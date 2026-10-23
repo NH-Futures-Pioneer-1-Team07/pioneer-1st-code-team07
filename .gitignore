@@ -1,0 +1,31 @@
+.DS_Store
+
+# 환경 설정·인증 정보
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+*.pem
+*.key
+!*.example.pem
+!*.example.key
+
+# 루트 실행 기록·백업
+/logs/
+*.log
+/backups/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node.js·빌드 결과
+node_modules/
+dist/
+build/
+coverage/
+.cache/
