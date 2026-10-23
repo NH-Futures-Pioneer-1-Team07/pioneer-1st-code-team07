@@ -7,6 +7,7 @@
 - Git·GitHub 작업 규칙: [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)
 - 이슈 양식: [.github/ISSUE_TEMPLATE/task.md](.github/ISSUE_TEMPLATE/task.md)
 - PR 양식: [.github/pull_request_template.md](.github/pull_request_template.md)
+- NH선물 API 명세를 찾을 때는 [API 문서 목록](docs/nh-api/README.md)에서 필요한 상세 문서를 확인한다.
 - 작업에 필요한 문서만 읽는다.
 
 ## 작업 원칙
