@@ -1,0 +1,117 @@
+.history {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.history :global(.table-wrap) {
+  flex: 1;
+  height: 0;
+  min-height: var(--table-height, 220px);
+}
+.history td small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 5px;
+}
+.history td strong {
+  font-weight: 500;
+}
+.row {
+  cursor: pointer;
+}
+.row:hover {
+  background: #15171c;
+}
+.history tr.selected {
+  background: #1b1a13;
+}
+.close {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.summary {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.summary span {
+  margin-left: 12px;
+  color: var(--text-tertiary);
+}
+.detailHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 14px;
+}
+.detailHeading h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  align-items: stretch;
+  margin-top: 18px;
+  transition:
+    grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    column-gap 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.splitOpen {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 14px;
+}
+.detailPanel {
+  min-width: 0;
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.splitOpen .detailPanel {
+  max-height: none;
+  opacity: 1;
+}
+.detailInner {
+  min-width: 460px;
+  padding: 22px;
+}
+.rowButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.splitOpen .history th:nth-child(2),
+.splitOpen .history td:nth-child(2) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .split,
+  .detailPanel {
+    transition: none;
+  }
+}
+.history .rowButton {
+  padding: 0;
+}

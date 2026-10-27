@@ -1,0 +1,18 @@
+:root {
+  color-scheme: dark;
+  --bg-canvas: #050608;
+  --bg-shell: #090b0e;
+  --bg-surface: #0d0f13;
+  --bg-elevated: #171a20;
+  --data-line: #20242c;
+  --text-primary: #f5f6f7;
+  --text-secondary: #afb4bd;
+  --text-tertiary: #9299a4;
+  /* Representative yellow sampled from the NH Futures website logo. */
+  --accent: #ffb819;
+  --accent-soft: rgb(255 184 25 / 10%);
+  --positive: #49c99b;
+  --rise: #ff6675;
+  --fall: #5795ff;
+  --danger: #ff7181;
+}
