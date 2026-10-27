@@ -1,5 +1,26 @@
 # 프론트엔드
 
+## 로컬 실행
+
+- Node.js 22.12 이상을 사용한다.
+- 프로젝트 루트에서 다음 명령을 실행한다.
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+- 브라우저에서 개발 서버가 출력한 주소에 접속한다.
+- 기본 주소는 `http://127.0.0.1:5173`이다.
+
+| 명령 | 확인할 내용 |
+| --- | --- |
+| `npm run typecheck` | TypeScript 타입 검사 |
+| `npm test` | 모의매매 상태 전환·원주문 연결·계좌 요약·백테스트 샘플 손익 검증 |
+| `npm run build` | 타입 검사와 배포용 정적 파일 생성 |
+| `npm run preview` | 빌드한 `dist/` 로컬 미리보기 |
+
 ## 기술 스택
 
 | 구분 | 기술 | 역할 |
@@ -12,11 +33,13 @@
 | 스타일 | CSS Modules | 컴포넌트별 스타일 관리 |
 
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.
-- 실시간 시세는 WebSocket으로 수신한다.
+- 실제 연동 단계에서는 실시간 시세를 WebSocket으로 수신한다.
 
 ## 폴더 구조
 
 아래 구조를 기준으로 필요한 파일과 폴더부터 만든다.
+현재 UI 구현에는 `data/`에 샘플 데이터와 모의매매 상태 전환 로직을 둔다.
+`apis/`와 별도 폰트 폴더는 실제 연동과 폰트 관리 방식 변경 시 추가한다.
 
 ```text
 src/
@@ -31,8 +54,16 @@ src/
 │       ├── BacktestPage.tsx
 │       ├── BacktestPage.module.css
 │       └── components/
+│           ├── EquityChart.tsx
+│           └── RecordDetail.tsx
 ├── components/
 │   └── common/
+├── data/
+│   ├── fixtures.ts
+│   ├── trading.ts
+│   ├── backtest.ts
+│   ├── trading.test.ts
+│   └── backtest.test.ts
 ├── apis/
 │   ├── axiosInstance.ts
 │   ├── trading.ts

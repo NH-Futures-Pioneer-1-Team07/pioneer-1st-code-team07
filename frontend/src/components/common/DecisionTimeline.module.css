@@ -1,0 +1,79 @@
+.decisions {
+  display: block;
+}
+.decision {
+  --row: 44px;
+  display: grid;
+  grid-template-columns: 132px 5px minmax(0, 1fr) 110px 80px 90px;
+  align-items: center;
+  gap: 16px;
+  height: var(--row);
+  font-size: 12px;
+}
+.decision time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.decision strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.decision > span:nth-child(4),
+.decision > span:nth-child(5),
+.decision > span:nth-child(6),
+.decisionHead > span:nth-child(4),
+.decisionHead > span:nth-child(5),
+.decisionHead > span:nth-child(6) {
+  text-align: right;
+}
+.decisionHead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: auto;
+  padding-bottom: 12px;
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.timelineDot {
+  width: 5px;
+  height: 5px;
+  background: #7a818e;
+  border-radius: 50%;
+  position: relative;
+}
+.timelineDot::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 2px;
+  width: 1px;
+  height: calc(var(--row) - 14px);
+  background: var(--data-line);
+}
+.decision:last-child .timelineDot::after {
+  display: none;
+}
+.decision:nth-child(2) .timelineDot {
+  background: var(--accent);
+  box-shadow:
+    0 0 4px var(--accent),
+    0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.decision:nth-child(2) .timelineDot::after {
+  background: linear-gradient(var(--accent), var(--data-line));
+}
+.score {
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 600;
+}
+.score small {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.noScore {
+  color: var(--text-tertiary);
+}
