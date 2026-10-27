@@ -29,3 +29,6 @@ dist/
 build/
 coverage/
 .cache/
+
+# 개인 도구 설정
+.claude/
