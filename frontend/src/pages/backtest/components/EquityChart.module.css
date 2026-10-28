@@ -23,3 +23,104 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.equity :global(.recharts-wrapper) {
+  font-family: inherit;
+}
+.tooltip {
+  width: 260px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+  background: rgb(23 26 32 / 94%);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 50%);
+}
+.tooltip header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-tertiary);
+}
+.tooltip header strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.tooltip header span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+.equityValue {
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.change {
+  font-weight: 500;
+}
+.change small {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.tooltip ul {
+  margin: 10px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  list-style: none;
+}
+.tooltip li {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 0 8px;
+  color: var(--text-secondary);
+}
+.tooltip li + li {
+  margin-top: 8px;
+}
+.tooltip li time {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.tooltip li p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.tooltip li b {
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tooltip li small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+}
+.buy {
+  background: rgb(255 102 117 / 14%);
+  color: var(--rise);
+}
+.sell {
+  background: rgb(87 149 255 / 14%);
+  color: var(--fall);
+}
+.scroll {
+  max-height: 168px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.hint {
+  margin: 8px 0 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}

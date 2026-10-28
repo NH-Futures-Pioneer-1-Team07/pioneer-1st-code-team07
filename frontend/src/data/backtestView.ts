@@ -1,4 +1,4 @@
-import type { BacktestProgress, BacktestRange } from "../apis/types.ts";
+import type { BacktestProgress, BacktestRange, JournalLine } from "../apis/types.ts";
 
 export const MIN_CAPITAL = 1_000_000;
 export const MAX_CAPITAL = 10_000_000_000;
@@ -52,38 +52,48 @@ export const percentText = (rate: number) => `${Number((rate * 100).toPrecision(
 export const returnText = (rate: number) =>
   `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
 
-export interface EquityLayout {
-  line: string;
-  area: string;
-  ticks: { y: number; value: number }[];
-  last: { x: number; y: number } | null;
+export interface EquityFill {
+  time: string;
+  side: string;
+  quantity: number;
+  price: number;
+  reason: string;
 }
 
-/** 자산 곡선을 `left`~`right`, `top`~`bottom` 안에 그린다. 값이 모두 같아도 가운데 선으로 그린다. */
-export function equityLayout(
-  curve: { equity: number }[],
-  box: { left: number; right: number; top: number; bottom: number; baseline: number },
-): EquityLayout {
-  if (!curve.length) return { line: "", area: "", ticks: [], last: null };
-  const values = curve.map((point) => point.equity);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min;
-  const x = (index: number) =>
-    curve.length === 1 ? box.right : box.left + (index * (box.right - box.left)) / (curve.length - 1);
-  const y = (value: number) =>
-    span === 0 ? (box.top + box.bottom) / 2 : box.top + ((max - value) / span) * (box.bottom - box.top);
-  const points = curve.map((point, index) => `${x(index)},${y(point.equity)}`);
-  const line = points.join(" ");
-  return {
-    line,
-    area: `${box.left},${box.baseline} ${line} ${box.right},${box.baseline}`,
-    ticks: [0, 1, 2, 3].map((row) => ({
-      y: box.top + (row * (box.bottom - box.top)) / 3,
-      value: span === 0 ? max : max - (span * row) / 3,
-    })),
-    last: { x: x(curve.length - 1), y: y(values[values.length - 1]) },
-  };
+export interface EquityPoint {
+  day: string;
+  equity: number;
+  /** 전날 자산(첫 날은 초기자금) 대비 손익 */
+  change: number;
+  fills: EquityFill[];
+}
+
+/** 자산 곡선의 날짜마다 그날의 체결을 붙인다. 곡선에 없는 날짜의 체결은 버린다. */
+export function equityPoints(
+  curve: { time: string; equity: number }[],
+  initialCapital: number,
+  fills: JournalLine[],
+): EquityPoint[] {
+  const byDay = new Map<string, EquityFill[]>();
+  for (const line of fills) {
+    const day = line.time.slice(0, 10);
+    const list = byDay.get(day) ?? [];
+    list.push({
+      time: line.time.slice(11, 16),
+      side: String(line.side),
+      quantity: typeof line.quantity === "number" ? line.quantity : 0,
+      price: typeof line.price === "number" ? line.price : 0,
+      reason: typeof line.reason === "string" ? line.reason : "",
+    });
+    byDay.set(day, list);
+  }
+  let previous = initialCapital;
+  return curve.map((point) => {
+    const day = point.time.slice(0, 10);
+    const row = { day, equity: point.equity, change: point.equity - previous, fills: byDay.get(day) ?? [] };
+    previous = point.equity;
+    return row;
+  });
 }
 
 /** 처음 보여 줄 기간: 가능 기간의 마지막 7일(달력 기준). */
