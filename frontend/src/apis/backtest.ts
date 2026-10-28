@@ -17,6 +17,7 @@ export const startBacktest = (body: {
   start_date: string;
   end_date: string;
   initial_capital: number;
+  slippage_ticks?: number;
 }) => http.post<RunRef>("/api/backtests", body).then((r) => r.data);
 
 export const fetchBacktestRun = (run: RunRef) =>

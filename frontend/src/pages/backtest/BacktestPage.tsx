@@ -39,6 +39,7 @@ export default function BacktestPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [capital, setCapital] = useState("50000000");
+  const [slippage, setSlippage] = useState("");
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [active, setActive] = useState<RunRef | null>(null);
@@ -105,9 +106,14 @@ export default function BacktestPage() {
     }
   }, [available, startDate, endDate]);
 
+  // 슬리피지 입력칸은 서버의 가정 값으로 처음 채운다.
+  useEffect(() => {
+    if (slippage === "" && assumptions.data) setSlippage(String(assumptions.data.slippage.ticks));
+  }, [assumptions.data, slippage]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problem = validateInput(startDate, endDate, capital, available);
+    const problem = validateInput(startDate, endDate, capital, available, slippage);
     if (problem || !strategyId) {
       setError(problem || "전략을 선택해 주세요.");
       return;
@@ -120,6 +126,7 @@ export default function BacktestPage() {
         start_date: startDate,
         end_date: endDate,
         initial_capital: Number(capital),
+        slippage_ticks: Number(slippage),
       });
       setActive(run);
       setAnnouncement("백테스트를 시작했습니다. 과거 데이터를 준비합니다.");
@@ -267,7 +274,22 @@ export default function BacktestPage() {
                   <div>
                     <dt>슬리피지</dt>
                     <dd>
-                      {assumptions.data.slippage.ticks}틱 · {assumptions.data.slippage.direction}
+                      <input
+                        className={styles.tickInput}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        aria-label="슬리피지(틱)"
+                        value={slippage}
+                        onChange={(event) => setSlippage(event.target.value.replace(/\D/g, "").slice(0, 2).replace(/^0+(?=\d)/, ""))}
+                      />
+                      틱
+                      <span className={styles.info} tabIndex={0} role="img" aria-label="슬리피지 자세히">
+                        <Icon name="info" size={13} />
+                        <span role="tooltip" className={`${styles.tip} ${styles.tipWrap}`}>
+                          {assumptions.data.slippage.direction}. 0틱부터 20틱까지 정할 수 있습니다.
+                        </span>
+                      </span>
                     </dd>
                   </div>
                   <div>

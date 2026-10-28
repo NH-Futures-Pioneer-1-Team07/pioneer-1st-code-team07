@@ -41,6 +41,10 @@ test("입력 검증은 기간·가능 범위·초기자금을 확인한다", () 
   assert.match(validateInput("2026-10-01", "2026-10-27", "500", range), /초기자금/);
   assert.match(validateInput("2026-10-01", "2026-10-27", "1000000.5", range), /초기자금/);
   assert.match(validateInput("2026-10-01", "2026-10-27", "50000000", null), /가능 기간/);
+  assert.equal(validateInput("2026-10-01", "2026-10-27", "50000000", range, "0"), "");
+  assert.equal(validateInput("2026-10-01", "2026-10-27", "50000000", range, "20"), "");
+  assert.match(validateInput("2026-10-01", "2026-10-27", "50000000", range, "21"), /슬리피지/);
+  assert.match(validateInput("2026-10-01", "2026-10-27", "50000000", range, ""), /슬리피지/);
 });
 
 test("수수료율과 수익률 표기", () => {
