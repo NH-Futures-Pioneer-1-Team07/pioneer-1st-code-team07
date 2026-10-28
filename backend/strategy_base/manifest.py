@@ -28,6 +28,15 @@ class ParameterSpec(BaseModel):
     description: str = Field(min_length=1)
 
 
+class BacktestSpec(BaseModel):
+    """별도 가격 봉 재현을 사용하는 전략의 선택적 실행 설정."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    price_minutes: Literal[1] = 1
+    tick_size: float = Field(gt=0)
+
+
 class Manifest(BaseModel):
     """전략 폴더의 `manifest.json` 형식."""
 
@@ -38,6 +47,7 @@ class Manifest(BaseModel):
     instruments: list[Instrument] = Field(min_length=1)
     bar: BarSpec
     parameters: dict[str, ParameterSpec] = Field(default_factory=dict)
+    backtest: BacktestSpec | None = None
 
     def default_params(self) -> dict[str, Any]:
         return {key: spec.default for key, spec in self.parameters.items()}
