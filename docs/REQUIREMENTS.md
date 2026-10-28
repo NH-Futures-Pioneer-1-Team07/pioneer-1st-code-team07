@@ -201,4 +201,5 @@
 - [국내 일봉 조회](nh-api/apis/domestic_chart-daily.md)
 - [국내 투자자 직전 매매동향](nh-api/apis/domestic_trend-investor.md)
 - [국내 주문·체결 실시간 정보](nh-api/apis/O1_K.md)
-- [2주차 삼성전자 개별주식선물 전략 초안](https://github.com/NH-Futures-Pioneer-1-Team07/pioneer-1st-code-team07/blob/660b170ea0cd2bdb6165fc55201e77379058fb8a/docs/strategies/week-02/samsung-futures.md)
+- [삼성전자선물 장중 전략](strategies/week-02/samsung-futures-intraday.md)
+- [삼성전자선물 고저점 역매매 전략](strategies/week-02/samsung-futures-reversal.md)
