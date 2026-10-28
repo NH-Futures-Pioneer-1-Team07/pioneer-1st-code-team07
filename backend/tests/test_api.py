@@ -10,7 +10,7 @@ from tests.test_registry import make_folder
 def client(tmp_path):
     make_folder(tmp_path, "week02_sample")
     make_folder(tmp_path, "broken", manifest=None)
-    settings = Settings(trading_env="mock", strategies_dir=tmp_path)
+    settings = Settings(trading_env="mock", strategies_dir=tmp_path, runs_dir=tmp_path / "runs")
     return TestClient(create_app(settings))
 
 

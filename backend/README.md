@@ -29,7 +29,7 @@ uv run uvicorn app.main:create_app --factory --reload
 ```
 
 - `TRADING_ENV`는 필수다. `mock`(모의) 또는 `real`(실전)을 쓴다. 없으면 서버가 시작되지 않고 없는 변수 이름을 알려 준다.
-- `STRATEGIES_DIR`는 선택이다. 생략하면 `backend/strategies`를 쓴다.
+- `STRATEGIES_DIR`, `RUNS_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`를 쓴다.
 - `.env`에는 비밀정보가 들어갈 수 있으므로 커밋하지 않는다.
 
 테스트는 다음 명령으로 실행한다.
@@ -46,6 +46,8 @@ uv run pytest
 | `strategy_base/` | 전략 인터페이스(`interface.py`), 입력·출력 형식(`models.py`), 전략 폴더 형식(`manifest.py`), 등록(`registry.py`), 공통 지표(`indicators.py`), 테스트 도우미(`testing.py`) |
 | `strategies/` | 전략 폴더. 폴더 하나가 전략 하나다 |
 | `strategies/_template/` | 새 전략을 만들 때 복사하는 템플릿. `_`로 시작하는 폴더는 등록하지 않는다 |
+| `app/records/` | 실행 기록의 저장·조회와 비밀정보 제거 |
+| `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `tests/` | 테스트 |
 
 ## 전략 추가 방법
