@@ -285,18 +285,20 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
                 {quote.data?.expiry ? ` · 만기 ${quote.data.expiry}` : ""}
               </p>
             </div>
-          </div>
-          <div className={styles.quote}>
-            <strong>{won(livePrice)}</strong>
-            <span className={pnlClass(changeRate)}>
-              {changeRate === null
-                ? dash
-                : `${changeRate > 0 ? "+" : ""}${changeRate.toFixed(2)}%`}
-            </span>
-          </div>
-          <div className={styles.connection}>
-            <span>거래량 {won(stream.lastTrade?.cum_volume ?? quote.data?.volume)}계약</span>
-            <span>수신 {receivedAt || dash}</span>
+            <div className={styles.quoteBlock}>
+              <div className={styles.quote}>
+                <strong>{won(livePrice)}</strong>
+                <span className={pnlClass(changeRate)}>
+                  {changeRate === null
+                    ? dash
+                    : `${changeRate > 0 ? "+" : ""}${changeRate.toFixed(2)}%`}
+                </span>
+              </div>
+              <div className={styles.connection}>
+                <span>거래량 {won(stream.lastTrade?.cum_volume ?? quote.data?.volume)}계약</span>
+                <span>수신 {receivedAt || dash}</span>
+              </div>
+            </div>
           </div>
           {quote.error && <p className="empty">시세를 불러오지 못했습니다. {quote.error}</p>}
           <PriceChart
