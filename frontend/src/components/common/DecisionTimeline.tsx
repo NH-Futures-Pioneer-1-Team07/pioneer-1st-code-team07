@@ -2,6 +2,8 @@ import { formatNumber } from "../../data/fixtures";
 import styles from "./DecisionTimeline.module.css";
 
 export interface DecisionRow {
+  key?: string;
+  reason?: string;
   at: string;
   action: string;
   price: number | null;
@@ -23,11 +25,14 @@ export default function DecisionTimeline({ rows }: { rows: DecisionRow[] }) {
         <span>수량</span>
         <span>점수</span>
       </div>
-      {rows.map((row) => (
-        <div key={row.at} className={styles.decision}>
+      {rows.map((row, index) => (
+        <div key={row.key ?? `${row.at}-${index}`} className={styles.decision}>
           <time>{row.at}</time>
           <span className={styles.timelineDot} />
-          <strong className={sideClass(row.action)}>{row.action}</strong>
+          <span className={styles.action}>
+            <strong className={sideClass(row.action)}>{row.action}</strong>
+            {row.reason && <small title={row.reason}>{row.reason}</small>}
+          </span>
           <span>{row.price === null ? "—" : formatNumber(row.price)}</span>
           <span>{row.quantity === null ? "—" : `${row.quantity}계약`}</span>
           <span className={row.score === null ? styles.noScore : styles.score}>

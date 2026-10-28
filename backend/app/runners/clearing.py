@@ -110,6 +110,7 @@ def _order(o: OrderRecord) -> dict[str, Any]:
         "filled_quantity": o.filled_quantity,
         "remaining_quantity": o.remaining_quantity,
         "price": o.price,
+        "received_time": o.received_time,
     }
 
 

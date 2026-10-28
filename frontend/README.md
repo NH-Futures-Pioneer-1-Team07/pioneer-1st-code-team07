@@ -17,7 +17,7 @@ npm run dev
 | 명령 | 확인할 내용 |
 | --- | --- |
 | `npm run typecheck` | TypeScript 타입 검사 |
-| `npm test` | 모의매매 상태 전환·원주문 연결·계좌 요약·백테스트 샘플 손익 검증 |
+| `npm test` | 모의매매 화면 변환(차트 배치·상태 문장·종목 이름)과 백테스트 샘플 손익 검증 |
 | `npm run build` | 타입 검사와 배포용 정적 파일 생성 |
 | `npm run preview` | 빌드한 `dist/` 로컬 미리보기 |
 
@@ -33,13 +33,14 @@ npm run dev
 | 스타일 | CSS Modules | 컴포넌트별 스타일 관리 |
 
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.
-- 실제 연동 단계에서는 실시간 시세를 WebSocket으로 수신한다.
+- 모의매매 화면은 FastAPI를 폴링하고, 실시간 시세는 WebSocket(`/ws/market`)으로 수신한다.
+- 개발 서버는 `/api`·`/ws`를 백엔드(기본 `http://127.0.0.1:8000`, `BACKEND_URL`로 변경)로 프록시한다.
 
 ## 폴더 구조
 
 아래 구조를 기준으로 필요한 파일과 폴더부터 만든다.
-현재 UI 구현에는 `data/`에 샘플 데이터와 모의매매 상태 전환 로직을 둔다.
-`apis/`와 별도 폰트 폴더는 실제 연동과 폰트 관리 방식 변경 시 추가한다.
+`data/`에는 백테스트 화면의 샘플 데이터와 화면 변환 함수를 둔다.
+모의매매 화면은 `apis/`로 백엔드에 연결하고, 백테스트 화면은 아직 샘플 데이터를 쓴다.
 
 ```text
 src/
@@ -82,9 +83,11 @@ src/
 | `pages/backtest` | 백테스트 페이지 |
 | `pages/*/components` | 해당 페이지에서만 사용하는 컴포넌트 |
 | `components/common` | 여러 페이지에서 공유하는 컴포넌트 |
-| `apis/axiosInstance.ts` | FastAPI 주소·타임아웃 등 공통 HTTP 설정 |
-| `apis/trading.ts` | 모의매매 API 호출 함수 |
-| `apis/backtest.ts` | 백테스트 API 호출 함수 |
+| `apis/client.ts` | 공통 Axios 설정과 오류 문구 |
+| `apis/trading.ts` | 전략·모의매매·시세·이력 API 호출 함수 |
+| `apis/polling.ts` | 주기적 조회 훅 |
+| `apis/marketStream.ts` | 실시간 시세 WebSocket 훅 |
+| `apis/types.ts` | API 응답 타입 |
 | `styles/global.css` | 전역 기본 스타일 |
 | `styles/colors.css` | 공통 색상 변수 |
 | `styles/fonts.css` | 글꼴 선언 |

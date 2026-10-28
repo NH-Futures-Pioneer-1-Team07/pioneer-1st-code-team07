@@ -292,7 +292,7 @@ await connection.stop()
 | --- | --- |
 | `deposit` | `cash`(예탁현금), `total_assets`(예탁자산), `order_available_total`·`order_available_cash`(주문가능금액), `initial_margin`·`maintenance_margin`(위탁·유지증거금), `futures_realized_pnl`(선물 확정손익) |
 | `positions` | 수량이 0이 아닌 포지션. `code`, `name`, `side`, `quantity`, `closable_quantity`, `avg_price`, `last_price`(종가), `pnl`, `pnl_rate` |
-| `open_orders` | 미체결 주문. `order_no`, `code`, `side`, `status`, `quantity`, `filled_quantity`, `remaining_quantity`, `price` |
+| `open_orders` | 미체결 주문. `order_no`, `code`, `side`, `status`, `quantity`, `filled_quantity`, `remaining_quantity`, `price`, `received_time`(접수 시각 HHMMSS) |
 
 모의 환경이 아니면 `422`, NH 인증 정보가 없으면 `503`, NH 조회에 실패하면 `502`다.
 

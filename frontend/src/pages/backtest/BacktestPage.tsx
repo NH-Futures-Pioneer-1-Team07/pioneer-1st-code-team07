@@ -172,7 +172,8 @@ export default function BacktestPage() {
           <div className={styles.strategyField}>
             <StrategySelect
               id={`${formId}-strategy`}
-              strategy={strategy}
+              items={strategies}
+              selectedId={strategy.id}
               disabled={busy}
               onChange={setStrategyId}
             />

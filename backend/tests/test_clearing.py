@@ -234,6 +234,6 @@ def test_계좌_조회는_예탁금과_포지션과_미체결을_돌려주고_�
     }
     assert view["open_orders"] == [{
         "order_no": "1", "code": "A116B000", "side": "buy", "status": "accepted", "quantity": 5,
-        "filled_quantity": 2, "remaining_quantity": 3, "price": 0.0,
+        "filled_quantity": 2, "remaining_quantity": 3, "price": 0.0, "received_time": "100000",
     }]
     assert "ac_no" not in repr(view) and "계좌" not in repr(view)
