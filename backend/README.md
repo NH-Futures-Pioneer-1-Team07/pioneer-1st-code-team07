@@ -323,3 +323,37 @@ await connection.stop()
 ### 확인하지 못한 것
 
 실제 모의계좌에 주문을 내 보지는 못했다. 위 동작은 가짜 NH(분봉·시세·주문·알림)로 확인했다. 주문/체결 알림(`O1`)의 필드가 명세와 같은지, 취소 후 주문의 상태 변화, 주문 내역의 주문번호가 주문 응답의 번호와 같은 형식인지는 장 시간에 소량 주문으로 확인해야 한다.
+
+## 실시간 시세 웹소켓
+
+`/ws/market?code=<종목코드>`가 한 종목의 실시간 체결·호가를 화면에 보낸다. `app/nh/hub.py`의 `MarketHub`가 NH 실시간 연결 하나를 여러 화면이 나눠 쓰게 한다. 모의매매 운용의 실시간 연결(체결·주문 알림)과는 별개다.
+
+### 메시지
+
+모두 JSON이고 `type`으로 구분한다. 연결하면 현재 연결 상태(`state`)를 먼저 한 번 보낸다.
+
+| `type` | 내용 |
+| --- | --- |
+| `state` | 시세 연결 상태. `state`는 `connecting`, `live`, `reconnecting`, `stopped`, `detail`은 설명 |
+| `trade` | 체결. `code`, `time`(HHMMSS), `price`, `quantity`, `cum_volume`, `open`, `high`, `low`, `best_ask`, `best_bid`, `is_trade` |
+| `orderbook` | 호가. `code`, `time`, `total_ask_quantity`, `total_bid_quantity`, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
+| `reconnected` | 시세가 끊겼다가 다시 연결됨. 끊긴 동안의 값은 오지 않으므로 **화면이 시세·차트·호가를 REST로 다시 조회해야 한다** |
+| `subscription_failed` | 서버가 구독을 거절함. `code`(종목, 알 수 없으면 `null`), `reason_code`, `message` |
+
+- `trade`의 `is_trade`가 거짓이면 체결량이 0인 기타 데이터다. 현재가·거래량 갱신에는 `is_trade`인 것만 쓴다.
+- 장이 끝났거나 체결이 없으면 `trade`·`orderbook`은 오지 않고 `state`만 온다.
+
+### 닫힘 코드
+
+| 코드 | 뜻 |
+| --- | --- |
+| `4422` | 종목코드 형식이 올바르지 않음 |
+| `4503` | NH 인증 정보가 설정되지 않음 |
+| `4429` | 서로 다른 종목을 4개까지만 볼 수 있음. 이미 보고 있는 종목에는 계속 붙을 수 있다 |
+
+### 동작
+
+- 종목마다 체결(`KA`)과 호가(`KB`)를 구독한다. 첫 화면이 붙을 때 구독하고 마지막 화면이 떠날 때 해제한다. NH의 구독 한도(20건) 가운데 모의매매 운용이 쓸 몫을 남기려고 종목을 4개(8건)로 제한한다.
+- 화면마다 대기열(256개)이 있고 가득 차면 오래된 메시지부터 버린다. 느린 화면이 다른 화면과 NH 수신을 막지 않는다.
+- 서버를 끌 때 NH 실시간 연결을 정리한다.
+- 모의환경 확인(2026-10-28, 장 마감 후): `/ws/market?code=A116B000`에 연결하면 `connecting`에 이어 `live`가 온다. 체결·호가 데이터는 장 시간에 확인해야 한다.
