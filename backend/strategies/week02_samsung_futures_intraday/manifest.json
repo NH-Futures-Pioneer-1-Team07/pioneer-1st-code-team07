@@ -1,0 +1,16 @@
+{
+  "name": "삼성전자선물 장중 전략",
+  "description": "3분봉의 고점·저점으로 추세를 판단하고, 추세 방향의 기준 고저점을 종가로 돌파하면 거래량에 비례한 수량을 시장가로 거래합니다. 반대 신호는 보유분을 줄이거나 뒤집고, 15:24 이후 신규 진입을 멈추며 15:30에 전량 청산합니다.",
+  "instruments": [{ "name": "삼성전자선물 2026년 11월물", "code": "A116B000" }],
+  "bar": { "unit": "minute", "size": 3 },
+  "parameters": {
+    "bar_minutes": { "default": 3, "description": "판단에 쓰는 봉의 분 단위" },
+    "swing_side_bars": { "default": 2, "description": "고점·저점 후보의 앞쪽·뒤쪽 봉 개수" },
+    "trend_compare_count": { "default": 2, "description": "추세 비교에 쓰는 최근 고점·저점 개수" },
+    "volume_avg_bars": { "default": 10, "description": "평균 거래량에 쓰는 직전 봉 개수" },
+    "quantity_factor": { "default": 5, "description": "신호 수량 공식의 계수" },
+    "order_valid_bars": { "default": 1, "description": "진입 주문 유효 시한과 반대 방향 신규 진입 기한의 봉 개수" },
+    "entry_cutoff_time": { "default": "15:24", "description": "신규 진입을 멈추는 시각(HH:MM, 한국 시간)" },
+    "flatten_time": { "default": "15:30", "description": "전량 청산 시각(HH:MM, 한국 시간)" }
+  }
+}
