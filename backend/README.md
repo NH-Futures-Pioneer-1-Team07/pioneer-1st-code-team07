@@ -108,6 +108,9 @@ uv run pytest
 | `rate_limit.py` | 주문 5건/초, 계좌 10건/초, 시세 10건/초 간격을 지킨다. 환경마다 따로 센다 |
 | `errors.py` | `TransportError`, `HttpError`, `BusinessError`, `GatewayError`, `NHConfigError` |
 | `quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
+| `account.py` | `fetch_deposit`(예탁금), `fetch_positions`(보유 포지션), `fetch_orders`(주문 내역), `fetch_orderable_quantity`(주문가능수량) |
+| `orders.py` | `place_order`(신규 주문), `cancel_order`(취소 주문). 모의 환경에서만 낸다 |
+| `values.py` | 응답의 문자열 값을 숫자·날짜로 바꾸는 함수 |
 
 - 환경: `TRADING_ENV=mock`이면 `apidemo.futures.co.kr`, `real`이면 `api.futures.co.kr`을 부른다.
 - 성공 판단: HTTP 200이어도 본문에 `errorCode`나 `msg_cd`가 있으면 실패로 본다. `EG`·`EST`로 시작하는 코드는 `GatewayError`, 그 밖은 `BusinessError`다.
@@ -120,3 +123,15 @@ uv run pytest
 - 주간(`nght_tp=1`)만 조회한다. 모의환경은 야간을 지원하지 않는다.
 - 거래량은 `occurs1_cum_trd_qty`를 봉 구간 거래량으로 쓴다. 이름은 누적이지만 모의환경의 삼성전자선물 2026-10-27 데이터에서는 봉 구간 값으로 관찰됐다는 것이 전략 문서의 기록이다.
 - **미확인**: 응답의 봉 시각(`occurs1_exch_tm`)이 봉의 시작인지 마감인지는 모의환경 호출로 확인하지 못했다. 기본값은 시작 시각(`time_marks="start"`)으로 본다. 마감 시각이면 `time_marks="end"`로 부르면 봉 길이를 빼서 시작 시각으로 바꾼다. 모의환경 키로 확인한 뒤 이 항목을 갱신해야 한다.
+
+### 계좌 조회와 주문
+
+- 계좌 조회는 계좌 LIMIT(10건/초), 주문과 취소는 주문 LIMIT(5건/초)로 호출한다.
+- 보유 포지션과 주문 내역은 다음 데이터 키가 있으면 이어받아 합친다. 같은 키가 반복되면 멈춘다.
+- 응답에 실리는 계좌번호·계좌명은 읽지 않고, 요청에도 계좌번호를 넣지 않는다.
+- `fetch_orders(client, open_only=True)`는 미체결 주문만 조회한다. 주문 상태는 `OrderStatus`(접수·확인·부분체결·전체체결·자동취소·거부)로 바뀌고, 접수·확인·부분체결이 `is_open`이다.
+- `place_order`와 `cancel_order`는 `TRADING_ENV=mock`일 때만 요청을 보낸다. 실전이면 `OrderBlocked`를 내고 요청하지 않는다.
+- 신규 주문의 체결조건은 FAS다. 시장가는 가격을 `0`으로 보내고, 지정가는 가격이 필요하다.
+- `cancel_order`의 매매구분은 원주문의 매매구분이다.
+- 주문 거부(`msg_cd`)는 `BusinessError`다. 시간 초과(`TransportError`)는 접수 여부를 알 수 없으므로 다시 보내지 않고 `fetch_orders`로 확인해야 한다.
+- 정정 주문은 구현하지 않았다.

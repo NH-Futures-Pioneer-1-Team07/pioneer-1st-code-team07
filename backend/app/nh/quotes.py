@@ -7,6 +7,8 @@ from typing import Any, Literal
 from app.nh.client import NHClient
 from app.nh.errors import NHError
 from app.nh.rate_limit import Limit
+from app.nh.values import day as _day
+from app.nh.values import number as _number
 from strategy_base.models import Bar
 
 MINUTE_PATH = "/trade/v1/domestic/chart-minute"
@@ -98,21 +100,3 @@ def _bar(row: dict[str, Any], shift: timedelta) -> Bar | None:
     except ValueError:
         return None
     return Bar(time=moment - shift, high=high, low=low, close=close, volume=int(volume))
-
-
-def _number(value: Any) -> float | None:
-    text = str(value if value is not None else "").replace(",", "").replace("+", "").strip()
-    if not text:
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
-def _day(value: Any) -> date | None:
-    text = str(value or "").strip()
-    try:
-        return datetime.strptime(text, "%Y%m%d").date()
-    except ValueError:
-        return None
