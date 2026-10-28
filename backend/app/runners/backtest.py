@@ -12,10 +12,10 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from fractions import Fraction
 from typing import Any
 
 from app.records.store import RunRecorder
+from app.runners.ledger import Ledger
 from strategy_base.interface import BaseStrategy
 from strategy_base.models import Bar, Context, IntentKind, Lot, OrderIntent, Side, StrategyOutput
 
@@ -32,29 +32,7 @@ class Assumptions:
 
 
 @dataclass
-class _Position:
-    side: Side
-    open_quantity: int = 0
-    entry_quantity: int = 0
-    entry_value: float = 0.0
-    exit_quantity: int = 0
-    exit_value: float = 0.0
-    gross_pnl: float = 0.0
-    fee: float = 0.0
-    opened_at: datetime | None = None
-
-    @property
-    def avg_entry(self) -> float:
-        return self.entry_value / self.entry_quantity if self.entry_quantity else 0.0
-
-
-@dataclass
 class _Totals:
-    gross_pnl: float = 0.0
-    fee: float = 0.0
-    trades: int = 0
-    wins: int = 0
-    losses: int = 0
     bars: int = 0
     days: int = 0
     peak: float = 0.0
@@ -118,7 +96,9 @@ class BacktestEngine:
         self.initial_capital = initial_capital
         self.minutes = minutes
         self.last_trading_day = last_trading_day
-        self.positions: dict[str, _Position] = {}
+        self.ledger = Ledger(
+            multiplier=assumptions.multiplier, fee_rate=assumptions.fee_rate, initial_capital=initial_capital
+        )
         self.totals = _Totals(peak=initial_capital)
         self.state: dict[str, Any] = {}
 
@@ -227,63 +207,34 @@ class BacktestEngine:
         else:
             self._exit(order, price, raw_price, moment, source)
 
-    def _fee(self, price: float, quantity: int) -> float:
-        return price * self.assumptions.multiplier * quantity * self.assumptions.fee_rate
-
     def _enter(self, order: OrderIntent, price: float, raw_price: float, moment: datetime, source: str) -> None:
-        position = self.positions.setdefault(order.entry_id, _Position(order.side, opened_at=moment))
-        if position.side != order.side:
+        applied = self.ledger.apply_entry(order.entry_id, order.side, order.quantity, price, moment)
+        if applied is None:
             self._warn(moment, f"진입분 {order.entry_id}의 방향과 다른 진입 주문을 무시했습니다")
             return
-        fee = self._fee(price, order.quantity)
-        position.open_quantity += order.quantity
-        position.entry_quantity += order.quantity
-        position.entry_value += price * order.quantity
-        position.fee += fee
-        self.totals.fee += fee
-        self._record_fill(order, order.quantity, price, raw_price, fee, moment, source)
+        self._record_fill(order, applied.quantity, price, raw_price, applied.fee, moment, source)
 
     def _exit(self, order: OrderIntent, price: float, raw_price: float, moment: datetime, source: str) -> None:
-        position = self.positions.get(order.entry_id)
-        if position is None or position.side == order.side:
+        applied = self.ledger.apply_exit(order.entry_id, order.side, order.quantity, price, moment)
+        if applied is None:
             self._warn(moment, f"청산할 진입분 {order.entry_id}이(가) 없어 청산 주문을 무시했습니다")
             return
-        quantity = min(order.quantity, position.open_quantity)
-        sign = 1 if position.side == Side.BUY else -1
-        gross = (price - position.avg_entry) * sign * quantity * self.assumptions.multiplier
-        fee = self._fee(price, quantity)
-        position.open_quantity -= quantity
-        position.exit_quantity += quantity
-        position.exit_value += price * quantity
-        position.gross_pnl += gross
-        position.fee += fee
-        self.totals.gross_pnl += gross
-        self.totals.fee += fee
-        self._record_fill(order, quantity, price, raw_price, fee, moment, source)
-        if position.open_quantity == 0:
-            self._close_trade(order.entry_id, position, moment)
-
-    def _close_trade(self, entry_id: str, position: _Position, moment: datetime) -> None:
-        net = position.gross_pnl - position.fee
-        self.totals.trades += 1
-        if net > 0:
-            self.totals.wins += 1
-        elif net < 0:
-            self.totals.losses += 1
-        self.recorder.record(
-            "trade",
-            time=moment,
-            entry_id=entry_id,
-            side=position.side.value,
-            quantity=position.entry_quantity,
-            entry_price=position.avg_entry,
-            exit_price=position.exit_value / position.exit_quantity,
-            gross_pnl=position.gross_pnl,
-            fee=position.fee,
-            net_pnl=net,
-            opened_at=position.opened_at.isoformat() if position.opened_at else None,
-        )
-        del self.positions[entry_id]
+        self._record_fill(order, applied.quantity, price, raw_price, applied.fee, moment, source)
+        if applied.trade is not None:
+            trade = applied.trade
+            self.recorder.record(
+                "trade",
+                time=moment,
+                entry_id=trade.entry_id,
+                side=trade.side.value,
+                quantity=trade.quantity,
+                entry_price=trade.entry_price,
+                exit_price=trade.exit_price,
+                gross_pnl=trade.gross_pnl,
+                fee=trade.fee,
+                net_pnl=trade.net_pnl,
+                opened_at=trade.opened_at.isoformat() if trade.opened_at else None,
+            )
 
     def _record_fill(
         self,
@@ -311,7 +262,7 @@ class BacktestEngine:
 
     def _close_all(self, raw_price: float, moment: datetime) -> None:
         """기간이 끝났을 때 남은 보유분을 청산한다."""
-        for entry_id, position in list(self.positions.items()):
+        for entry_id, position in list(self.ledger.positions.items()):
             side = Side.SELL if position.side == Side.BUY else Side.BUY
             order = OrderIntent(
                 side=side,
@@ -325,27 +276,17 @@ class BacktestEngine:
     # ---- 상태와 결과 ----
 
     def _lots(self) -> list[Lot]:
-        return [
-            Lot(entry_id, position.side, position.open_quantity, position.avg_entry)
-            for entry_id, position in self.positions.items()
-            if position.open_quantity > 0
-        ]
+        return self.ledger.lots()
 
     def _net(self) -> int:
-        return sum(
-            position.open_quantity if position.side == Side.BUY else -position.open_quantity
-            for position in self.positions.values()
-        )
+        return self.ledger.net_quantity()
 
     def _equity(self, price: float) -> float:
-        unrealized = sum(
-            (price - position.avg_entry)
-            * (1 if position.side == Side.BUY else -1)
-            * position.open_quantity
-            * self.assumptions.multiplier
-            for position in self.positions.values()
-        )
-        return self.initial_capital + self.totals.gross_pnl - self.totals.fee + unrealized
+        return self.ledger.equity(price)
+
+    @property
+    def positions(self) -> dict:
+        return self.ledger.positions
 
     def _mark(self, price: float, moment: datetime) -> None:
         equity = self._equity(price)
@@ -365,28 +306,28 @@ class BacktestEngine:
             text="일별 요약",
             day=day.isoformat(),
             equity=equity,
-            net_pnl=self.totals.gross_pnl - self.totals.fee,
-            trades=self.totals.trades,
+            net_pnl=self.ledger.net_pnl,
+            trades=self.ledger.trades,
         )
 
     def _warn(self, moment: datetime, text: str) -> None:
         self.recorder.record("event", time=moment, level="warning", text=text)
 
     def _result(self) -> dict[str, Any]:
-        totals = self.totals
-        net = totals.gross_pnl - totals.fee
+        totals, ledger = self.totals, self.ledger
+        net = ledger.net_pnl
         if totals.curve:
             totals.curve[-1] = {**totals.curve[-1], "equity": self.initial_capital + net}
         return {
             "initial_capital": self.initial_capital,
             "final_equity": self.initial_capital + net,
-            "gross_pnl": totals.gross_pnl,
-            "fee": totals.fee,
+            "gross_pnl": ledger.gross_pnl,
+            "fee": ledger.fee,
             "net_pnl": net,
             "return_rate": net / self.initial_capital if self.initial_capital else None,
-            "trade_count": totals.trades,
-            "win_count": totals.wins,
-            "loss_count": totals.losses,
+            "trade_count": ledger.trades,
+            "win_count": ledger.wins,
+            "loss_count": ledger.losses,
             "max_drawdown": totals.max_drawdown,
             "max_drawdown_rate": totals.max_drawdown_rate,
             "days": totals.days,

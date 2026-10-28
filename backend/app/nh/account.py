@@ -34,6 +34,7 @@ class Deposit:
     maintenance_margin: float | None
     futures_realized_pnl: float | None
     total_pnl: float | None
+    fee: float | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ def fetch_deposit(client: NHClient, business_day: date | None = None) -> Deposit
         maintenance_margin=number(body.get("mtn_mrgn_tam_amt")),
         futures_realized_pnl=number(body.get("fut_rez_pl_amt")),
         total_pnl=number(body.get("pl_tot_pric")),
+        fee=number(body.get("fee")),
     )
 
 
