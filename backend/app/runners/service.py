@@ -9,8 +9,10 @@ from typing import Any
 from app.config import Settings
 from app.nh.auth import KST
 from app.nh.client import NHClient
+from app.nh.errors import NHError
 from app.nh.quotes import fetch_minute_bars, fetch_quote
 from app.records.store import RunRecorder, RunStore
+from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache
 from app.runners.backtest import Assumptions, BacktestEngine, infer_tick
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
@@ -87,17 +89,45 @@ class BacktestService:
         store: RunStore,
         *,
         loader_factory: Callable[[], DataLoader] | None = None,
+        probe_factory: Callable[[str, int], ProbeSource] | None = None,
     ):
         self._settings = settings
         self._registry = registry
         self._store = store
         self._loader_factory = loader_factory or (lambda: nh_loader(NHClient(settings)))
+        self._probe_factory = probe_factory or (lambda code, minutes: NHProbe(NHClient(settings), code, minutes))
+        self._ranges = RangeCache(lambda: datetime.now(KST).date())
         self._lock = threading.Lock()
         self._current: dict[str, str] | None = None
         self._thread: threading.Thread | None = None
 
     def assumptions(self) -> dict[str, Any]:
         return describe_assumptions(self._settings)
+
+    def available_range(self, strategy_id: str) -> dict[str, Any]:
+        """전략의 첫 번째 종목으로 백테스트할 수 있는 기간."""
+        registered = self._registry.get(strategy_id)
+        if registered is None:
+            raise BacktestRejected(404, "전략을 찾을 수 없습니다")
+        instrument = registered.manifest.instruments[0]
+        if not instrument.code:
+            raise BacktestRejected(422, "전략의 종목에 종목코드가 필요합니다")
+        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
+            raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        found = self._range(instrument.code, registered.manifest.bar.size)
+        return {
+            "strategy_id": strategy_id,
+            "instrument": {"name": instrument.name, "code": instrument.code},
+            "start": found.start.isoformat() if found else None,
+            "end": found.end.isoformat() if found else None,
+            "last_trading_day": found.last_trading_day.isoformat() if found and found.last_trading_day else None,
+        }
+
+    def _range(self, code: str, minutes: int) -> AvailableRange | None:
+        try:
+            return self._ranges.get(code, self._probe_factory(code, minutes))
+        except NHError as error:
+            raise BacktestRejected(502, f"가능 기간을 확인하지 못했습니다: {type(error).__name__}") from error
 
     def current(self) -> dict[str, str] | None:
         """실행 중인 백테스트의 식별자. 없으면 `None`."""
@@ -130,6 +160,13 @@ class BacktestService:
         merged = self._merge_params(manifest, params)
         if not (self._settings.nh_app_key and self._settings.nh_app_secret):
             raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        available = self._range(instrument.code, manifest.bar.size)
+        if available is None:
+            raise BacktestRejected(422, "백테스트할 수 있는 분봉이 없습니다")
+        if start < available.start or end > available.end:
+            raise BacktestRejected(
+                422, f"백테스트할 수 있는 기간은 {available.start.isoformat()}부터 {available.end.isoformat()}까지입니다"
+            )
 
         with self._lock:
             if self._current is not None:
