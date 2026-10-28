@@ -44,6 +44,21 @@ def day_bars(day):
     return [Bar(first + timedelta(minutes=3 * n), h, l, c, 100, o) for n, (o, h, l, c) in enumerate(rows)]
 
 
+class FakeProbe:
+    """분봉이 있는 날짜를 정해 둔 가짜 조회."""
+
+    def __init__(self, first=date(2026, 10, 1), last=date(2026, 10, 27), last_trading_day=date(2026, 11, 12)):
+        self.first, self.last, self.ltd = first, last, last_trading_day
+        self.calls = 0
+
+    def bars_on(self, day):
+        self.calls += 1
+        return 130 if self.first <= day <= self.last and day.weekday() < 5 else 0
+
+    def last_trading_day(self):
+        return self.ltd
+
+
 def good_loader(code, minutes, start, end, on_progress):
     days = {}
     current = start
@@ -56,7 +71,7 @@ def good_loader(code, minutes, start, end, on_progress):
 
 @pytest.fixture
 def make_client(tmp_path):
-    def build(loader=good_loader, manifest=MANIFEST, **settings_kwargs):
+    def build(loader=good_loader, manifest=MANIFEST, probe=None, **settings_kwargs):
         strategies = tmp_path / "strategies"
         strategies.mkdir(exist_ok=True)
         if (strategies / "week02_stub").exists():
@@ -68,6 +83,7 @@ def make_client(tmp_path):
                   "strategies_dir": strategies, "runs_dir": tmp_path / "runs"}
         app = create_app(Settings(**{**values, **settings_kwargs}))
         app.state.backtests._loader_factory = lambda: loader
+        app.state.backtests._probe_factory = lambda code, minutes: probe or FakeProbe()
         return TestClient(app), app.state.backtests
 
     return build
@@ -254,3 +270,80 @@ def test_시작_거부_예외는_상태_코드를_담는다(make_client):
         service.start("nope", START, END, 1)
 
     assert error.value.status_code == 404
+
+
+# ---- 가능 기간 ----
+
+
+def test_가능_기간_조회는_분봉이_있는_첫_날과_마지막_날과_최종거래일을_돌려준다(make_client):
+    client, _ = make_client()
+
+    response = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "strategy_id": "week02_stub",
+        "instrument": {"name": "삼성전자선물", "code": "A116B000"},
+        "start": "2026-10-01",
+        "end": "2026-10-27",
+        "last_trading_day": "2026-11-12",
+    }
+
+
+def test_분봉이_전혀_없으면_가능_기간이_없고_시작도_거부한다(make_client):
+    client, _ = make_client(probe=FakeProbe(first=date(2030, 1, 1), last=date(2030, 1, 2)))
+
+    shown = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"}).json()
+    started = client.post("/api/backtests", json=body())
+
+    assert (shown["start"], shown["end"]) == (None, None)
+    assert started.status_code == 422 and "분봉이 없습니다" in started.json()["detail"]
+
+
+def test_가능_기간_밖의_시작일_종료일은_거부하고_사유에_가능_기간을_적는다(make_client):
+    client, _ = make_client(probe=FakeProbe(first=date(2026, 10, 1), last=date(2026, 10, 20)))
+
+    early = client.post("/api/backtests", json=body(start_date="2026-09-28", end_date="2026-10-02"))
+    late = client.post("/api/backtests", json=body(start_date="2026-10-15", end_date="2026-10-23"))
+
+    for response in (early, late):
+        assert response.status_code == 422
+        assert "2026-10-01부터 2026-10-20까지" in response.json()["detail"]
+    assert client.get("/api/runs").json() == []
+
+
+def test_가능_기간_경계_날짜는_허용한다(make_client):
+    client, service = make_client()
+
+    response = client.post("/api/backtests", json=body(start_date="2026-10-01", end_date="2026-10-02"))
+    service.join(10)
+
+    assert response.status_code == 202
+
+
+def test_가능_기간_조회의_오류를_처리한다(make_client):
+    from app.nh.errors import TransportError
+
+    class Broken(FakeProbe):
+        def bars_on(self, day):
+            raise TransportError("조회 실패")
+
+    client, _ = make_client(probe=Broken())
+    no_keys, _ = make_client(nh_app_key=None, nh_app_secret=None)
+
+    assert client.get("/api/backtests/range", params={"strategy_id": "nope"}).status_code == 404
+    assert client.get("/api/backtests/range", params={"strategy_id": "week02_stub"}).status_code == 502
+    assert client.post("/api/backtests", json=body()).status_code == 502
+    assert no_keys.get("/api/backtests/range", params={"strategy_id": "week02_stub"}).status_code == 503
+
+
+def test_같은_종목의_가능_기간은_하루_동안_다시_조회하지_않는다(make_client):
+    probe = FakeProbe()
+    client, _ = make_client(probe=probe)
+
+    client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+    calls = probe.calls
+    client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+    client.post("/api/backtests", json=body(start_date="2026-10-20", end_date="2026-10-21"))
+
+    assert calls > 0 and probe.calls == calls
