@@ -8,8 +8,8 @@
 
 ## 위치와 이름
 
-- 전략 문서는 `docs/strategies/week-NN/` 아래에 둔다.
-- 파일 이름은 소문자 영문과 하이픈으로 쓴다. 예: `samsung-futures-intraday.md`
+- 전략 문서는 `docs/strategies/` 바로 아래에 둔다.
+- 파일 이름은 전략 ID(`backend/strategies/` 폴더 이름)와 같게 쓴다. 예: `week02_samsung_futures_intraday.md`
 - 전략 하나에 문서 하나를 쓴다.
 
 ## 쓸지 말지 판단하는 기준

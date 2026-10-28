@@ -1,4 +1,4 @@
-"""삼성전자선물 고저점 역매매 전략. 판단 규칙은 docs/strategies/week-02/samsung-futures-reversal.md를 따른다."""
+"""삼성전자선물 역매매 전략. 연구 코드에 의존하지 않는 실행 전략."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -47,6 +47,10 @@ class _Work:
 class Strategy(BaseStrategy):
     def __init__(self, params: Mapping[str, Any]):
         super().__init__(params)
+        if params["bar_minutes"] != 3:
+            raise ValueError("이 전략의 신호 봉은 3분으로 고정됩니다")
+        if params["min_target_ticks"] < 0 or params["tick_size"] <= 0:
+            raise ValueError("최소 목표 틱은 0 이상, 틱 간격은 0보다 커야 합니다")
         if params["target_mode"] not in (TARGET_UPDATE, TARGET_FIXED):
             raise ValueError(f"target_mode는 '{TARGET_UPDATE}' 또는 '{TARGET_FIXED}'이어야 합니다")
 
@@ -80,6 +84,7 @@ class Strategy(BaseStrategy):
             self._update_targets(ctx, work, bars)
             self._evaluate_signal(ctx, work, bars)
         else:
+            self._release_entry(ctx, work)
             self._check_exits(ctx, work)
         return self._finish(work)
 
@@ -98,38 +103,53 @@ class Strategy(BaseStrategy):
         )
 
     def _today_bars(self, ctx: Context) -> list[Bar]:
-        return [bar for bar in ctx.bars if bar.time.date() == ctx.now.date()]
+        bars = [b for b in ctx.bars if b.time.date() == ctx.now.date()
+                and b.time.time() >= self._time("signal_start_time")]
+        start = 0
+        step = timedelta(minutes=self.params["bar_minutes"])
+        for index in range(1, len(bars)):
+            if bars[index].time - bars[index - 1].time != step:
+                start = index
+        return bars[start:]
 
     # ---- 시각·날짜 규칙 ----
 
     def _exit_on_final_day(self, ctx: Context, work: _Work) -> None:
-        if work.state.get("final_exit_done") or not ctx.lots:
-            return
-        closing = {order.entry_id for order in ctx.open_orders if order.kind == IntentKind.EXIT}
-        for lot in ctx.lots:
-            if lot.entry_id not in closing:
-                self._exit(work, lot, lot.quantity, "최종거래일 보유 포지션 청산")
-        work.set("final_exit_done", True)
-        self._note(ctx, work, "최종거래일 보유 포지션 청산을 시도")
+        self._close_remaining(ctx, work, "최종거래일 보유 포지션 청산", "final_exit_retry_at")
+        work.set("final_exit_done", not ctx.lots and not ctx.open_orders)
 
     def _flatten(self, ctx: Context, work: _Work) -> None:
-        if work.state.get("flatten_done"):
-            return
-        for order in ctx.open_orders:
-            work.cancels.append(CancelRequest(order.order_id, "당일 청산 시각 미체결 주문 취소"))
-        for lot in ctx.lots:
-            remaining = lot.quantity - work.scheduled_exit.get(lot.entry_id, 0)
-            if remaining > 0:
-                self._exit(work, lot, remaining, "당일 청산")
-        work.set("flatten_done", True)
+        if not work.state.get("flatten_started"):
+            for order in ctx.open_orders:
+                work.cancels.append(CancelRequest(order.order_id, "당일 청산 시각 미체결 주문 취소"))
+            self._note(ctx, work, "당일 청산 시각: 미체결 주문 취소 후 전량 청산")
+            work.set("flatten_started", True)
+        self._close_remaining(ctx, work, "당일 청산", "flatten_retry_at")
+        work.set("flatten_done", not ctx.lots and not ctx.open_orders)
         work.set("cutoff_done", True)
         work.set("candidate", None)
-        self._note(ctx, work, "당일 청산 시각: 미체결 주문 취소 후 전량 청산")
+        work.set("pending_entry", None)
+
+    def _close_remaining(self, ctx: Context, work: _Work, reason: str, retry_key: str) -> None:
+        retry_at = work.state.get(retry_key)
+        if retry_at and ctx.now < datetime.fromisoformat(retry_at):
+            return
+        issued = False
+        for lot in ctx.lots:
+            reserved = sum(o.quantity-o.filled_quantity for o in ctx.open_orders
+                           if o.kind == IntentKind.EXIT and o.entry_id == lot.entry_id)
+            remaining = lot.quantity-reserved-work.scheduled_exit.get(lot.entry_id, 0)
+            if remaining > 0:
+                self._exit(work, lot, remaining, reason)
+                issued = True
+        if issued:
+            work.set(retry_key, (ctx.now+timedelta(seconds=5)).isoformat())
 
     def _cut_off(self, ctx: Context, work: _Work) -> None:
         if work.state.get("cutoff_done"):
             return
         work.set("cutoff_done", True)
+        work.set("pending_entry", None)
         if work.state.get("candidate"):
             self._skip(ctx, work, "신규 진입 제한 시각이 되어 후보 봉을 확인하지 않음")
         work.set("candidate", None)
@@ -173,26 +193,23 @@ class Strategy(BaseStrategy):
                 work.touch()
 
     def _update_targets(self, ctx: Context, work: _Work, bars: list[Bar]) -> None:
-        """목표 갱신 방식: 보유 중 새로 확정된 반대쪽 고점·저점으로 목표를 바꾸고, 이미 지났으면 청산한다."""
         if self.params["target_mode"] != TARGET_UPDATE or not bars:
             return
-        swings = confirmed_swings(bars, self.params["swing_side_bars"])
-        price = ctx.price if ctx.price is not None else bars[-1].close
-        closing = self._closing_ids(ctx)
+        before = confirmed_swings(bars[:-1], self.params["swing_side_bars"])
+        after = confirmed_swings(bars, self.params["swing_side_bars"])
         for lot in ctx.lots:
             position = work.state["positions"].get(lot.entry_id)
-            if position is None:
-                continue
             kind = SwingKind.HIGH if lot.side == Side.BUY else SwingKind.LOW
-            fresh = [s for s in swings if s.kind == kind and s.confirmed_index > position["since_index"]]
-            if not fresh or fresh[-1].index <= position["target_index"]:
+            old, new = latest_swings(before, kind), latest_swings(after, kind)
+            if position is None or not new:
                 continue
-            position["target"] = fresh[-1].price
-            position["target_index"] = fresh[-1].index
+            if (old and new[0].price == old[0].price) or new[0].price == position["target"]:
+                continue
+            position["target"] = new[0].price
             work.touch()
-            reason = _exit_reason(lot.side, price, position)
-            if reason and lot.entry_id not in closing:
-                self._exit_with_decision(ctx, work, lot, position, price, f"{reason} (목표 갱신 시점)")
+            passed = bars[-1].close >= position["target"] if lot.side == Side.BUY else bars[-1].close <= position["target"]
+            if passed and lot.entry_id not in self._closing_ids(ctx) and not work.scheduled_exit.get(lot.entry_id, 0):
+                self._exit_with_decision(ctx, work, lot, position, bars[-1].close, "목표 갱신 후 다음 시가 청산")
 
     def _check_exits(self, ctx: Context, work: _Work) -> None:
         if ctx.price is None:
@@ -200,7 +217,7 @@ class Strategy(BaseStrategy):
         closing = self._closing_ids(ctx)
         for lot in ctx.lots:
             position = work.state["positions"].get(lot.entry_id)
-            if position is None or lot.entry_id in closing:
+            if position is None or lot.entry_id in closing or work.scheduled_exit.get(lot.entry_id, 0):
                 continue
             reason = _exit_reason(lot.side, ctx.price, position)
             if reason:
@@ -226,25 +243,27 @@ class Strategy(BaseStrategy):
     # ---- 신호 ----
 
     def _evaluate_signal(self, ctx: Context, work: _Work, bars: list[Bar]) -> None:
-        if len(bars) < 2:
-            self._hold(ctx, work, "당일 완성 봉이 2개보다 적음")
+        if ctx.now.time() < self._time("signal_start_time") or ctx.now.time() >= self._time("entry_cutoff_time"):
             return
         candidate = work.state.get("candidate")
         work.set("candidate", None)
-        if candidate and candidate["time"] == bars[-2].time.isoformat():
-            self._confirm(ctx, work, bars, candidate)
-        self._find_candidate(ctx, work, bars)
+        if candidate:
+            if len(bars) >= 2 and candidate["time"] == bars[-2].time.isoformat():
+                self._confirm(ctx, work, bars, candidate)
+        elif len(bars) >= 2:
+            self._find_candidate(ctx, work, bars)
 
     def _find_candidate(self, ctx: Context, work: _Work, bars: list[Bar]) -> None:
         bar = bars[-1]
         before = confirmed_swings(bars[:-1], self.params["swing_side_bars"])
-        low = latest_swings(before, SwingKind.LOW)
-        high = latest_swings(before, SwingKind.HIGH)
-        buy = bool(low) and bar.low <= low[0].price and bar.close > low[0].price
-        sell = bool(high) and bar.high >= high[0].price and bar.close < high[0].price
+        highs, lows = latest_swings(before, SwingKind.HIGH), latest_swings(before, SwingKind.LOW)
+        if not highs or not lows or highs[0].price <= lows[0].price:
+            return
+        buy = bar.low <= lows[0].price and bar.close > lows[0].price
+        sell = bar.high >= highs[0].price and bar.close < highs[0].price
         detail = {
-            "reference_low": low[0].price if low else None,
-            "reference_high": high[0].price if high else None,
+            "reference_low": lows[0].price,
+            "reference_high": highs[0].price,
             "close": bar.close,
         }
         if buy and sell:
@@ -254,19 +273,17 @@ class Strategy(BaseStrategy):
             self._hold(ctx, work, "후보 봉 없음", detail)
             return
         side = Side.BUY if buy else Side.SELL
-        reference, opposite = (low[0], high) if buy else (high[0], low)
-        if not opposite:
-            name = "고점" if buy else "저점"
-            self._skip(ctx, work, f"반대쪽 확정 {name}이 없음", side, detail)
+        if ctx.net_quantity and (ctx.net_quantity > 0) != (side == Side.BUY):
+            self._skip(ctx, work, "보유 중 반대 방향 후보를 만들지 않음", side, detail)
             return
+        reference, opposite = (lows[0], highs[0]) if buy else (highs[0], lows[0])
         work.set(
             "candidate",
             {
                 "side": side.value,
                 "time": bar.time.isoformat(),
                 "reference": reference.price,
-                "target": opposite[0].price,
-                "target_index": opposite[0].index,
+                "target": opposite.price,
             },
         )
         self._hold(ctx, work, f"{side.value} 후보 봉 발생, 다음 봉에서 확인", detail)
@@ -327,29 +344,48 @@ class Strategy(BaseStrategy):
             "side": side.value,
             "stop": stop,
             "target": candidate["target"],
-            "target_index": candidate["target_index"],
-            "since_index": len(bars) - 1,
             "expires": expires.isoformat(),
         }
         reason = "저점을 깼다가 회복해 매수" if side == Side.BUY else "고점을 넘었다가 내려와 매도"
-        work.orders.append(
-            OrderIntent(
-                side=side,
-                quantity=self.params["entry_quantity"],
-                kind=IntentKind.ENTRY,
-                entry_id=entry_id,
-                reason=reason,
-                valid_bars=valid_bars,
-            )
-        )
-        work.decisions.append(
-            Decision(
-                ctx.now,
-                DecisionResult(side.value),
-                reason,
-                detail={**detail, "entry_id": entry_id, "stop": stop, "quantity": self.params["entry_quantity"]},
-            )
-        )
+        work.set("pending_entry", dict(side=side.value, quantity=self.params["entry_quantity"],
+            entry_id=entry_id, reason=reason, valid_bars=valid_bars, at=ctx.now.isoformat()))
+        self._hold(ctx, work, "확인 완료: 다음 가격에서 목표거리와 진입 범위 검사",
+                   {**detail, "entry_id": entry_id, "stop": stop})
+
+    def _release_entry(self, ctx: Context, work: _Work) -> None:
+        pending = work.state.get("pending_entry")
+        if not pending or ctx.price is None:
+            return
+        at = datetime.fromisoformat(pending["at"])
+        if ctx.now < at:
+            return
+        work.set("pending_entry", None)
+        side = Side(pending["side"])
+        position = work.state["positions"].get(pending["entry_id"])
+        reason = self._entry_block(ctx)
+        if ctx.now >= at + timedelta(minutes=1):
+            reason = "시세 공백으로 다음 진입 구간을 놓침"
+        elif position is None:
+            reason = "진입 정보가 만료됨"
+        elif ctx.open_orders:
+            reason = "이전 주문이 처리 중이어서 진입을 건너뜀"
+        elif ctx.net_quantity and (ctx.net_quantity > 0) != (side == Side.BUY):
+            reason = "보유 중 반대 방향 진입을 건너뜀"
+        else:
+            inside = position["stop"] < ctx.price < position["target"] if side == Side.BUY else position["target"] < ctx.price < position["stop"]
+            distance = (position["target"] - ctx.price) * (1 if side == Side.BUY else -1)
+            if not inside:
+                reason = "진입 가격이 손절·목표 범위 밖"
+            elif distance < self.params["min_target_ticks"] * self.params["tick_size"]:
+                reason = "목표까지 거리가 최소 목표 틱 수 미만"
+        if reason:
+            self._skip(ctx, work, reason, side, {"entry_id": pending["entry_id"], "price": ctx.price})
+            return
+        work.orders.append(OrderIntent(side, pending["quantity"], IntentKind.ENTRY,
+            pending["entry_id"], pending["reason"], valid_bars=pending["valid_bars"]))
+        work.decisions.append(Decision(ctx.now, DecisionResult(side.value), pending["reason"],
+            detail={"entry_id": pending["entry_id"], "price": ctx.price,
+                    "target": position["target"], "stop": position["stop"]}))
 
     # ---- 주문·판단 기록 ----
 

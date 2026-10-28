@@ -174,7 +174,7 @@
 
 ## 12. 관련 API 문서
 
-- [국내 분봉](../../nh-api/apis/domestic_chart-minute.md)
-- [국내 현재가·최종거래일](../../nh-api/apis/domestic_price.md)
-- [국내 주문](../../nh-api/apis/domestic_order.md)
-- [국내 취소주문](../../nh-api/apis/domestic_cancel.md)
+- [국내 분봉](../nh-api/apis/domestic_chart-minute.md)
+- [국내 현재가·최종거래일](../nh-api/apis/domestic_price.md)
+- [국내 주문](../nh-api/apis/domestic_order.md)
+- [국내 취소주문](../nh-api/apis/domestic_cancel.md)

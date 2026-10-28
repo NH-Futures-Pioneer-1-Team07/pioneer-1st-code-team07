@@ -11,7 +11,7 @@ from tests.test_backtest_service import FakeProbe
 from tests.test_reversal_strategy import BUY_ROWS
 
 
-ID = "week02_samsung_futures_reversal_3tick"
+ID = "week02_samsung_futures_reversal"
 DAY = date(2026, 10, 27)
 
 
