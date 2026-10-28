@@ -882,3 +882,61 @@ def test_상태_스냅샷에_단계_가격_손익_차단_사유가_있다(tmp_pa
         assert snap["entry_blocks"] == []
 
     run(scenario)
+
+
+# ---- 계좌 전체 정리 ----
+
+
+def test_정리를_시작하면_전략_판단과_신규_주문을_멈춘다(tmp_path):
+    async def scenario():
+        h = Harness(tmp_path, Script(on_bar=buy_once()))
+        await h.send(trade_event(243000.0))
+        calls = len(h.strategy.price_calls)
+
+        await h.send(paper.PauseRequest())
+        await h.send(trade_event(243500.0))
+        h.broker.bars = [bar(0)]
+        await h.at(minutes=3, seconds=10)
+
+        assert h.session.phase == paper.CLEARING
+        assert len(h.strategy.price_calls) == calls and h.strategy.bar_calls == []
+        assert h.broker.place_calls == []
+        assert "계좌 전체 정리 중" in h.session.entry_blocks(h.now)
+        assert h.session.snapshot == {} or h.session.snapshot["phase"] != "running"
+
+    run(scenario)
+
+
+def test_정리_중_종료하면_계좌_전체_확인_없이_자기_보유만_청산하고_끝낸다(tmp_path):
+    async def scenario():
+        h = Harness(tmp_path, Script(on_bar=buy_once()))
+        await h.send(trade_event(243000.0))
+        await fill_entry(h)
+        h.broker.positions_list = [account_position(Side.BUY, 5), account_position(Side.SELL, 9)]  # 계좌에는 다른 보유도 있음
+        await h.send(paper.PauseRequest())
+        await h.send(paper.StopRequest(account_wide=True))
+        h.broker.place_calls.clear()
+
+        await h.at(minutes=4)
+        assert h.broker.place_calls == [(Side.SELL, 5)]  # 자기 진입분만 청산
+        await h.send(order_event("0000000002", OrderStatus.FILLED, filled=5, price=244000.0, quantity=5))
+        await h.at(minutes=4, seconds=3)
+
+        assert h.session.final_status == "completed"
+
+    run(scenario)
+
+
+def test_일반_종료는_계좌에_다른_보유가_남아_있으면_완료로_끝내지_않는다(tmp_path):
+    async def scenario():
+        h = Harness(tmp_path)
+        h.broker.positions_list = [account_position(Side.BUY, 1)]
+        await h.send(paper.StopRequest(account_wide=False))
+        for seconds in range(0, 100, 5):
+            await h.at(seconds=seconds)
+            if h.session.done.is_set():
+                break
+
+        assert h.session.final_status == "error"
+
+    run(scenario)
