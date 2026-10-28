@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorMessage } from "../../apis/client";
 import { useMarketStream } from "../../apis/marketStream";
 import { usePolling } from "../../apis/polling";
@@ -19,12 +19,12 @@ import { formatMoney, formatNumber } from "../../data/format";
 import {
   formatClock,
   instrumentLabel,
-  marketSessionLabel,
   phaseLabel,
   sideLabel,
   signed,
   statusMessage,
 } from "../../data/tradingView";
+import type { MarketStatus } from "../../data/tradingView";
 import Icon from "../../components/common/Icon";
 import ConfirmDialog from "../../components/common/ConfirmDialog";
 import StrategySelect from "../../components/common/StrategySelect";
@@ -44,7 +44,7 @@ const pnlClass = (value: number | null | undefined) =>
       ? "positive"
       : "negative";
 
-export default function TradingPage() {
+export default function TradingPage({ onMarketStatus }: { onMarketStatus: (status: MarketStatus) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [interval, setInterval] = useState("5");
   const [confirm, setConfirm] = useState<"stop" | "all" | null>(null);
@@ -103,12 +103,10 @@ export default function TradingPage() {
   const positions = account.data?.positions ?? [];
   const openOrders = account.data?.open_orders ?? [];
   const pnl = status.data?.pnl;
-  const streamNote =
-    stream.state === "live"
-      ? "실시간 시세 수신 중"
-      : stream.failure
-        ? `시세 연결 문제: ${stream.failure}`
-        : "시세 연결 중";
+  const session = quote.data?.market_session ?? null;
+  useEffect(() => {
+    onMarketStatus({ session, stream: stream.state, failure: stream.failure });
+  }, [onMarketStatus, session, stream.state, stream.failure]);
   const receivedAt = formatClock(stream.lastTrade?.time);
 
   const act = async (action: () => Promise<unknown>) => {
@@ -215,13 +213,6 @@ export default function TradingPage() {
                 {quote.data?.contract && (
                   <span className="badge">{quote.data.contract}</span>
                 )}
-                {quote.data && (
-                  <span
-                    className={`badge ${quote.data.market_session === "regular" ? styles.sessionOpen : ""}`}
-                  >
-                    {marketSessionLabel(quote.data.market_session)}
-                  </span>
-                )}
               </div>
               <small>
                 {instrument?.code ?? dash}
@@ -307,10 +298,6 @@ export default function TradingPage() {
             </span>
           </div>
           <div className={styles.connection}>
-            <span>
-              <i />
-              {streamNote}
-            </span>
             <span>거래량 {won(stream.lastTrade?.cum_volume ?? quote.data?.volume)}계약</span>
             <span>수신 {receivedAt || dash}</span>
           </div>

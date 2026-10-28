@@ -39,6 +39,17 @@ const MARKET_SESSION_LABELS: Record<MarketSession, string> = {
 export const marketSessionLabel = (session: MarketSession | null | undefined): string =>
   MARKET_SESSION_LABELS[session ?? "unknown"] ?? MARKET_SESSION_LABELS.unknown;
 
+/** 상단바에 보이는 시세 스트림 연결 문구. 장이 열렸는지가 아니라 연결 여부만 뜻한다. */
+export const streamLabel = (state: string, failure: string | null): string =>
+  state === "live" ? "시세 연결됨" : failure ? `시세 연결 끊김: ${failure}` : "시세 연결 중";
+
+/** 상단바에 보일 국내장 장 상태와 시세 연결 상태. 모의매매 화면이 채운다. */
+export interface MarketStatus {
+  session: MarketSession | null;
+  stream: string;
+  failure: string | null;
+}
+
 export const signed = (value: number, format: (n: number) => string) =>
   `${value > 0 ? "+" : ""}${format(value)}`;
 
