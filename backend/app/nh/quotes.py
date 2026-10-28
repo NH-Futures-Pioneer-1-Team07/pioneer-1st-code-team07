@@ -93,10 +93,11 @@ def _bar(row: dict[str, Any], shift: timedelta) -> Bar | None:
     day, clock = str(row.get("occurs1_ref_dt") or "").strip(), str(row.get("occurs1_exch_tm") or "").strip()
     high, low = _number(row.get("occurs1_high_pric")), _number(row.get("occurs1_low_pric"))
     close, volume = _number(row.get("occurs1_close_pric")), _number(row.get("occurs1_cum_trd_qty"))
+    open_ = _number(row.get("occurs1_open_pric"))
     if len(day) != 8 or len(clock) != 6 or None in (high, low, close, volume):
         return None
     try:
         moment = datetime.strptime(day + clock, "%Y%m%d%H%M%S")
     except ValueError:
         return None
-    return Bar(time=moment - shift, high=high, low=low, close=close, volume=int(volume))
+    return Bar(time=moment - shift, high=high, low=low, close=close, volume=int(volume), open=open_)
