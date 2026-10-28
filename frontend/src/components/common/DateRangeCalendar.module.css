@@ -145,6 +145,24 @@
   font-weight: 700;
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
+.sparse:not(.selected) {
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 55%, transparent);
+}
 .preview {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent);
 }

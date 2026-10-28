@@ -189,6 +189,8 @@ export interface BacktestRange {
   start: string | null;
   end: string | null;
   last_trading_day: string | null;
+  /** 기간 안에서 봉이 적은 날 → 그날의 봉 수 */
+  sparse_days?: Record<string, number>;
 }
 
 export interface Assumptions {
