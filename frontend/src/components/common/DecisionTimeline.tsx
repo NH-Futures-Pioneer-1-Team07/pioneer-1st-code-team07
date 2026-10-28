@@ -1,4 +1,4 @@
-import { formatNumber } from "../../data/fixtures";
+import { formatNumber } from "../../data/format";
 import styles from "./DecisionTimeline.module.css";
 
 export interface DecisionRow {

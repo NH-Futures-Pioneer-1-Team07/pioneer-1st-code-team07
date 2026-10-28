@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { errorMessage } from "../../../apis/client";
 import { fetchJournal } from "../../../apis/trading";
 import type { RunSummary } from "../../../apis/types";
-import { formatMoney, formatNumber } from "../../../data/fixtures";
+import { formatMoney, formatNumber } from "../../../data/format";
 import {
   formatDateTime,
   instrumentLabel,

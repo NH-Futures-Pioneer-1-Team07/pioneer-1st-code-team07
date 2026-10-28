@@ -15,7 +15,7 @@ import {
   startTrading,
   stopTrading,
 } from "../../apis/trading";
-import { formatMoney, formatNumber } from "../../data/fixtures";
+import { formatMoney, formatNumber } from "../../data/format";
 import {
   formatClock,
   instrumentLabel,
