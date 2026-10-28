@@ -3,9 +3,12 @@
 - 접근토큰을 붙이고 호출 제한 간격을 지킨다.
 - 성공 여부를 본문까지 보고 판단한다. HTTP 200은 성공이 아니다.
 - 실패해도 다시 보내지 않는다. 주문이 시간 초과로 실패했을 때 다시 보내면 같은 주문이
-  두 번 접수될 수 있다. 예외는 토큰이 거부된 경우의 한 번뿐이다. 그 요청은 처리되지 않았다.
+  두 번 접수될 수 있다. 예외는 토큰이 거부된 경우의 한 번과, 조회가 호출 속도 제한(`EGW036`)으로
+  거절된 경우의 몇 번뿐이다. 그 요청은 처리되지 않았다.
 """
 
+import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -13,7 +16,7 @@ import httpx
 from app.config import Settings
 from app.nh.auth import TokenManager
 from app.nh.errors import BusinessError, GatewayError, HttpError, TransportError
-from app.nh.rate_limit import Limit, RateLimiter
+from app.nh.rate_limit import SHARED_LIMITER, Limit, RateLimiter
 
 BASE_URLS = {"mock": "https://apidemo.futures.co.kr", "real": "https://api.futures.co.kr"}
 TIMEOUT = httpx.Timeout(10.0)
@@ -23,6 +26,9 @@ WEBSOCKET_KEY_PATH = "/permission/v1/web-socket-key"
 # 접근토큰을 다시 받으면 풀리는 코드
 REISSUE_CODES = {"EG041", "EG042", "EG043", "EG044", "EG045", "EG047", "EG049", "EGW052"}
 GATEWAY_PREFIXES = ("EG", "EST")
+RATE_LIMITED = "EGW036"
+RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_BACKOFF = 1.0
 ERROR_MESSAGE_FIELDS = ("errorMessage", "errorMsg", "message", "msg")
 
 
@@ -33,11 +39,14 @@ class NHClient:
         *,
         http_client: httpx.Client | None = None,
         limiter: RateLimiter | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ):
         self.environment = settings.trading_env
         self.base_url = BASE_URLS[self.environment]
         self._http = http_client or httpx.Client(timeout=TIMEOUT)
-        self._limiter = limiter or RateLimiter()
+        # 클라이언트가 여러 개여도 같은 계정의 호출 한도를 함께 지키도록 기본은 하나를 공유한다.
+        self._limiter = limiter or SHARED_LIMITER
+        self._sleep = sleep
         self._tokens = TokenManager(
             base_url=self.base_url,
             app_key=settings.nh_app_key.get_secret_value() if settings.nh_app_key else None,
@@ -46,7 +55,21 @@ class NHClient:
         )
 
     def call(self, path: str, payload: dict[str, Any], limit: Limit) -> dict[str, Any]:
-        """API를 한 번 부르고 응답 본문을 돌려준다. 실패하면 예외를 낸다."""
+        """API를 부르고 응답 본문을 돌려준다. 실패하면 예외를 낸다.
+
+        주문이 아닌 조회가 호출 속도 제한으로 거절되면 간격을 늘려 몇 번 다시 보낸다.
+        """
+        retries = 0
+        while True:
+            try:
+                return self._call_once(path, payload, limit)
+            except GatewayError as error:
+                if error.code != RATE_LIMITED or limit is Limit.ORDER or retries >= RATE_LIMIT_RETRIES:
+                    raise
+                retries += 1
+                self._sleep(RATE_LIMIT_BACKOFF * retries)
+
+    def _call_once(self, path: str, payload: dict[str, Any], limit: Limit) -> dict[str, Any]:
         self._limiter.wait(self.environment, limit)
         response, body = self._send(path, payload)
         if response.status_code == UNAUTHORIZED or _error_code(body) in REISSUE_CODES:

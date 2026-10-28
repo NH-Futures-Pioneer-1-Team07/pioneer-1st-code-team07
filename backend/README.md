@@ -103,9 +103,9 @@ uv run pytest
 
 | 파일 | 내용 |
 | --- | --- |
-| `client.py` | `NHClient.call(경로, 본문, 호출 등급)`. 접근토큰을 붙이고, 호출 제한을 지키고, 실패를 예외로 바꾼다 |
+| `client.py` | `NHClient.call(경로, 본문, 호출 등급)`. 접근토큰을 붙이고, 호출 제한을 지키고, 실패를 예외로 바꾼다. 주문이 아닌 조회가 `EGW036`(호출 속도 초과)으로 거절되면 1·2·3초 간격으로 최대 3번 다시 보낸다 |
 | `auth.py` | 접근토큰 발급·보관. 메모리에만 두고 만료 5분 전에 다시 발급한다 |
-| `rate_limit.py` | 주문 5건/초, 계좌 10건/초, 시세 10건/초 간격을 지킨다. 환경마다 따로 센다 |
+| `rate_limit.py` | 주문 5건/초, 계좌 10건/초, 시세 10건/초 간격을 지킨다. 환경마다 따로 세고, 모든 `NHClient`가 제한기 하나(`SHARED_LIMITER`)를 함께 쓴다 |
 | `errors.py` | `TransportError`, `HttpError`, `BusinessError`, `GatewayError`, `NHConfigError` |
 | `quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
 | `account.py` | `fetch_deposit`(예탁금), `fetch_positions`(보유 포지션), `fetch_orders`(주문 내역), `fetch_orderable_quantity`(주문가능수량) |
