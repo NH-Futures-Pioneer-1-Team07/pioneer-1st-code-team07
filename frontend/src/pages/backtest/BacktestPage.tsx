@@ -108,8 +108,9 @@ export default function BacktestPage() {
 
   // 슬리피지 입력칸은 서버의 가정 값으로 처음 채운다.
   useEffect(() => {
-    if (slippage === "" && assumptions.data) setSlippage(String(assumptions.data.slippage.ticks));
-  }, [assumptions.data, slippage]);
+    const ticks = assumptions.data?.slippage.ticks;
+    if (ticks !== undefined) setSlippage((current) => (current === "" ? String(ticks) : current));
+  }, [assumptions.data?.slippage.ticks]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -440,9 +441,17 @@ export default function BacktestPage() {
               </div>
               <div className={styles.chartHeading}>
                 <h3>자산 변화</h3>
-                <span>
-                  <i /> 하루마다 한 점 · 아래 막대는 하루 거래 건수
-                </span>
+                <ul className={styles.chartLegend}>
+                  <li>
+                    <i data-mark="line" /> 노란 선: 하루마다 찍은 자산 변화
+                  </li>
+                  <li>
+                    <i data-mark="candle" /> 중간 봉: 그날의 일봉. 종가가 시가 이상이면 빨강, 낮으면 파랑
+                  </li>
+                  <li>
+                    <i data-mark="bar" /> 하단 막대: 그날 체결 건수. 이익이면 빨강, 손실이면 파랑
+                  </li>
+                </ul>
               </div>
               <EquityChart meta={reportMeta} result={result} />
               <div className={styles.resultFooter}>
@@ -585,16 +594,16 @@ export default function BacktestPage() {
                   </div>
                   <div>
                     <dt>비용</dt>
-                    <dd>
-                      체결대금의 {percentText(reportMeta.assumptions.fee.rate)} · 슬리피지{" "}
-                      {reportMeta.assumptions.slippage.ticks}틱
-                      {reportMeta.assumptions.slippage.tick_size !== null &&
-                        `(${formatNumber(reportMeta.assumptions.slippage.tick_size)})`}
-                    </dd>
+                    <dd>체결대금의 {percentText(reportMeta.assumptions.fee.rate)}</dd>
                   </div>
                   <div>
-                    <dt>체결 기준</dt>
-                    <dd>{reportMeta.assumptions.fill.on_bar}</dd>
+                    <dt>슬리피지</dt>
+                    <dd>
+                      {reportMeta.assumptions.slippage.ticks}틱
+                      {reportMeta.assumptions.slippage.tick_size !== null &&
+                        `(${formatNumber(reportMeta.assumptions.slippage.tick_size)})`}{" "}
+                      · {reportMeta.assumptions.slippage.direction}
+                    </dd>
                   </div>
                 </dl>
                 <RecordDetail meta={reportMeta} />
