@@ -8,8 +8,10 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.config import Settings
+from app.nh.auth import KST
 from app.nh.client import NHClient
 from app.nh.errors import NHError
+from app.nh.market_hours import market_session
 from app.nh.quotes import MINUTE_PATH, PRICE_PATH, TimeMarks, parse_bar
 from app.nh.rate_limit import Limit
 from app.nh.realtime_data import BookLevel, OrderBook
@@ -188,8 +190,16 @@ class MarketService:
     BOOK_TTL = 1.0
     CANDLE_TTL = 2.0
 
-    def __init__(self, settings: Settings, *, client: NHClient | None = None, clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        client: NHClient | None = None,
+        clock: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = lambda: datetime.now(KST).replace(tzinfo=None),
+    ):
         self._settings = settings
+        self._now = now
         self._client = client
         self._cache = TtlCache(clock)
 
@@ -222,6 +232,7 @@ class MarketService:
             "lower_limit": detail.lower_limit,
             "multiplier": detail.multiplier,
             "remaining_days": detail.remaining_days,
+            "market_session": market_session(detail.name, self._now()),
         }
 
     def candles(self, code: str, interval: str, quantity: int) -> list[dict[str, Any]]:
