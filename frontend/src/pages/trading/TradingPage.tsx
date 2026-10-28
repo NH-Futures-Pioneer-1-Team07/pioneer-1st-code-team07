@@ -210,9 +210,6 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
                 <strong>
                   {instrument ? instrumentLabel(instrument.name) : dash}
                 </strong>
-                {quote.data?.contract && (
-                  <span className="badge">{quote.data.contract}</span>
-                )}
               </div>
               <small>
                 {instrument?.code ?? dash}
