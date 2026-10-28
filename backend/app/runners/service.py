@@ -21,6 +21,7 @@ from strategy_base.registry import RegisteredStrategy, StrategyRegistry
 DEFAULT_FEE_RATE = 0.000085
 FEE_SOURCE = "NH선물 수수료 부과 기준(2026-09-07 개정) 개별주식선물 온라인 매매 표준수수료 0.0085%"
 MAX_DAYS = 366
+MAX_SLIPPAGE_TICKS = 20
 
 
 class BacktestRejected(Exception):
@@ -42,7 +43,9 @@ class LoadedData:
 DataLoader = Callable[[str, int, date, date, Callable[[int, int], None]], LoadedData]
 
 
-def describe_assumptions(settings: Settings, tick_size: float | None = None) -> dict[str, Any]:
+def describe_assumptions(
+    settings: Settings, tick_size: float | None = None, slippage_ticks: int | None = None
+) -> dict[str, Any]:
     """백테스트의 비용·체결 가정. 실행 기록과 수수료 조회 API가 같은 내용을 쓴다."""
     rate = settings.backtest_fee_rate
     return {
@@ -52,7 +55,7 @@ def describe_assumptions(settings: Settings, tick_size: float | None = None) -> 
             "source": FEE_SOURCE if rate == DEFAULT_FEE_RATE else "환경변수 BACKTEST_FEE_RATE로 지정",
         },
         "slippage": {
-            "ticks": settings.backtest_slippage_ticks,
+            "ticks": settings.backtest_slippage_ticks if slippage_ticks is None else slippage_ticks,
             "tick_size": tick_size,
             "direction": "시장가 체결마다 불리한 방향",
         },
@@ -147,6 +150,7 @@ class BacktestService:
         end: date,
         initial_capital: float,
         params: dict[str, Any] | None = None,
+        slippage_ticks: int | None = None,
     ) -> dict[str, str]:
         registered = self._registry.get(strategy_id)
         if registered is None:
@@ -158,6 +162,8 @@ class BacktestService:
         if not instrument.code or not instrument.multiplier:
             raise BacktestRejected(422, "전략의 종목에 종목코드와 거래승수가 필요합니다")
         self._validate_period(start, end, initial_capital)
+        if slippage_ticks is not None and not 0 <= slippage_ticks <= MAX_SLIPPAGE_TICKS:
+            raise BacktestRejected(422, f"슬리피지는 0틱부터 {MAX_SLIPPAGE_TICKS}틱까지 입력할 수 있습니다")
         merged = self._merge_params(manifest, params)
         if not (self._settings.nh_app_key and self._settings.nh_app_secret):
             raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
@@ -180,12 +186,12 @@ class BacktestService:
                 params=merged,
                 period={"start": start.isoformat(), "end": end.isoformat()},
                 initial_capital=initial_capital,
-                assumptions=describe_assumptions(self._settings),
+                assumptions=describe_assumptions(self._settings, slippage_ticks=slippage_ticks),
             )
             self._current = {"strategy_id": strategy_id, "mode": "backtest", "run_id": recorder.run_id}
             self._thread = threading.Thread(
                 target=self._job,
-                args=(recorder, registered, merged, start, end, initial_capital),
+                args=(recorder, registered, merged, start, end, initial_capital, slippage_ticks),
                 daemon=True,
             )
             self._thread.start()
@@ -217,9 +223,10 @@ class BacktestService:
         start: date,
         end: date,
         initial_capital: float,
+        slippage_ticks: int | None,
     ) -> None:
         try:
-            self._run(recorder, registered, params, start, end, initial_capital)
+            self._run(recorder, registered, params, start, end, initial_capital, slippage_ticks)
         except Exception as error:
             recorder.record("event", level="error", text=f"백테스트가 오류로 멈췄습니다: {type(error).__name__}: {error}")
             recorder.finish(status="error")
@@ -235,6 +242,7 @@ class BacktestService:
         start: date,
         end: date,
         initial_capital: float,
+        slippage_ticks: int | None,
     ) -> None:
         manifest = registered.manifest
         instrument = manifest.instruments[0]
@@ -250,10 +258,10 @@ class BacktestService:
             raise RuntimeError("조회 기간에 분봉 데이터가 없습니다")
 
         tick = infer_tick(loaded.days)
-        recorder.update_meta(assumptions=describe_assumptions(self._settings, tick))
+        recorder.update_meta(assumptions=describe_assumptions(self._settings, tick, slippage_ticks))
         assumptions = Assumptions(
             fee_rate=self._settings.backtest_fee_rate,
-            slippage_ticks=self._settings.backtest_slippage_ticks,
+            slippage_ticks=self._settings.backtest_slippage_ticks if slippage_ticks is None else slippage_ticks,
             multiplier=instrument.multiplier or 1,
             tick_size=tick,
         )

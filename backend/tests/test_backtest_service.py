@@ -136,6 +136,28 @@ def test_비용과_체결_가정이_실행_정보에_기록된다(make_client):
     assert assumptions["margin"]
 
 
+def test_요청한_슬리피지가_체결_가격과_실행_정보에_반영된다(make_client):
+    client, service = make_client(backtest_slippage_ticks=1)
+    results = {}
+    for ticks in (None, 0, 3):
+        started = client.post("/api/backtests", json=body(**({} if ticks is None else {"slippage_ticks": ticks}))).json()
+        service.join(10)
+        detail = run_detail(client, started)
+        results[ticks] = (detail["meta"]["assumptions"]["slippage"]["ticks"], detail["result"]["gross_pnl"])
+
+    assert [results[key][0] for key in (None, 0, 3)] == [1, 0, 3]
+    assert results[0][1] > results[None][1] > results[3][1]
+
+
+def test_슬리피지가_범위를_벗어나면_거부한다(make_client):
+    client, _ = make_client()
+
+    for ticks in (-1, 21):
+        response = client.post("/api/backtests", json=body(slippage_ticks=ticks))
+        assert response.status_code == 422 and "0틱부터 20틱" in response.json()["detail"]
+    assert client.post("/api/backtests", json=body(slippage_ticks=20)).status_code == 202
+
+
 def test_기록에_판단_주문_체결_거래가_남는다(make_client):
     client, service = make_client()
     started = client.post("/api/backtests", json=body()).json()

@@ -193,7 +193,7 @@ await connection.stop()
 
 | 요청 | 내용 |
 | --- | --- |
-| `POST /api/backtests` | 백테스트를 시작하고 `202`와 실행 식별자(`strategy_id`, `mode`, `run_id`)를 바로 돌려준다 |
+| `POST /api/backtests` | 백테스트를 시작하고 `202`와 실행 식별자(`strategy_id`, `mode`, `run_id`)를 바로 돌려준다. 요청의 `slippage_ticks`(선택, 0~20 정수)로 이번 실행의 슬리피지를 정하고, 없으면 환경변수 값을 쓴다. 범위를 벗어나면 `422`다 |
 | `GET /api/backtests/current` | 실행 중인 백테스트의 식별자. 없으면 `{"run": null}` |
 | `GET /api/backtests/assumptions` | 시작 전에 보여 줄 비용·체결 가정 |
 | `GET /api/backtests/range?strategy_id=` | 전략의 종목으로 백테스트할 수 있는 기간(`start`, `end`, `last_trading_day`)과 봉이 적은 날(`sparse_days`) |
@@ -235,7 +235,7 @@ await connection.stop()
 | 항목 | 값 | 바꾸는 방법 |
 | --- | --- | --- |
 | 수수료율 | 체결대금의 0.0085% | 환경변수 `BACKTEST_FEE_RATE`(0.000085) |
-| 슬리피지 | 시장가 체결마다 불리한 방향으로 1틱 | 환경변수 `BACKTEST_SLIPPAGE_TICKS`(1) |
+| 슬리피지 | 시장가 체결마다 불리한 방향으로 1틱 | 환경변수 `BACKTEST_SLIPPAGE_TICKS`(1), 실행마다 요청의 `slippage_ticks`(0~20) |
 | 호가 단위 | 기간의 봉 가격 차이의 최대공약수 | 삼성전자선물은 500원으로 추정된다 |
 
 수수료율은 NH선물 수수료 부과 기준(2026-09-07 개정)의 개별주식선물 온라인 매매 표준수수료다. API 주문을 온라인으로 보았고, 협의수수료와 거래소 수수료는 반영하지 않았다. 실행마다 쓴 가정은 `meta.json`의 `assumptions`에 기록한다.

@@ -15,6 +15,7 @@ class BacktestRequest(BaseModel):
     end_date: date
     initial_capital: float = Field(gt=0)
     params: dict[str, Any] | None = None
+    slippage_ticks: int | None = None
 
 
 def _service(request: Request) -> BacktestService:
@@ -26,7 +27,7 @@ def start_backtest(body: BacktestRequest, request: Request) -> dict[str, str]:
     """백테스트를 시작하고 실행 식별자를 돌려준다. 진행 상황은 실행 상세의 `meta.progress`로 읽는다."""
     try:
         return _service(request).start(
-            body.strategy_id, body.start_date, body.end_date, body.initial_capital, body.params
+            body.strategy_id, body.start_date, body.end_date, body.initial_capital, body.params, body.slippage_ticks
         )
     except BacktestRejected as rejected:
         raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
