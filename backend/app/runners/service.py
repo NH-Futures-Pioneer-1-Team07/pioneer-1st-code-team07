@@ -12,7 +12,7 @@ from app.nh.client import NHClient
 from app.nh.errors import NHError
 from app.nh.quotes import fetch_minute_bars, fetch_quote
 from app.records.store import RunRecorder, RunStore
-from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache
+from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache, sparse_below
 from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
@@ -121,11 +121,12 @@ class BacktestService:
             "start": found.start.isoformat() if found else None,
             "end": found.end.isoformat() if found else None,
             "last_trading_day": found.last_trading_day.isoformat() if found and found.last_trading_day else None,
+            "sparse_days": {day.isoformat(): bars for day, bars in found.sparse_days.items()} if found else {},
         }
 
     def _range(self, code: str, minutes: int) -> AvailableRange | None:
         try:
-            return self._ranges.get(code, self._probe_factory(code, minutes))
+            return self._ranges.get(code, self._probe_factory(code, minutes), sparse_below(minutes))
         except NHError as error:
             raise BacktestRejected(502, f"가능 기간을 확인하지 못했습니다: {type(error).__name__}") from error
 

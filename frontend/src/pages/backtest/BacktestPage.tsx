@@ -198,6 +198,7 @@ export default function BacktestPage() {
                   end={endDate}
                   min={available.start as string}
                   max={available.end as string}
+                  sparse={available.sparse_days}
                   onChange={(start, end) => {
                     setStartDate(start);
                     setEndDate(end);

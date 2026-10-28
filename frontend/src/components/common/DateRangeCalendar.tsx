@@ -13,12 +13,15 @@ export default function DateRangeCalendar({
   end,
   min,
   max,
+  sparse = {},
   onChange,
 }: {
   start: string;
   end: string;
   min: string;
   max: string;
+  /** 봉이 적은 날 → 그날의 봉 수. 붉게 표시하고 선택은 막지 않는다. */
+  sparse?: Record<string, number>;
   onChange: (start: string, end: string) => void;
 }) {
   const initial = start || min;
@@ -119,6 +122,7 @@ export default function DateRangeCalendar({
         styles.day,
         (isStart || isEnd) && styles.selected,
         isPreviewEnd && styles.preview,
+        sparse[key] !== undefined && styles.sparse,
       ]
         .filter(Boolean)
         .join(" ");
@@ -129,7 +133,8 @@ export default function DateRangeCalendar({
             className={dayClasses}
             disabled={disabled}
             aria-pressed={isStart || isEnd}
-            aria-label={`${view.y}년 ${view.m}월 ${day}일${isStart ? " 시작일" : isEnd ? " 종료일" : ""}`}
+            aria-label={`${view.y}년 ${view.m}월 ${day}일${isStart ? " 시작일" : isEnd ? " 종료일" : ""}${sparse[key] !== undefined ? `, 봉이 적은 날 ${sparse[key]}개` : ""}`}
+            title={sparse[key] !== undefined ? `봉이 적은 날 (${sparse[key]}개)` : undefined}
             onClick={() => pick(key)}
             onMouseEnter={() => setHover(key)}
             onFocus={() => setHover(key)}
@@ -203,6 +208,11 @@ export default function DateRangeCalendar({
             ))}
           </div>
           <div className={styles.grid}>{cells}</div>
+          {Object.keys(sparse).length > 0 && (
+            <p className={styles.legend}>
+              <i aria-hidden="true" /> 봉이 적은 날 · 전략이 판단을 못 해 보류가 많아요
+            </p>
+          )}
         </div>
       </div>
     </div>

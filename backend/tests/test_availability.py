@@ -8,14 +8,15 @@ TODAY = date(2026, 10, 28)
 class Source:
     """날짜별 분봉 수를 정해 둔 가짜 조회. `days`는 분봉이 있는 날짜의 집합이다."""
 
-    def __init__(self, days, last_trading_day=date(2026, 11, 12)):
+    def __init__(self, days, last_trading_day=date(2026, 11, 12), few=None):
         self.days = set(days)
+        self.few = few or {}
         self.ltd = last_trading_day
         self.calls = 0
 
     def bars_on(self, day):
         self.calls += 1
-        return 100 if day in self.days else 0
+        return self.few.get(day, 100) if day in self.days else 0
 
     def last_trading_day(self):
         return self.ltd
@@ -116,3 +117,31 @@ def test_같은_날에는_보관한_값을_쓰고_날이_바뀌면_다시_조회
     third = cache.get("A116B000", source)
     assert source.calls > after_other
     assert third.end == date(2026, 10, 27)
+
+
+def test_기준보다_봉이_적은_날을_봉_수와_함께_담고_휴장일은_담지_않는다():
+    few = {date(2026, 8, 14): 1, date(2026, 8, 20): 19, date(2026, 9, 10): 70, date(2026, 9, 9): 69}
+
+    found = find_range(Source(REAL, few=few), TODAY, sparse_below=70)
+
+    assert found.sparse_days == {date(2026, 8, 14): 1, date(2026, 8, 20): 19, date(2026, 9, 9): 69}
+    assert date(2026, 8, 17) not in found.sparse_days and date(2026, 9, 24) not in found.sparse_days
+
+
+def test_기준을_주지_않으면_봉이_적은_날을_찾지_않고_조회_수도_늘지_않는다():
+    plain, counted = Source(REAL, few={date(2026, 8, 20): 5}), Source(REAL, few={date(2026, 8, 20): 5})
+
+    assert find_range(plain, TODAY).sparse_days == {}
+    find_range(counted, TODAY, sparse_below=70)
+    assert counted.calls <= plain.calls + len(REAL)
+
+
+def test_봉이_적은_날을_찾을_때_같은_날을_두_번_조회하지_않는다():
+    source = Source(REAL)
+    seen = []
+    original = source.bars_on
+    source.bars_on = lambda day: (seen.append(day), original(day))[1]
+
+    find_range(source, TODAY, sparse_below=70)
+
+    assert len(seen) == len(set(seen))

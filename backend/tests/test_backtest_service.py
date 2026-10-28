@@ -47,13 +47,16 @@ def day_bars(day):
 class FakeProbe:
     """분봉이 있는 날짜를 정해 둔 가짜 조회."""
 
-    def __init__(self, first=date(2026, 10, 1), last=date(2026, 10, 27), last_trading_day=date(2026, 11, 12)):
+    def __init__(self, first=date(2026, 10, 1), last=date(2026, 10, 27), last_trading_day=date(2026, 11, 12), few=None):
         self.first, self.last, self.ltd = first, last, last_trading_day
+        self.few = few or {}
         self.calls = 0
 
     def bars_on(self, day):
         self.calls += 1
-        return 130 if self.first <= day <= self.last and day.weekday() < 5 else 0
+        if not (self.first <= day <= self.last and day.weekday() < 5):
+            return 0
+        return self.few.get(day, 130)
 
     def last_trading_day(self):
         return self.ltd
@@ -290,7 +293,16 @@ def test_가능_기간_조회는_분봉이_있는_첫_날과_마지막_날과_�
         "start": "2026-10-01",
         "end": "2026-10-27",
         "last_trading_day": "2026-11-12",
+        "sparse_days": {},
     }
+
+
+def test_가능_기간_조회는_봉이_적은_날과_그날의_봉_수를_함께_돌려준다(make_client):
+    client, _ = make_client(probe=FakeProbe(few={date(2026, 10, 6): 20, date(2026, 10, 8): 69, date(2026, 10, 9): 70}))
+
+    shown = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"}).json()
+
+    assert shown["sparse_days"] == {"2026-10-06": 20, "2026-10-08": 69}
 
 
 def test_분봉이_전혀_없으면_가능_기간이_없고_시작도_거부한다(make_client):

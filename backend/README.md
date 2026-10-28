@@ -196,7 +196,7 @@ await connection.stop()
 | `POST /api/backtests` | 백테스트를 시작하고 `202`와 실행 식별자(`strategy_id`, `mode`, `run_id`)를 바로 돌려준다 |
 | `GET /api/backtests/current` | 실행 중인 백테스트의 식별자. 없으면 `{"run": null}` |
 | `GET /api/backtests/assumptions` | 시작 전에 보여 줄 비용·체결 가정 |
-| `GET /api/backtests/range?strategy_id=` | 전략의 종목으로 백테스트할 수 있는 기간(`start`, `end`, `last_trading_day`) |
+| `GET /api/backtests/range?strategy_id=` | 전략의 종목으로 백테스트할 수 있는 기간(`start`, `end`, `last_trading_day`)과 봉이 적은 날(`sparse_days`) |
 | `GET /api/runs/<전략 id>/backtest/<실행 일시>` | 진행 상황(`meta.progress`)과 결과 |
 
 시작 요청 본문은 `strategy_id`, `start_date`, `end_date`, `initial_capital`이고, 전략 파라미터를 바꾸려면 `params`를 더한다.
@@ -210,7 +210,7 @@ await connection.stop()
 
 ### 가능 기간
 
-`GET /api/backtests/range?strategy_id=`는 전략의 첫 번째 종목에 대해 분봉이 있는 첫 날(`start`)과 마지막으로 마감된 거래일(`end`), 최종거래일(`last_trading_day`)을 돌려준다. 분봉이 전혀 없으면 `start`와 `end`가 `null`이다. 없는 전략 `404`, NH 인증 정보 없음 `503`, NH 조회 실패 `502`다.
+`GET /api/backtests/range?strategy_id=`는 전략의 첫 번째 종목에 대해 분봉이 있는 첫 날(`start`)과 마지막으로 마감된 거래일(`end`), 최종거래일(`last_trading_day`)을 돌려준다. 분봉이 전혀 없으면 `start`와 `end`가 `null`이다. `sparse_days`는 기간 안에서 봉이 적은 날을 `{날짜: 그날의 봉 수}`로 담는다. 하루 정상 봉 수(거래 시간 420분 ÷ 봉 크기)의 절반보다 적은 날이고 3분봉이면 70개 미만이다. 분봉이 없는 휴장일은 넣지 않는다. 처음 한 번은 기간의 날짜마다 NH를 조회해 몇 초 걸리고(2026.11월물 약 50일에 6.7초), 그날 안에는 종목별로 보관해 다시 조회하지 않는다. 없는 전략 `404`, NH 인증 정보 없음 `503`, NH 조회 실패 `502`다.
 
 - 월물은 상장일 이전의 분봉이 없어서 조회 가능한 기간은 그 월물의 상장일부터다. NH 응답에는 상장일이 없어 날짜별 분봉 조회로 찾는다.
 - `end`는 오늘 이전이고 최종거래일 이하이며, 그 이전에서 분봉이 있는 가장 최근 날이다.
