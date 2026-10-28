@@ -311,9 +311,9 @@
   padding: 24px;
 }
 .history :global(.table-wrap) {
-  flex: 1;
-  height: 0;
-  min-height: var(--table-height, 220px);
+  flex: none;
+  height: auto;
+  max-height: 320px;
 }
 .history :global(.section-head) p {
   font-size: 11px;
@@ -521,7 +521,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
   column-gap: 0;
-  align-items: stretch;
+  align-items: start;
   transition:
     grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     column-gap 0.4s cubic-bezier(0.22, 1, 0.36, 1);

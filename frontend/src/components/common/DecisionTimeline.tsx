@@ -1,3 +1,4 @@
+import type { UIEventHandler } from "react";
 import { formatNumber } from "../../data/format";
 import styles from "./DecisionTimeline.module.css";
 
@@ -14,10 +15,17 @@ export interface DecisionRow {
 export const sideClass = (side: string) =>
   side === "매수" ? "positive" : side === "매도" ? "negative" : "";
 
-export default function DecisionTimeline({ rows }: { rows: DecisionRow[] }) {
+export default function DecisionTimeline({
+  rows,
+  onScroll,
+}: {
+  rows: DecisionRow[];
+  onScroll?: UIEventHandler<HTMLElement>;
+}) {
   return (
-    <div className={`table-wrap ${styles.decisions}`}>
+    <div className={`table-wrap ${styles.decisions}`} onScroll={onScroll}>
       <div className={`${styles.decision} ${styles.decisionHead}`}>
+        <span className={styles.index}>번호</span>
         <span>시각</span>
         <span />
         <span>판단</span>
@@ -27,6 +35,7 @@ export default function DecisionTimeline({ rows }: { rows: DecisionRow[] }) {
       </div>
       {rows.map((row, index) => (
         <div key={row.key ?? `${row.at}-${index}`} className={styles.decision}>
+          <span className={styles.index}>{index + 1}</span>
           <time>{row.at}</time>
           <span className={styles.timelineDot} />
           <span className={styles.action}>

@@ -1,10 +1,11 @@
 .decisions {
+  --table-height: 440px;
   display: block;
 }
 .decision {
   --row: 44px;
   display: grid;
-  grid-template-columns: 132px 5px minmax(0, 1fr) 110px 80px 90px;
+  grid-template-columns: 44px 132px 5px minmax(0, 1fr) 110px 80px 90px;
   align-items: center;
   gap: 16px;
   height: var(--row);
@@ -35,12 +36,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.decision > span:nth-child(4),
 .decision > span:nth-child(5),
 .decision > span:nth-child(6),
-.decisionHead > span:nth-child(4),
+.decision > span:nth-child(7),
 .decisionHead > span:nth-child(5),
-.decisionHead > span:nth-child(6) {
+.decisionHead > span:nth-child(6),
+.decisionHead > span:nth-child(7) {
+  text-align: right;
+}
+.index {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .decisionHead {
