@@ -11,6 +11,10 @@ from app.nh.account import OrderStatus
 from app.runners import paper
 from app.runners.paper_service import PaperService
 from strategy_base.models import Side
+from app.runners.clearing import ClearConfig
+from tests.test_clearing import FakeGateway
+from tests.test_clearing import order as gateway_order
+from tests.test_clearing import position as gateway_position
 from tests.test_paper_session import CODE, FakeBroker, account_position, record
 from tests.test_registry import make_folder
 
@@ -74,6 +78,11 @@ class Env:
         self.service._components = lambda code, minutes: (
             self.broker, lambda on_event, on_state: FakeRealtime(on_event, on_state, self.hub))
         self.service._overrides = FAST
+        self.gateway = FakeGateway()
+        self.service._gateway = self.gateway
+        self.service._clear_config = ClearConfig(
+            poll=0.02, cancel_timeout=2.0, stop_timeout=5.0, flatten_timeout=2.0, flatten_retry=0.05
+        )
         self.client = TestClient(self.app)
 
     def start(self, **body):
@@ -285,3 +294,112 @@ def test_서버가_멈춰_실행_중으로_남은_모의매매는_다음_시작_
     assert second.detail(started)["meta"]["status"] == "interrupted"
     first.client.post("/api/trading/stop")
     first.service.join(10)
+
+
+# ---- 계좌 조회와 전체 정리 ----
+
+
+def test_계좌_조회는_운용_중이_아니어도_예탁금_포지션_미체결을_돌려준다(env):
+    env.gateway.positions_list = [gateway_position(CODE, Side.BUY, 3)]
+    env.gateway.orders_list = [gateway_order("1", CODE, Side.SELL, 2)]
+
+    response = env.client.get("/api/trading/account")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deposit"]["cash"] == 1e8 and body["deposit"]["order_available_total"] == 9e7
+    assert body["positions"][0]["code"] == CODE and body["positions"][0]["quantity"] == 3
+    assert body["open_orders"][0]["order_no"] == "1"
+
+
+def test_계좌_조회가_실패하면_502다(env):
+    env.gateway.fail = {"deposit"}
+
+    assert env.client.get("/api/trading/account").status_code == 502
+
+
+def test_계좌_조회와_정리는_인증_정보가_없으면_503이고_실전_환경에서는_422다(tmp_path, monkeypatch):
+    no_keys = Env(tmp_path, monkeypatch, nh_app_key=None, nh_app_secret=None)
+    real = Env(tmp_path / "r", monkeypatch, trading_env="real")
+
+    assert no_keys.client.get("/api/trading/account").status_code == 503
+    assert no_keys.client.post("/api/trading/clear").status_code == 503
+    assert real.client.get("/api/trading/account").status_code == 422
+    assert real.client.post("/api/trading/clear").status_code == 422
+    assert real.gateway.cancel_calls == [] and real.gateway.close_calls == []
+
+
+def test_운용이_없어도_전체_정리가_미체결을_취소하고_포지션을_청산한다(env):
+    env.gateway.orders_list = [gateway_order("1", "A0169000", Side.BUY, 4)]
+    env.gateway.positions_list = [gateway_position(CODE, Side.BUY, 5), gateway_position("A0169000", Side.SELL, 2)]
+
+    response = env.client.post("/api/trading/clear")
+    env.service.join(10)
+
+    assert response.status_code == 202 and response.json() == {"phase": "clearing"}
+    status = env.status()
+    assert status["phase"] == "idle"
+    result = status["clear"]["result"]
+    assert status["clear"]["state"] == "done" and result["status"] == "completed"
+    assert result["cancelled"] == 1
+    assert env.gateway.close_calls == [(CODE, Side.SELL, 5), ("A0169000", Side.BUY, 2)]
+    assert env.gateway.positions_list == [] and env.gateway.orders_list == []
+
+
+def test_정리_중에는_상태가_clearing이고_다시_정리하면_409다(env):
+    import threading
+
+    release = threading.Event()
+    original = env.gateway.open_orders
+
+    def blocking():
+        release.wait(5)
+        return original()
+
+    env.gateway.open_orders = blocking
+
+    first = env.client.post("/api/trading/clear")
+    env.wait(lambda: env.status().get("clear", {}).get("step") == "cancel")
+    second = env.client.post("/api/trading/clear")
+    status = env.status()
+    release.set()
+    env.service.join(10)
+
+    assert first.status_code == 202 and second.status_code == 409
+    assert status["phase"] == "clearing" and status["clear"]["state"] == "running"
+    assert env.status()["clear"]["state"] == "done"
+
+
+def test_운용_중에_정리하면_전략을_끝내고_계좌_전체를_정리하며_기록에_남긴다(env):
+    started = env.start().json()
+    env.wait(lambda: env.hub and env.hub[0].started)
+    env.gateway.orders_list = [gateway_order("9", "A0169000", Side.BUY, 4)]
+    env.gateway.positions_list = [gateway_position("A0169000", Side.SELL, 2)]
+
+    response = env.client.post("/api/trading/clear")
+    env.service.join(15)
+
+    assert response.status_code == 202
+    detail = env.detail(started)
+    assert detail["meta"]["status"] == "completed"
+    texts = [e["text"] for e in env.journal(started, "event")]
+    assert any("계좌 전체 정리" in t and "미체결" in t for t in texts)
+    assert any(t == "계좌 전체 정리 결과" for t in texts)
+    assert env.status()["clear"]["result"]["status"] == "completed"
+    assert env.gateway.close_calls == [("A0169000", Side.BUY, 2)]
+    assert env.broker.place_calls == []  # 운용은 보유가 없어 주문을 내지 않았다
+    assert env.hub[0].stopped
+
+
+def test_정리가_시작되면_운용은_더_이상_전략을_호출하지_않는다(env):
+    env.start()
+    env.wait(lambda: env.hub and env.hub[0].started)
+    env.emit(trade(243000.0))
+    env.wait(lambda: env.broker.place_calls)
+    placed = len(env.broker.place_calls)
+    env.gateway.orders_list = [gateway_order("9", "A0169000", Side.BUY, 4)]
+
+    env.client.post("/api/trading/clear")
+    env.service.join(15)
+
+    assert len(env.broker.place_calls) == placed

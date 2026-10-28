@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses
+import logging
 import threading
 from collections.abc import Callable
 from datetime import datetime
@@ -14,9 +15,13 @@ from app.nh.realtime import RealtimeConnection
 from app.nh.realtime_data import Feed
 from app.records.store import RunRecorder, RunStore
 from app.runners.broker import Broker, NHBroker
+from app.runners.clearing import AccountGateway, ClearConfig, NHAccountGateway, account_view, run_clear
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
 from strategy_base.manifest import Manifest
 from strategy_base.registry import StrategyRegistry
+
+
+logger = logging.getLogger(__name__)
 
 
 class TradingRejected(Exception):
@@ -62,6 +67,8 @@ class PaperService:
         components: ComponentsFactory | None = None,
         clock: Callable[[], datetime] = kst_now,
         config_overrides: dict[str, Any] | None = None,
+        gateway_factory: Callable[[], AccountGateway] | None = None,
+        clear_config: ClearConfig | None = None,
     ):
         self._settings = settings
         self._registry = registry
@@ -75,6 +82,12 @@ class PaperService:
         self._thread: threading.Thread | None = None
         self._run: dict[str, str] | None = None
         self._last: dict[str, Any] | None = None
+        self._recorder: RunRecorder | None = None
+        self._gateway_factory = gateway_factory or (lambda: NHAccountGateway(NHClient(settings)))
+        self._gateway: AccountGateway | None = None
+        self._clear_config = clear_config or ClearConfig()
+        self._clear: dict[str, Any] | None = None
+        self._clear_thread: threading.Thread | None = None
 
     # ---- API ----
 
@@ -130,6 +143,7 @@ class PaperService:
                 clock=self._clock,
             )
             self._session = session
+            self._recorder = recorder
             self._run = {"strategy_id": strategy_id, "mode": "paper", "run_id": recorder.run_id}
             self._thread = threading.Thread(
                 target=self._thread_main, args=(session, make_realtime, config.code, recorder), daemon=True
@@ -150,18 +164,64 @@ class PaperService:
 
     def status(self) -> dict[str, Any]:
         with self._lock:
-            session, run, last = self._session, self._run, self._last
+            session, run, last, clear = self._session, self._run, self._last, self._clear
         if session is None:
-            return {"phase": "idle", "run": None, "last_run": last}
-        snapshot = dict(session.snapshot) or {"phase": session.phase}
-        return {**snapshot, "run": run, "strategy": session.config.name, "instrument": session.config.code}
+            status: dict[str, Any] = {"phase": "idle", "run": None, "last_run": last}
+        else:
+            snapshot = dict(session.snapshot) or {"phase": session.phase}
+            status = {**snapshot, "run": run, "strategy": session.config.name, "instrument": session.config.code}
+        if clear is not None:
+            status["clear"] = clear
+            if clear["state"] == "running":
+                status["phase"] = "clearing"
+        return status
+
+    def account(self) -> dict[str, Any]:
+        """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문."""
+        gateway = self._account_gateway()
+        try:
+            return account_view(gateway)
+        except NHError as error:
+            raise TradingRejected(502, f"NH 모의계좌를 조회하지 못했습니다: {type(error).__name__}") from error
+
+    def clear(self) -> dict[str, str]:
+        """미체결 주문을 모두 취소하고 남은 포지션을 모두 청산한다. 운용 중인 전략은 판단을 멈추고 끝낸다."""
+        gateway = self._account_gateway()
+        with self._lock:
+            if self._clear is not None and self._clear["state"] == "running":
+                raise TradingRejected(409, "이미 정리 중입니다")
+            session, loop, recorder = self._session, self._loop, self._recorder
+            self._clear = {"state": "running", "step": "start", "detail": "정리를 시작합니다", "result": None}
+            if session is not None:
+                self._call_in_loop(loop, session, session.begin_pause)
+            self._clear_thread = threading.Thread(
+                target=self._clear_main, args=(gateway, session, loop, recorder), daemon=True
+            )
+            self._clear_thread.start()
+        return {"phase": "clearing"}
 
     def join(self, timeout: float | None = None) -> None:
-        thread = self._thread
-        if thread is not None:
-            thread.join(timeout)
+        for thread in (self._thread, self._clear_thread):
+            if thread is not None:
+                thread.join(timeout)
 
     # ---- 검증과 준비 ----
+
+    def _account_gateway(self) -> AccountGateway:
+        if self._settings.trading_env != "mock":
+            raise TradingRejected(422, "모의 환경(TRADING_ENV=mock)에서만 쓸 수 있습니다")
+        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
+            raise TradingRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        if self._gateway is None:
+            self._gateway = self._gateway_factory()
+        return self._gateway
+
+    @staticmethod
+    def _call_in_loop(loop: asyncio.AbstractEventLoop | None, session: PaperSession, call: Callable[..., None], *args: Any) -> None:
+        if loop is not None:
+            loop.call_soon_threadsafe(call, *args)
+        else:
+            call(*args)
 
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
         unknown = sorted(set(overrides or {}) - set(manifest.parameters))
@@ -217,3 +277,40 @@ class PaperService:
             with self._lock:
                 self._last = {**(self._run or {}), "status": session.final_status or "error"}
                 self._session, self._loop, self._run = None, None, None
+
+    # ---- 계좌 전체 정리 ----
+
+    def _clear_main(
+        self,
+        gateway: AccountGateway,
+        session: PaperSession | None,
+        loop: asyncio.AbstractEventLoop | None,
+        recorder: RunRecorder | None,
+    ) -> None:
+        def active() -> bool:
+            return session is not None and self._session is session
+
+        def report(step: str, detail: str) -> None:
+            self._clear = {"state": "running", "step": step, "detail": detail, "result": None}
+            logger.info("계좌 전체 정리: %s", detail)
+            if recorder is not None and active():
+                recorder.record("event", text=f"계좌 전체 정리: {detail}", step=step)
+
+        def stop_run() -> None:
+            if session is not None and active():
+                self._call_in_loop(loop, session, session.begin_stop, True)
+
+        try:
+            result = run_clear(gateway, self._clear_config, report=report, stop_run=stop_run, run_active=active)
+        except Exception as error:
+            result = {
+                "status": "incomplete",
+                "open_orders": [],
+                "positions": [],
+                "cancelled": 0,
+                "closed": [],
+                "problems": [f"정리 중 오류: {type(error).__name__}: {error}"],
+            }
+        if recorder is not None and session is not None:
+            recorder.record("event", text="계좌 전체 정리 결과", status=result["status"], problems=result["problems"])
+        self._clear = {"state": "done", "step": "done", "detail": result["status"], "result": result}

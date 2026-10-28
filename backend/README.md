@@ -238,12 +238,14 @@ await connection.stop()
 | --- | --- |
 | `POST /api/trading/start` | 운용을 시작하고 `202`와 실행 식별자를 돌려준다. 본문은 `strategy_id`(와 선택으로 `params`) |
 | `POST /api/trading/stop` | 정상 종료를 시작한다 |
-| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문 |
+| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전체 정리 진행과 결과(`clear`) |
+| `GET /api/trading/account` | NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 운용 중이 아니어도 조회된다 |
+| `POST /api/trading/clear` | 미체결 취소·전체 포지션 청산을 시작한다 |
 
 - 시작 거부: 없는 전략 `404`, 잘못된 파라미터·일봉 전략·종목 정보 부족·모의 환경이 아님 `422`, 이미 운용 중이거나 그 종목에 기존 포지션·미체결 주문이 있음 `409`, NH 인증 정보 없음 `503`, NH 계좌 조회 실패 `502`.
 - 한 번에 전략 1개·종목 1개(전략의 첫 번째 종목)만 운용한다. 세션은 전용 스레드의 이벤트 루프에서 돈다.
 - 시작할 때 예탁금·포지션·미체결 주문을 조회해 기록(`운용 전 계좌` 이벤트)한다.
-- 단계는 `idle`, `running`, `stopping`이다. 운용이 끝나면 `idle`이 되고 `last_run`에 마지막 실행의 식별자와 상태가 남는다.
+- 단계는 `idle`, `running`, `stopping`, `clearing`이다. 운용이 끝나면 `idle`이 되고 `last_run`에 마지막 실행의 식별자와 상태가 남는다.
 - 서버가 도중에 꺼지면 운용 중이던 기록은 다음 시작 때 `interrupted`가 된다. 보유 포지션과 미체결 주문은 자동으로 정리하지 않으므로 계좌를 확인해야 한다.
 
 ### 동작
@@ -281,6 +283,42 @@ await connection.stop()
 4. 90초 안에 확인하지 못하면 `error`로 끝내고 `result.json`의 `open_lots`에 남은 진입분을 적는다.
 
 처리 중 예외가 나면 `error`로 끝내고 보유 포지션과 미체결 주문이 남아 있을 수 있다고 `event`에 남긴다.
+
+### 계좌 조회
+
+`GET /api/trading/account`는 다음을 돌려준다. 계좌번호와 계좌명은 읽지 않는다.
+
+| 필드 | 내용 |
+| --- | --- |
+| `deposit` | `cash`(예탁현금), `total_assets`(예탁자산), `order_available_total`·`order_available_cash`(주문가능금액), `initial_margin`·`maintenance_margin`(위탁·유지증거금), `futures_realized_pnl`(선물 확정손익) |
+| `positions` | 수량이 0이 아닌 포지션. `code`, `name`, `side`, `quantity`, `closable_quantity`, `avg_price`, `last_price`(종가), `pnl`, `pnl_rate` |
+| `open_orders` | 미체결 주문. `order_no`, `code`, `side`, `status`, `quantity`, `filled_quantity`, `remaining_quantity`, `price` |
+
+모의 환경이 아니면 `422`, NH 인증 정보가 없으면 `503`, NH 조회에 실패하면 `502`다.
+
+### 전체 정리
+
+`POST /api/trading/clear`는 `202`와 `{"phase": "clearing"}`을 돌려주고 백그라운드에서 다음 순서로 처리한다. 이미 정리 중이면 `409`다. 모의 환경이 아니면 `422`, 인증 정보가 없으면 `503`이다.
+
+1. 운용 중인 전략의 판단을 멈춘다. 전략을 더 부르지 않고 신규 주문을 내지 않는다(`clearing`).
+2. 계좌 전체의 미체결 주문을 종목과 관계없이 취소하고, 조회로 모두 사라졌는지 확인한다(30초).
+3. 운용 중이면 그 운용을 종료한다. 운용이 낸 주문의 취소와 보유 진입분의 청산은 운용 종료 절차가 맡고, 이때 계좌 전체 확인은 하지 않는다(120초).
+4. 운용이 끝난 뒤 계좌에 남은 포지션을 종목과 관계없이 반대 방향 시장가로 청산한다. 매수 보유는 매도로, 매도 보유는 매수로 낸다. 청산 주문이 미체결로 남아 있는 동안은 다시 내지 않고, 포지션이 남아 있고 미체결도 없으면 5초 간격으로 다시 낸다(60초).
+5. 남은 미체결 주문과 보유 포지션을 조회해 결과로 돌려준다.
+
+운용 종료와 계좌 전체 청산은 차례로 하므로 한 포지션에 청산 주문이 두 번 나가지 않는다.
+
+진행은 `GET /api/trading/status`의 `clear`로 읽는다. `state`는 `running` 또는 `done`, `step`은 `cancel`, `stop_run`, `flatten`, `verify`, `done`이다. 끝나면 `clear.result`에 다음이 담긴다.
+
+| 필드 | 내용 |
+| --- | --- |
+| `status` | `completed`(미체결·보유가 0) 또는 `incomplete` |
+| `open_orders`, `positions` | 정리 뒤에 남은 미체결 주문과 보유 포지션 |
+| `cancelled` | 취소를 요청한 주문 수 |
+| `closed` | 낸 청산 주문(`code`, `side`, `quantity`). 다시 낸 것도 모두 담는다 |
+| `problems` | 취소·청산 실패, 시간 초과 같은 문제 |
+
+운용 중에 정리하면 단계마다 그 실행 기록에 `event`로 남기고 마지막에 결과를 남긴다. 운용이 없으면 서버 로그에만 남는다.
 
 ### 확인하지 못한 것
 

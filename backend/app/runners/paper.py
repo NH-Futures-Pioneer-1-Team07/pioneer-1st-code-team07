@@ -40,7 +40,7 @@ from strategy_base.models import (
 
 logger = logging.getLogger(__name__)
 
-RUNNING, STOPPING, STOPPED = "running", "stopping", "stopped"
+RUNNING, CLEARING, STOPPING, STOPPED = "running", "clearing", "stopping", "stopped"
 TICK_SECONDS = 1.0
 
 
@@ -65,7 +65,14 @@ class PaperConfig:
 
 @dataclass(frozen=True)
 class StopRequest:
-    pass
+    """종료 요청. `account_wide`이면 계좌 전체 확인은 하지 않는다(계좌 전체 정리가 맡는다)."""
+
+    account_wide: bool = False
+
+
+@dataclass(frozen=True)
+class PauseRequest:
+    """계좌 전체 정리를 시작한다. 전략 판단과 신규 주문을 멈추고 상태만 따라간다."""
 
 
 @dataclass(frozen=True)
@@ -146,6 +153,7 @@ class PaperSession:
         self.queue: asyncio.Queue[Any] = asyncio.Queue()
         self.done = asyncio.Event()
         self.phase = RUNNING
+        self.verify_account = True
         self.final_status: str | None = None
 
         self.feed_state = "connecting"
@@ -174,8 +182,11 @@ class PaperSession:
     def post(self, item: Any) -> None:
         self.queue.put_nowait(item)
 
-    def begin_stop(self) -> None:
-        self.post(StopRequest())
+    def begin_stop(self, account_wide: bool = False) -> None:
+        self.post(StopRequest(account_wide))
+
+    def begin_pause(self) -> None:
+        self.post(PauseRequest())
 
     async def run(self) -> None:
         self._note("운용 시작", strategy=self.config.name, code=self.config.code)
@@ -206,8 +217,12 @@ class PaperSession:
             self.next_poll = self.next_reconcile = now
         elif isinstance(item, SubscriptionFailed):
             self._note("실시간 구독이 거절되었습니다", level="warning", code=item.code, message=item.message)
+        elif isinstance(item, PauseRequest):
+            if self.phase == RUNNING:
+                self.phase = CLEARING
+                self._note("계좌 전체 정리를 시작해 전략 판단과 신규 주문을 멈춥니다")
         elif isinstance(item, StopRequest):
-            await self._begin_stop(now)
+            await self._begin_stop(now, item.account_wide)
 
     async def tick(self, now: datetime) -> None:
         if self.done.is_set():
@@ -345,7 +360,7 @@ class PaperSession:
         """신규 진입을 막는 이유. 비어 있으면 낼 수 있다."""
         reasons = []
         if self.phase != RUNNING:
-            reasons.append("종료 중")
+            reasons.append("계좌 전체 정리 중" if self.phase == CLEARING else "종료 중")
         if self.unknown:
             reasons.append("주문 처리 여부를 확인하지 못함")
         if self.mismatch:
@@ -666,10 +681,11 @@ class PaperSession:
 
     # ---- 종료 ----
 
-    async def _begin_stop(self, now: datetime) -> None:
-        if self.phase != RUNNING:
+    async def _begin_stop(self, now: datetime, account_wide: bool = False) -> None:
+        if self.phase not in (RUNNING, CLEARING):
             return
         self.phase = STOPPING
+        self.verify_account = not account_wide
         self.stop_started = now
         self.account_clean = False
         self.next_reconcile = now
@@ -700,7 +716,7 @@ class PaperSession:
                     )
                     await self._submit(intent, now, None)
             return
-        if self.account_clean and self.mismatch is None:
+        if not self.verify_account or (self.account_clean and self.mismatch is None):
             await self._finish("completed", "", now)
 
     async def _fail(self, error: Exception) -> None:
@@ -757,7 +773,7 @@ class PaperSession:
             "last_price": price,
             "last_price_at": self.price_at.isoformat() if self.price_at else None,
             "last_bar_time": self.last_bar_time.isoformat() if self.last_bar_time else None,
-            "entry_blocks": self.entry_blocks(now) if self.phase == RUNNING else ["종료 중"],
+            "entry_blocks": self.entry_blocks(now),
             "pnl": {
                 "realized_pnl": self.ledger.gross_pnl,
                 "unrealized_pnl": unrealized,

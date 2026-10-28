@@ -39,3 +39,21 @@ def stop(request: Request) -> dict[str, str]:
 def status(request: Request) -> dict[str, Any]:
     """운용 단계, 시세 상태, 신규 주문 차단 사유, 현재 운용의 손익."""
     return _service(request).status()
+
+
+@router.get("/account")
+def account(request: Request) -> dict[str, Any]:
+    """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문."""
+    try:
+        return _service(request).account()
+    except TradingRejected as rejected:
+        raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
+
+
+@router.post("/clear", status_code=202)
+def clear(request: Request) -> dict[str, str]:
+    """계좌 전체의 미체결 주문을 취소하고 남은 포지션을 청산한다. 진행과 결과는 상태 API로 읽는다."""
+    try:
+        return _service(request).clear()
+    except TradingRejected as rejected:
+        raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
