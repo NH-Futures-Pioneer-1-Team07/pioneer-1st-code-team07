@@ -115,3 +115,15 @@ runs/<전략 id>/<backtest|paper>/<실행 일시>/
 | `fill` | `source`는 체결 시점이다. `next_open`(봉 마감 판단을 다음 봉 시가에), `intrabar`(장중 가격 판단을 그 가격에), `day_end`(그날 마지막 봉 종가에), `backtest_end`(기간 종료 청산). `price`는 슬리피지를 반영한 값이다 |
 | `trade` | 진입분 하나의 진입부터 청산까지. `entry_id`, `side`, `quantity`, `entry_price`(평균), `exit_price`(평균), `gross_pnl`, `fee`, `net_pnl`, `opened_at` |
 | `event` | `일별 요약`(`day`, `equity`, `net_pnl`, `trades`), `백테스트 시작`, `백테스트 완료`, 경고·오류(`level`) |
+
+### 모의매매가 남기는 기록
+
+| `kind` | 필드 |
+| --- | --- |
+| `decision` | 전략이 돌려준 판단 그대로. `orders`에 그 판단이 낸 주문 의도를 담는다 |
+| `order` | `status`: `submitted`(접수, `order_no`), `blocked`(신규 진입 차단, `reason`에 사유), `skipped`(주문하지 않음), `rejected`(거부, `code`, `message`), `unknown`(처리 여부 불명), `cancel_requested`(취소 요청), `closed`(미체결이 끝남, `closed_because`). `planned_quantity`는 전략이 낸 수량, `quantity`는 실제 주문 수량 |
+| `fill` | `source`는 `notification`(체결 알림) 또는 `history`(주문 내역 조회). 건별 체결이다. `fee`는 추정값이고 `fee_estimated`가 참이다. `score`는 주문을 낸 판단의 점수 |
+| `trade` | 진입분 하나의 진입부터 청산까지. 수수료는 추정값(`fee_estimated`) |
+| `event` | `운용 전 계좌`(`deposit`), `운용 시작`, 실시간 상태·재연결·구독 거절, 조회 실패(30초에 한 번), 계좌와 원장의 어긋남과 해소, 종료 단계, `운용 종료` |
+
+모의매매 `result.json`은 `gross_pnl`, `fee`(추정), `fee_estimated`, `net_pnl`, `trade_count`, `win_count`, `loss_count`, `open_lots`(종료 시 남은 진입분)와 `account`를 담는다. `account`는 시작 전·종료 후 계좌 요약(`before`, `after`)과 수수료·선물 확정손익의 변화(`fee_change`, `realized_pnl_change`)다.
