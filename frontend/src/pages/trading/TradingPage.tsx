@@ -19,6 +19,7 @@ import { formatMoney, formatNumber } from "../../data/format";
 import {
   formatClock,
   instrumentLabel,
+  marketSessionLabel,
   phaseLabel,
   sideLabel,
   signed,
@@ -213,6 +214,13 @@ export default function TradingPage() {
                 </strong>
                 {quote.data?.contract && (
                   <span className="badge">{quote.data.contract}</span>
+                )}
+                {quote.data && (
+                  <span
+                    className={`badge ${quote.data.market_session === "regular" ? styles.sessionOpen : ""}`}
+                  >
+                    {marketSessionLabel(quote.data.market_session)}
+                  </span>
                 )}
               </div>
               <small>

@@ -15,6 +15,8 @@ export interface StrategyDetail extends StrategySummary {
   bar: { unit: string; size: number };
 }
 
+export type MarketSession = "before_open" | "auction" | "regular" | "closed" | "holiday" | "unknown";
+
 export interface Quote {
   code: string;
   name: string;
@@ -32,6 +34,7 @@ export interface Quote {
   lower_limit: number | null;
   multiplier: number | null;
   remaining_days: number | null;
+  market_session: MarketSession;
 }
 
 export interface Candle {

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import httpx
 import pytest
@@ -78,7 +79,7 @@ def make(tmp_path):
         app = create_app(settings)
         clock = Clock()
         client = NHClient(settings, http_client=httpx.Client(transport=httpx.MockTransport(backend)), limiter=FakeLimiter())
-        app.state.market = MarketService(settings, client=client, clock=clock)
+        app.state.market = MarketService(settings, client=client, clock=clock, now=lambda: datetime(2026, 10, 28, 10, 0))
         return TestClient(app), backend, clock
 
     return build
@@ -95,6 +96,7 @@ def test_시세는_종목명_월물_만기_현재가_등락_거래량을_돌려�
         "price": 243000.0, "change": 20000.0, "change_rate": 8.97, "volume": 2711873,
         "open": 229000.0, "high": 243500.0, "low": 228500.0, "prev_close": 223000.0,
         "upper_limit": 245000.0, "lower_limit": 201000.0, "multiplier": 10, "remaining_days": 16,
+        "market_session": "regular",
     }
     assert backend.calls == [("/trade/v1/domestic/price", {"sym": CODE})]
 

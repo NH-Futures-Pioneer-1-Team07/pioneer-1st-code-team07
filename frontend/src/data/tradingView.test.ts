@@ -7,6 +7,7 @@ import {
   instrumentLabel,
   mapDecisions,
   mapFills,
+  marketSessionLabel,
   phaseLabel,
   sideLabel,
   statusMessage,
@@ -122,4 +123,11 @@ test("종목 이름을 이름 · 월물 형식으로 맞춘다", () => {
   assert.equal(instrumentLabel("삼성전자선물 2026년 11월물"), "삼성전자 선물 · 2026.11");
   assert.equal(instrumentLabel("삼성전자선물 2026년 9월물"), "삼성전자 선물 · 2026.09");
   assert.equal(instrumentLabel("A116B000"), "A116B000");
+});
+
+test("장 종류를 한글로 보여 주고 모르는 값은 장 정보 없음으로 둔다", () => {
+  assert.equal(marketSessionLabel("regular"), "정규장");
+  assert.equal(marketSessionLabel("auction"), "동시호가");
+  assert.equal(marketSessionLabel("holiday"), "휴장");
+  assert.equal(marketSessionLabel(undefined), "장 정보 없음");
 });

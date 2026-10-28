@@ -1,4 +1,4 @@
-import type { Candle, JournalLine, Phase, TradingStatus } from "../apis/types.ts";
+import type { Candle, JournalLine, MarketSession, Phase, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -26,6 +26,18 @@ export function instrumentLabel(name: string): string {
   if (manifest) return `${manifest[1].replace(/선물$/, " 선물")} · ${manifest[2]}.${manifest[3].padStart(2, "0")}`;
   return name;
 }
+
+const MARKET_SESSION_LABELS: Record<MarketSession, string> = {
+  before_open: "장 시작 전",
+  auction: "동시호가",
+  regular: "정규장",
+  closed: "장 마감",
+  holiday: "휴장",
+  unknown: "장 정보 없음",
+};
+
+export const marketSessionLabel = (session: MarketSession | null | undefined): string =>
+  MARKET_SESSION_LABELS[session ?? "unknown"] ?? MARKET_SESSION_LABELS.unknown;
 
 export const signed = (value: number, format: (n: number) => string) =>
   `${value > 0 ? "+" : ""}${format(value)}`;

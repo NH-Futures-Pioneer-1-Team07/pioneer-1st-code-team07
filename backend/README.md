@@ -376,7 +376,7 @@ await connection.stop()
 
 | 요청 | 내용 |
 | --- | --- |
-| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수 |
+| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
 | `GET /api/market/<종목코드>/candles?interval=&count=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
 | `GET /api/market/<종목코드>/orderbook` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
 
