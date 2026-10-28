@@ -55,6 +55,23 @@
   color: var(--accent);
   font-size: 11px;
 }
+.ohlc {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+.ohlc dt {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.ohlc dd {
+  margin: 0;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 .equityValue {
   margin-top: 6px;
   color: var(--text-primary);

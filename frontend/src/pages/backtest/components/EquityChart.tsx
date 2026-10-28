@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import type { TooltipContentProps } from "recharts";
 import { fetchJournal } from "../../../apis/trading";
-import type { BacktestMeta, BacktestResult } from "../../../apis/types";
+import type { BacktestMeta, BacktestResult, DailyBar } from "../../../apis/types";
 import { equityPoints, returnText } from "../../../data/backtestView";
 import type { EquityPoint } from "../../../data/backtestView";
 import { formatMoney, formatNumber } from "../../../data/format";
@@ -24,6 +24,26 @@ import styles from "./EquityChart.module.css";
 const SCROLL_FROM = 5;
 const dayLabel = (day: string) => day.slice(5).replace("-", ".");
 const pnlClass = (value: number) => (value > 0 ? "positive" : value < 0 ? "negative" : "");
+
+const candleColor = (bar: DailyBar) => (bar.close >= bar.open ? "var(--rise)" : "var(--fall)");
+
+/** 저가~고가 범위 막대 위에 심지와 몸통을 그린다. 일봉이 없는 날은 그리지 않는다. */
+function Candle({ x, y, width, height, payload }: { x?: number; y?: number; width?: number; height?: number; payload?: EquityPoint }) {
+  const bar = payload?.bar;
+  if (!bar || x === undefined || y === undefined || width === undefined || height === undefined) return null;
+  const span = bar.high - bar.low;
+  const at = (value: number) => (span === 0 ? y : y + ((bar.high - value) / span) * height);
+  const color = candleColor(bar);
+  const center = x + width / 2;
+  const body = Math.min(at(bar.open), at(bar.close));
+  const bodyWidth = Math.max(3, width * 0.6);
+  return (
+    <g opacity={0.5}>
+      <line x1={center} x2={center} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
+      <rect x={center - bodyWidth / 2} y={body} width={bodyWidth} height={Math.max(1.5, Math.abs(at(bar.open) - at(bar.close)))} fill={color} />
+    </g>
+  );
+}
 
 function EquityTooltip({ active, payload }: TooltipContentProps) {
   const point = payload?.[0]?.payload as EquityPoint | undefined;
@@ -41,6 +61,16 @@ function EquityTooltip({ active, payload }: TooltipContentProps) {
       <div className={`${styles.change} ${pnlClass(point.change)}`}>
         {signed(point.change, formatMoney)} <small>({returnText(rate)})</small>
       </div>
+      {point.bar && (
+        <dl className={styles.ohlc}>
+          {([["시가", point.bar.open], ["고가", point.bar.high], ["저가", point.bar.low], ["종가", point.bar.close]] as const).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{formatNumber(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {point.fills.length > 0 && (
         <ul data-fills className={scrolls ? styles.scroll : undefined}>
           {point.fills.map((fill, index) => (
@@ -104,7 +134,7 @@ export default function EquityChart({
 
   const initial = result?.initial_capital ?? 0;
   const points = useMemo(
-    () => (result ? equityPoints(result.equity_curve, initial, fills) : []),
+    () => (result ? equityPoints(result.equity_curve, initial, fills, result.daily_bars) : []),
     [result, initial, fills],
   );
   const values = points.map((point) => point.equity);
@@ -112,6 +142,10 @@ export default function EquityChart({
   const min = Math.min(...values, initial);
   const pad = (max - min) * 0.1 || Math.abs(initial) * 0.01 || 1;
   // 거래 건수 막대가 차트 아래쪽 1/5 안에 들어오도록 축 범위를 넓혀 둔다.
+  const priced = points.flatMap((point) => (point.bar ? [point.bar.low, point.bar.high] : []));
+  const priceMin = Math.min(...priced);
+  const priceMax = Math.max(...priced);
+  const pricePad = (priceMax - priceMin) * 0.08 || 1;
   const busiest = Math.max(1, ...points.map((point) => point.fills.length));
   const barColor = (change: number) => (change > 0 ? "var(--rise)" : change < 0 ? "var(--fall)" : "var(--text-tertiary)");
 
@@ -119,7 +153,7 @@ export default function EquityChart({
     <figure ref={frameRef} className={styles.equity}>
       {points.length > 0 && (
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={points.map((point) => ({ ...point, count: point.fills.length }))} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+          <ComposedChart data={points.map((point) => ({ ...point, count: point.fills.length, range: point.bar ? [point.bar.low, point.bar.high] : null }))} margin={{ top: 16, right: 8, bottom: 0, left: priced.length > 0 ? 0 : 8 }}>
             <CartesianGrid vertical={false} stroke="var(--data-line)" strokeOpacity={0.6} />
             <XAxis
               dataKey="day"
@@ -139,7 +173,19 @@ export default function EquityChart({
               axisLine={false}
               tick={{ fill: "var(--text-tertiary)", fontSize: 11 }}
             />
-            <YAxis yAxisId="count" hide domain={[0, busiest * 5]} />
+            {priced.length > 0 && (
+              <YAxis
+                yAxisId="price"
+                orientation="left"
+                width={56}
+                domain={[priceMin - pricePad, priceMax + pricePad]}
+                tickFormatter={(value: number) => formatNumber(Math.round(value))}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: "var(--text-tertiary)", fontSize: 11 }}
+              />
+            )}
+            <YAxis yAxisId="count" orientation="right" width={0} hide domain={[0, busiest * 5]} />
             <ReferenceLine
               yAxisId="equity"
               y={initial}
@@ -154,6 +200,9 @@ export default function EquityChart({
               isAnimationActive={false}
               wrapperStyle={{ zIndex: 10 }}
             />
+            {priced.length > 0 && (
+              <Bar yAxisId="price" dataKey="range" shape={Candle} maxBarSize={9} isAnimationActive={false} />
+            )}
             <Bar yAxisId="count" dataKey="count" maxBarSize={5} radius={[2, 2, 0, 0]} isAnimationActive={false}>
               {points.map((point) => (
                 <Cell key={point.day} fill={barColor(point.change)} fillOpacity={0.75} />

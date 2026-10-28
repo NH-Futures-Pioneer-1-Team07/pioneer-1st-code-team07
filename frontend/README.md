@@ -30,7 +30,7 @@ npm run dev
 | 개발 도구 | Vite | 로컬 개발 서버와 빌드 |
 | 패키지 관리 | npm | 의존성 설치와 스크립트 실행 |
 | HTTP 통신 | Axios | FastAPI에 조회·실행 요청 |
-| 차트 | Recharts | 백테스트 자산 변화 차트(거래 마커·호버 상세) |
+| 차트 | Recharts | 백테스트 자산 변화 차트(가격 일봉·거래 막대·호버 상세) |
 | 스타일 | CSS Modules | 컴포넌트별 스타일 관리 |
 
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.

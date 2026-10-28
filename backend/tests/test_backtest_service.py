@@ -113,6 +113,9 @@ def test_백테스트를_시작하면_식별자를_바로_돌려주고_끝나면
     assert detail["meta"]["period"] == {"start": "2026-10-20", "end": "2026-10-23"}
     assert detail["result"]["trade_count"] == 4
     assert detail["result"]["initial_capital"] == 100_000_000
+    bars = detail["result"]["daily_bars"]
+    assert [row["date"] for row in bars] == ["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]
+    assert bars[0] == {"date": "2026-10-20", "open": 100000, "high": 102500, "low": 99500, "close": 102000, "volume": 500}
     assert client.get("/api/backtests/current").json() == {"run": None}
 
 

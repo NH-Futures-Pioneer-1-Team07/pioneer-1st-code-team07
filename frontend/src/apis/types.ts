@@ -216,6 +216,15 @@ export interface BacktestMeta extends RunRef {
   progress?: BacktestProgress;
 }
 
+export interface DailyBar {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export interface BacktestResult {
   initial_capital: number;
   final_equity: number;
@@ -231,6 +240,8 @@ export interface BacktestResult {
   days: number;
   bars: number;
   equity_curve: { time: string; equity: number }[];
+  /** 기간의 일봉. 이 항목이 생기기 전에 실행한 기록에는 없다. */
+  daily_bars?: DailyBar[];
 }
 
 export interface BacktestRun {

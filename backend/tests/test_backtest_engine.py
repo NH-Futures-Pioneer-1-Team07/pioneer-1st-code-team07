@@ -8,6 +8,7 @@ from app.runners.backtest import (
     END_OF_PERIOD_REASON,
     Assumptions,
     BacktestEngine,
+    daily_bars,
     infer_tick,
     price_path,
 )
@@ -92,6 +93,27 @@ def journal(recorder, kind=None):
 
 
 # ---- 호가 단위와 가격 경로 ----
+
+
+def test_분봉을_날짜별_일봉으로_합친다():
+    first, second = date(2026, 10, 20), date(2026, 10, 21)
+    days = {
+        second: bars_of(second, [(200, 210, 190, 205)]),
+        first: bars_of(first, [(100, 110, 95, 105), (105, 120, 100, 115), (115, 118, 90, 98)]),
+    }
+
+    assert daily_bars(days) == [
+        {"date": "2026-10-20", "open": 100, "high": 120, "low": 90, "close": 98, "volume": 300},
+        {"date": "2026-10-21", "open": 200, "high": 210, "low": 190, "close": 205, "volume": 100},
+    ]
+
+
+def test_일봉의_시가는_첫_봉에_시가가_없으면_종가로_대신한다():
+    day = date(2026, 10, 20)
+    bars = [Bar(datetime(2026, 10, 20, 9, 0), 110, 95, 105, 100)]
+
+    assert daily_bars({day: bars})[0]["open"] == 105
+    assert daily_bars({day: []}) == []
 
 
 def test_호가_단위는_봉_가격_차이의_최대공약수다():

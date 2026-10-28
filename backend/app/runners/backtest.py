@@ -41,6 +41,27 @@ class _Totals:
     curve: list[dict[str, Any]] = field(default_factory=list)
 
 
+def daily_bars(days: dict[date, list[Bar]]) -> list[dict[str, Any]]:
+    """날짜별 분봉을 일봉으로 합친다. 시가가 없는 첫 봉은 종가로 대신한다."""
+    rows: list[dict[str, Any]] = []
+    for day in sorted(days):
+        bars = days[day]
+        if not bars:
+            continue
+        first = bars[0]
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "open": first.open if first.open is not None else first.close,
+                "high": max(bar.high for bar in bars),
+                "low": min(bar.low for bar in bars),
+                "close": bars[-1].close,
+                "volume": sum(bar.volume for bar in bars),
+            }
+        )
+    return rows
+
+
 def infer_tick(days: dict[date, list[Bar]]) -> float:
     """봉 가격 차이의 최대공약수로 호가 단위를 추정한다. 알 수 없으면 1이다."""
     prices = {

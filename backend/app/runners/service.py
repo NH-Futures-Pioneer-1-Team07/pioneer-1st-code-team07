@@ -13,7 +13,7 @@ from app.nh.errors import NHError
 from app.nh.quotes import fetch_minute_bars, fetch_quote
 from app.records.store import RunRecorder, RunStore
 from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache
-from app.runners.backtest import Assumptions, BacktestEngine, infer_tick
+from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
 from strategy_base.registry import RegisteredStrategy, StrategyRegistry
@@ -270,6 +270,7 @@ class BacktestService:
 
         compute(0, len(loaded.days))
         result = engine.run(loaded.days, compute)
+        result["daily_bars"] = daily_bars(loaded.days)
         recorder.record("event", text="백테스트 완료", net_pnl=result["net_pnl"], trades=result["trade_count"])
         recorder.update_meta(progress={"stage": "done", "done": len(loaded.days), "total": len(loaded.days)})
         recorder.finish(result)

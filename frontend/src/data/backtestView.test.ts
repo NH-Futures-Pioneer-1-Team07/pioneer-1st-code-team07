@@ -77,6 +77,10 @@ test("자산 곡선의 날짜마다 그날의 체결과 전날 대비 손익을 
     ],
   );
   assert.deepEqual(points[1].fills[0], { time: "10:15", side: "buy", quantity: 2, price: 250, reason: "당일 청산" });
+  assert.equal(points[1].bar, null);
+  const bar = { date: "2026-08-18", open: 250, high: 260, low: 240, close: 255, volume: 10 };
+  const withBars = equityPoints(curve, 1000, [], [bar]);
+  assert.deepEqual(withBars.map((point) => point.bar), [null, bar, null]);
   assert.deepEqual(equityPoints([], 1000, []), []);
 });
 
