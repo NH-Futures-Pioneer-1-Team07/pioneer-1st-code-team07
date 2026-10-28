@@ -41,3 +41,7 @@ class RateLimiter:
         if delay > 0:
             self._sleep(delay)
         return delay
+
+
+# 프로세스 안의 모든 NH 클라이언트가 함께 쓰는 제한기. 한도는 클라이언트가 아니라 계정마다 걸린다.
+SHARED_LIMITER = RateLimiter()

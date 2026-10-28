@@ -7,9 +7,9 @@ import pytest
 
 from app.config import Settings
 from app.nh.auth import KST, REFRESH_MARGIN, AuthError, Token, TokenManager, parse_expires_at
-from app.nh.client import NHClient
+from app.nh.client import RATE_LIMIT_RETRIES, NHClient
 from app.nh.errors import BusinessError, GatewayError, HttpError, NHConfigError, TransportError
-from app.nh.rate_limit import PER_SECOND, Limit, RateLimiter
+from app.nh.rate_limit import PER_SECOND, SHARED_LIMITER, Limit, RateLimiter
 
 KEY, SECRET, TOKEN = "APPKEY-123", "APPSECRET-456", "ACCESS-TOKEN-789"
 TOKEN_BODY = {"access_token": TOKEN, "token_type": "Bearer", "expires_in": "86400", "expires_at": "2099-01-01 00:00:00"}
@@ -49,11 +49,11 @@ class FakeLimiter:
         return 0.0
 
 
-def make_client(*responses, env="mock", key=KEY, secret=SECRET, limiter=None):
+def make_client(*responses, env="mock", key=KEY, secret=SECRET, limiter=None, sleep=lambda seconds: None):
     server = Server(*responses)
     settings = Settings(trading_env=env, nh_app_key=key, nh_app_secret=secret)
     http = httpx.Client(transport=httpx.MockTransport(server))
-    return NHClient(settings, http_client=http, limiter=limiter or FakeLimiter()), server
+    return NHClient(settings, http_client=http, limiter=limiter or FakeLimiter(), sleep=sleep), server
 
 
 # ---- 환경과 설정 ----
@@ -336,3 +336,53 @@ def test_세션_초기화용_토큰_값을_돌려준다():
     client, _ = make_client()
 
     assert client.session_token() == TOKEN
+
+
+RATE_LIMITED_BODY = {"errorCode": "EGW036", "errorMessage": "허용된 요청 속도를 초과했습니다."}
+
+
+def test_클라이언트를_여러_개_만들어도_기본_호출_제한기는_하나를_함께_쓴다():
+    settings = Settings(trading_env="mock", nh_app_key=KEY, nh_app_secret=SECRET)
+
+    first, second = NHClient(settings), NHClient(settings)
+
+    assert first._limiter is second._limiter is SHARED_LIMITER
+
+
+def test_조회가_호출_속도_제한으로_거절되면_기다렸다가_다시_보낸다():
+    waits = []
+    client, server = make_client(RATE_LIMITED_BODY, RATE_LIMITED_BODY, {"ok": 1}, sleep=waits.append)
+
+    body = client.call("/trade/v1/domestic/chart-minute", {}, Limit.QUOTE)
+
+    assert body == {"ok": 1}
+    assert len(server.api_requests()) == 3
+    assert waits == [1.0, 2.0]
+
+
+def test_호출_속도_제한이_계속되면_재시도_횟수만큼만_보내고_예외를_낸다():
+    client, server = make_client(*[RATE_LIMITED_BODY] * (RATE_LIMIT_RETRIES + 2))
+
+    with pytest.raises(GatewayError) as error:
+        client.call("/trade/v1/domestic/chart-minute", {}, Limit.QUOTE)
+
+    assert error.value.code == "EGW036"
+    assert len(server.api_requests()) == RATE_LIMIT_RETRIES + 1
+
+
+def test_주문은_호출_속도_제한으로_거절돼도_다시_보내지_않는다():
+    client, server = make_client(RATE_LIMITED_BODY, {"ord_no": "1", "msg_cd": ""})
+
+    with pytest.raises(GatewayError):
+        client.call("/trade/v1/domestic/order", {}, Limit.ORDER)
+
+    assert len(server.api_requests()) == 1
+
+
+def test_다른_게이트웨이_거절은_다시_보내지_않는다():
+    client, server = make_client({"errorCode": "EG999", "errorMessage": "거절"}, {"ok": 1})
+
+    with pytest.raises(GatewayError):
+        client.call("/trade/v1/domestic/price", {}, Limit.QUOTE)
+
+    assert len(server.api_requests()) == 1
