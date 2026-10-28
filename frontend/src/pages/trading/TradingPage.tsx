@@ -1,22 +1,29 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { errorMessage } from "../../apis/client";
+import { useMarketStream } from "../../apis/marketStream";
+import { usePolling } from "../../apis/polling";
 import {
-  formatMoney,
-  formatNumber,
-  instruments,
-  instrumentTitle,
-  sampleTime,
-  strategies,
-  strategyById,
-  supportedInstruments,
-} from "../../data/fixtures";
+  clearAccount,
+  fetchAccount,
+  fetchCandles,
+  fetchOrderBook,
+  fetchQuote,
+  fetchRuns,
+  fetchStatus,
+  fetchStrategies,
+  fetchStrategy,
+  startTrading,
+  stopTrading,
+} from "../../apis/trading";
+import { formatMoney, formatNumber } from "../../data/fixtures";
 import {
-  accountSummary,
-  beginStop,
-  createTradingState,
-  finishStop,
-  remaining,
-  startRun,
-} from "../../data/trading";
+  formatClock,
+  instrumentLabel,
+  phaseLabel,
+  sideLabel,
+  signed,
+  statusMessage,
+} from "../../data/tradingView";
 import Icon from "../../components/common/Icon";
 import ConfirmDialog from "../../components/common/ConfirmDialog";
 import StrategySelect from "../../components/common/StrategySelect";
@@ -24,29 +31,99 @@ import PriceChart from "./components/PriceChart";
 import RunHistory from "./components/RunHistory";
 import styles from "./TradingPage.module.css";
 
-const instrumentLabel = (id: string) => {
-  const item = instruments.find((candidate) => candidate.id === id);
-  return item ? instrumentTitle(item) : "";
-};
+const dash = "—";
+const won = (value: number | null | undefined) =>
+  value === null || value === undefined ? dash : formatNumber(value);
+const sideClassName = (side: string | null) =>
+  side === "buy" ? "positive" : "negative";
+const pnlClass = (value: number | null | undefined) =>
+  value === null || value === undefined || value === 0
+    ? ""
+    : value > 0
+      ? "positive"
+      : "negative";
 
 export default function TradingPage() {
-  const [strategyId, setStrategyId] = useState(strategies[0].id);
-  const strategy = strategyById(strategyId);
-  const [state, setState] = useState(createTradingState);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [interval, setInterval] = useState("5");
   const [confirm, setConfirm] = useState<"stop" | "all" | null>(null);
-  const instrument = supportedInstruments(strategy)[0];
-  const active = state.runs.find((run) => run.id === state.activeRunId);
-  const pending = state.phase === "stopping" || state.phase === "clearing";
-  const openOrders = state.orders.filter((order) => remaining(order) > 0);
-  const account = accountSummary(state);
-  useEffect(() => {
-    if (!pending) return;
-    const timeout = window.setTimeout(
-      () => setState((current) => finishStop(current)),
-      1400,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [pending]);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const strategies = usePolling(fetchStrategies, 60000);
+  const status = usePolling(fetchStatus, 2000);
+  const account = usePolling(fetchAccount, 5000);
+  const runs = usePolling(() => fetchRuns("paper"), 10000);
+
+  const phase = status.data?.phase ?? "idle";
+  const items = strategies.data ?? [];
+  const activeId = status.data?.run?.strategy_id ?? null;
+  const strategyId = activeId ?? selected ?? items[0]?.id ?? null;
+  const running = phase !== "idle";
+  const pending = phase === "stopping" || phase === "clearing";
+  const clearing = status.data?.clear?.state === "running";
+
+  const detail = usePolling(
+    () => fetchStrategy(strategyId as string),
+    600000,
+    [strategyId],
+    !!strategyId,
+  );
+  const instrument = detail.data?.instruments[0] ?? null;
+  const code = instrument?.code ?? null;
+
+  const quote = usePolling(() => fetchQuote(code as string), 3000, [code], !!code);
+  const candles = usePolling(
+    () => fetchCandles(code as string, interval),
+    5000,
+    [code, interval],
+    !!code,
+  );
+  const book = usePolling(() => fetchOrderBook(code as string), 3000, [code], !!code);
+  const stream = useMarketStream(code);
+
+  const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;
+  const prevClose = quote.data?.prev_close ?? null;
+  const changeRate =
+    livePrice !== null && prevClose ? ((livePrice - prevClose) / prevClose) * 100 : null;
+  const levels = (stream.book ?? book.data)?.levels.slice(0, 5) ?? [];
+  const totalAsk = (stream.book ?? book.data)?.total_ask_quantity ?? null;
+  const totalBid = (stream.book ?? book.data)?.total_bid_quantity ?? null;
+  const askShare =
+    totalAsk !== null && totalBid !== null && totalAsk + totalBid > 0
+      ? (totalAsk / (totalAsk + totalBid)) * 100
+      : 50;
+  const maxQuantity = Math.max(
+    1,
+    ...levels.flatMap((level) => [level.ask_quantity ?? 0, level.bid_quantity ?? 0]),
+  );
+
+  const deposit = account.data?.deposit;
+  const positions = account.data?.positions ?? [];
+  const openOrders = account.data?.open_orders ?? [];
+  const pnl = status.data?.pnl;
+  const streamNote =
+    stream.state === "live"
+      ? "실시간 시세 수신 중"
+      : stream.failure
+        ? `시세 연결 문제: ${stream.failure}`
+        : "시세 연결 중";
+  const receivedAt = formatClock(stream.lastTrade?.time);
+
+  const act = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await action();
+    } catch (failure) {
+      setActionError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+      status.reload();
+      account.reload();
+      runs.reload();
+    }
+  };
 
   return (
     <>
@@ -56,17 +133,23 @@ export default function TradingPage() {
         </div>
         <span className={styles.accountLabel}>
           <Icon name="shield" size={15} />
-          NH 모의계좌 <strong>DEMO-0001</strong>
+          NH 모의계좌
         </span>
       </div>
       <div className={styles.summaryHeading}>
-        <span>기준 {sampleTime} · 샘플</span>
+        <span>
+          {account.error
+            ? `계좌를 불러오지 못했습니다. ${account.error}`
+            : account.data
+              ? "5초마다 갱신"
+              : "계좌를 불러오는 중…"}
+        </span>
       </div>
       <div className={styles.metrics} role="group" aria-label="계좌 전체 자산">
         <div className={styles.metric}>
           <span>예탁자산</span>
           <strong>
-            {formatNumber(account.assets)}
+            {won(deposit?.total_assets)}
             <small>원</small>
           </strong>
           <p>계좌에 맡긴 현금에 평가손익을 더한 전체 자산</p>
@@ -74,7 +157,7 @@ export default function TradingPage() {
         <div className={styles.metric}>
           <span>예탁현금</span>
           <strong>
-            {formatNumber(account.cash)}
+            {won(deposit?.cash)}
             <small>원</small>
           </strong>
           <p>계좌에 맡겨 둔 현금</p>
@@ -82,89 +165,99 @@ export default function TradingPage() {
         <div className={styles.metric}>
           <span>주문 가능 금액</span>
           <strong>
-            {formatNumber(account.orderable)}
+            {won(deposit?.order_available_total)}
             <small>원</small>
           </strong>
-          <p>새 주문에 쓸 수 있는 금액 (예탁현금 − 사용 증거금)</p>
+          <p>새 주문에 쓸 수 있는 금액</p>
         </div>
         <div className={styles.metric}>
           <span>사용 증거금</span>
           <strong>
-            {formatNumber(account.margin)}
+            {won(deposit?.initial_margin)}
             <small>원</small>
           </strong>
           <p>보유 포지션과 미체결 주문에 묶인 금액</p>
         </div>
       </div>
       <div className={styles.tradingGrid}>
-        <section
-          className={`panel ${styles.control}`}
-          aria-labelledby="run-title"
-        >
+        <section className={`panel ${styles.control}`} aria-labelledby="run-title">
           <div className="section-head">
             <h2 id="run-title">전략 운용</h2>
             <span
-              className={`${styles.stateBadge} ${active ? styles.running : ""}`}
+              className={`${styles.stateBadge} ${phase === "running" ? styles.running : ""}`}
             >
               <i />
-              {state.phase === "running"
-                ? "운용 중"
-                : pending
-                  ? "정리 중"
-                  : "대기"}
+              {phaseLabel(phase)}
             </span>
           </div>
           <div className={styles.strategyField}>
-            <StrategySelect
-              id="trading-strategy"
-              strategy={strategy}
-              onChange={setStrategyId}
-            />
+            {strategies.error && (
+              <p className="empty">전략을 불러오지 못했습니다. {strategies.error}</p>
+            )}
+            {strategyId && (
+              <StrategySelect
+                id="trading-strategy"
+                items={items}
+                selectedId={strategyId}
+                disabled={running}
+                onChange={setSelected}
+              />
+            )}
           </div>
           <div className={styles.instrument}>
             <span className={styles.instrumentLabel}>운용 종목</span>
             <div className={styles.instrumentCard}>
               <div>
-                <strong>{instrument.name}</strong>
-                <span className="badge">{instrument.contract}</span>
+                <strong>
+                  {instrument ? instrumentLabel(instrument.name) : dash}
+                </strong>
+                {quote.data?.contract && (
+                  <span className="badge">{quote.data.contract}</span>
+                )}
               </div>
               <small>
-                {instrument.code} · 만기 {instrument.expiry}
+                {instrument?.code ?? dash}
+                {quote.data?.expiry ? ` · 만기 ${quote.data.expiry}` : ""}
               </small>
             </div>
           </div>
           <div className={styles.activeRun}>
             <span>운용 중인 전략</span>
-            <strong>{active?.strategy.name ?? "현재 운용 없음"}</strong>
+            <strong>
+              {running
+                ? (items.find((item) => item.id === activeId)?.name ??
+                  status.data?.strategy ??
+                  activeId)
+                : "현재 운용 없음"}
+            </strong>
             <p>
-              {active
-                ? instrumentTitle(active.instrument)
-                : "전략과 종목을 선택해 시작하세요."}
+              {running && status.data?.instrument
+                ? instrumentLabel(status.data.instrument)
+                : "전략을 선택해 시작하세요."}
             </p>
           </div>
           <div className={styles.performance}>
             <div>
               <span>현재 운용 평가손익</span>
-              <strong className={active ? "positive" : ""}>
-                {active ? `+${formatNumber(active.pnl)}` : "0"}
+              <strong className={pnlClass(pnl?.unrealized_pnl)}>
+                {signed(pnl?.unrealized_pnl ?? 0, formatNumber)}
                 <small>원</small>
               </strong>
             </div>
             <p>
               <span>실현손익</span>
-              <span>0원</span>
+              <span>{formatMoney(pnl?.realized_pnl ?? 0)}</span>
             </p>
             <p>
-              <span>비용</span>
-              <span>{formatNumber(active?.cost ?? 0)}원</span>
+              <span>비용{pnl?.fee_estimated ? " (추정)" : ""}</span>
+              <span>{formatMoney(pnl?.fee ?? 0)}</span>
             </p>
           </div>
-          {state.phase === "idle" ? (
+          {!running ? (
             <button
               className={`button primary ${styles.fullButton}`}
-              onClick={() =>
-                setState((current) => startRun(current, strategy, instrument))
-              }
+              disabled={busy || !strategyId || clearing}
+              onClick={() => void act(() => startTrading(strategyId as string))}
             >
               <Icon name="play" size={15} />
               운용 시작
@@ -172,7 +265,7 @@ export default function TradingPage() {
           ) : (
             <button
               className={`button danger ${styles.fullButton} ${styles.stopButton}`}
-              disabled={pending}
+              disabled={busy || pending}
               onClick={() => setConfirm("stop")}
             >
               <Icon name="stop" size={14} />
@@ -180,104 +273,108 @@ export default function TradingPage() {
             </button>
           )}
         </section>
-        <section
-          className={`panel ${styles.market}`}
-          aria-labelledby="market-title"
-        >
+        <section className={`panel ${styles.market}`} aria-labelledby="market-title">
           <div className={styles.marketHeader}>
             <div>
               <div className={styles.marketName}>
                 <span className={styles.symbolAvatar}>
-                  {instrument.id === "samsung" ? "S" : "K"}
+                  {(quote.data?.name ?? "").slice(0, 1) || dash}
                 </span>
-                <h2 id="market-title">{instrument.name}</h2>
+                <h2 id="market-title">
+                  {instrument ? instrumentLabel(instrument.name) : dash}
+                </h2>
               </div>
               <p className={styles.instrumentMeta}>
-                {instrument.code} · 만기 {instrument.expiry}
+                {instrument?.code ?? dash}
+                {quote.data?.expiry ? ` · 만기 ${quote.data.expiry}` : ""}
               </p>
             </div>
           </div>
           <div className={styles.quote}>
-            <strong>{formatNumber(instrument.price)}</strong>
-            <span className={instrument.change >= 0 ? "positive" : "negative"}>
-              {instrument.change >= 0 ? "+" : ""}
-              {instrument.change}%
+            <strong>{won(livePrice)}</strong>
+            <span className={pnlClass(changeRate)}>
+              {changeRate === null
+                ? dash
+                : `${changeRate > 0 ? "+" : ""}${changeRate.toFixed(2)}%`}
             </span>
           </div>
           <div className={styles.connection}>
             <span>
               <i />
-              시세 연결 예시
+              {streamNote}
             </span>
-            <span>거래량 {formatNumber(instrument.volume)}계약</span>
-            <span>수신 {sampleTime.slice(-8)} (고정 샘플)</span>
+            <span>거래량 {won(stream.lastTrade?.cum_volume ?? quote.data?.volume)}계약</span>
+            <span>수신 {receivedAt || dash}</span>
           </div>
-          <PriceChart instrument={instrument} />
+          {quote.error && <p className="empty">시세를 불러오지 못했습니다. {quote.error}</p>}
+          <PriceChart
+            name={instrument?.name ?? ""}
+            candles={candles.data}
+            interval={interval}
+            onIntervalChange={setInterval}
+            error={candles.error}
+          />
           <div className={styles.bookSummary}>
             <span>
-              매도 잔량 <strong>1,284</strong>
+              매도 잔량 <strong>{won(totalAsk)}</strong>
             </span>
             <div>
-              <i />
+              <i style={{ width: `${askShare}%` }} />
               <b />
             </div>
             <span>
-              매수 잔량 <strong>1,652</strong>
+              매수 잔량 <strong>{won(totalBid)}</strong>
             </span>
           </div>
         </section>
-        <section className={`panel ${styles.orderbook}`} aria-label="호가 샘플">
+        <section className={`panel ${styles.orderbook}`} aria-label="호가">
           <div className="section-head">
             <h2>호가</h2>
             <span className="badge">5호가</span>
           </div>
-          <div className={styles.bookLabels}>
-            <span>매도</span>
-            <span>가격</span>
-            <span>매수</span>
-          </div>
-          {Array.from({ length: 5 }, (_, i) => 5 - i).map((n, i) => (
-            <div key={`ask${n}`} className={styles.bookRow}>
-              <span
-                className="negative"
-                style={{
-                  background: `linear-gradient(to left, #5795ff14 ${30 + i * 12}%, transparent ${30 + i * 12}%)`,
-                }}
-              >
-                {[186, 248, 329, 215, 306][i]}
-              </span>
-              <strong className="negative">
-                {formatNumber(
-                  instrument.price +
-                    n * (instrument.id === "samsung" ? 100 : 0.05),
-                )}
-              </strong>
-              <span />
-            </div>
-          ))}
-          <div className={styles.bookCurrent}>
-            {formatNumber(instrument.price)}
-            <span>현재가</span>
-          </div>
-          {[1, 2, 3, 4, 5].map((n, i) => (
-            <div key={`bid${n}`} className={styles.bookRow}>
-              <span />
-              <strong className="positive">
-                {formatNumber(
-                  instrument.price -
-                    n * (instrument.id === "samsung" ? 100 : 0.05),
-                )}
-              </strong>
-              <span
-                className="positive"
-                style={{
-                  background: `linear-gradient(to right, #ff667514 ${78 - i * 12}%, transparent ${78 - i * 12}%)`,
-                }}
-              >
-                {[426, 368, 291, 312, 255][i]}
-              </span>
-            </div>
-          ))}
+          {levels.length === 0 ? (
+            <p className="empty">{book.error ? "호가를 불러오지 못했습니다." : "호가를 불러오는 중…"}</p>
+          ) : (
+            <>
+              <div className={styles.bookLabels}>
+                <span>매도</span>
+                <span>가격</span>
+                <span>매수</span>
+              </div>
+              {[...levels].reverse().map((level, i) => (
+                <div key={`ask${i}`} className={styles.bookRow}>
+                  <span
+                    className="negative"
+                    style={{
+                      background: `linear-gradient(to left, #5795ff14 ${((level.ask_quantity ?? 0) / maxQuantity) * 100}%, transparent 0)`,
+                    }}
+                  >
+                    {won(level.ask_quantity)}
+                  </span>
+                  <strong className="negative">{won(level.ask_price)}</strong>
+                  <span />
+                </div>
+              ))}
+              <div className={styles.bookCurrent}>
+                {won(livePrice)}
+                <span>현재가</span>
+              </div>
+              {levels.map((level, i) => (
+                <div key={`bid${i}`} className={styles.bookRow}>
+                  <span />
+                  <strong className="positive">{won(level.bid_price)}</strong>
+                  <span
+                    className="positive"
+                    style={{
+                      background: `linear-gradient(to right, #ff667514 ${((level.bid_quantity ?? 0) / maxQuantity) * 100}%, transparent 0)`,
+                    }}
+                  >
+                    {won(level.bid_quantity)}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
         </section>
       </div>
       <div className={styles.accountBar}>
@@ -290,32 +387,28 @@ export default function TradingPage() {
         </div>
         <button
           className="button danger"
-          disabled={pending}
+          disabled={busy || pending || clearing}
           onClick={() => setConfirm("all")}
         >
           미체결 취소·전체 포지션 청산
         </button>
       </div>
       <div className={styles.status} role="status" aria-live="polite">
-        {state.message}
+        {statusMessage(status.data, actionError ?? status.error)}
       </div>
       <div className={styles.accountGrid}>
-        <section
-          className={`panel ${styles.holdings}`}
-          aria-labelledby="positions-title"
-        >
+        <section className={`panel ${styles.holdings}`} aria-labelledby="positions-title">
           <div className="section-head">
             <h2 id="positions-title">보유 포지션</h2>
-            <span className="badge">{state.positions.length}</span>
+            <span className="badge">{positions.length}</span>
           </div>
-          {state.positions.length ? (
+          {positions.length ? (
             <div className="table-wrap">
               <table className="data-table">
                 <caption className="sr-only">계좌 전체 보유 포지션</caption>
                 <thead>
                   <tr>
                     <th>종목</th>
-                    <th>구분</th>
                     <th>매매구분</th>
                     <th>수량</th>
                     <th>평균 진입가</th>
@@ -324,21 +417,18 @@ export default function TradingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.positions.map((position) => (
-                    <tr key={position.id}>
-                      <td>{instrumentLabel(position.instrumentId)}</td>
-                      <td>{position.runId ? "현재 운용" : "기존 계좌"}</td>
-                      <td
-                        className={
-                          position.side === "매수" ? "positive" : "negative"
-                        }
-                      >
-                        {position.side}
+                  {positions.map((position) => (
+                    <tr key={`${position.code}-${position.side}`}>
+                      <td>{instrumentLabel(position.name)}</td>
+                      <td className={sideClassName(position.side)}>
+                        {sideLabel(position.side)}
                       </td>
-                      <td>{position.quantity}계약</td>
-                      <td>{formatNumber(position.average)}</td>
-                      <td>{formatNumber(position.price)}</td>
-                      <td className="positive">+{formatMoney(position.pnl)}</td>
+                      <td>{won(position.quantity)}계약</td>
+                      <td>{won(position.avg_price)}</td>
+                      <td>{won(position.last_price)}</td>
+                      <td className={pnlClass(position.pnl)}>
+                        {position.pnl === null ? dash : signed(position.pnl, formatMoney)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -348,10 +438,7 @@ export default function TradingPage() {
             <p className="empty">보유 포지션이 없습니다.</p>
           )}
         </section>
-        <section
-          className={`panel ${styles.holdings}`}
-          aria-labelledby="open-orders-title"
-        >
+        <section className={`panel ${styles.holdings}`} aria-labelledby="open-orders-title">
           <div className="section-head">
             <h2 id="open-orders-title">미체결 주문</h2>
             <span className="badge">{openOrders.length}</span>
@@ -378,19 +465,14 @@ export default function TradingPage() {
                 </thead>
                 <tbody>
                   {openOrders.map((order) => (
-                    <tr key={order.id}>
-                      <td>{instrumentLabel(order.instrumentId)}</td>
-                      <td>{order.at}</td>
-                      <td
-                        className={
-                          order.side === "매수" ? "positive" : "negative"
-                        }
-                      >
-                        {order.side}
-                      </td>
-                      <td>{formatNumber(order.price)}</td>
+                    <tr key={order.order_no}>
+                      <td>{order.code}</td>
+                      <td>{formatClock(order.received_time) || order.received_time}</td>
+                      <td className={sideClassName(order.side)}>{sideLabel(order.side)}</td>
+                      <td>{won(order.price)}</td>
                       <td>
-                        {order.quantity} / {order.filled} / {remaining(order)}
+                        {won(order.quantity)} / {won(order.filled_quantity)} /{" "}
+                        {won(order.remaining_quantity)}
                       </td>
                     </tr>
                   ))}
@@ -402,27 +484,25 @@ export default function TradingPage() {
           )}
         </section>
       </div>
-      <RunHistory runs={state.runs} />
+      <RunHistory runs={runs.data} error={runs.error} />
       {confirm && (
         <ConfirmDialog
           title={
-            confirm === "all"
-              ? "계좌 전체를 정리할까요?"
-              : "현재 운용을 종료할까요?"
+            confirm === "all" ? "계좌 전체를 정리할까요?" : "현재 운용을 종료할까요?"
           }
           action={confirm === "all" ? "계좌 전체 정리" : "운용 종료"}
           onClose={() => setConfirm(null)}
           onConfirm={() => {
-            setState((current) => beginStop(current, confirm === "all"));
+            void act(confirm === "all" ? clearAccount : stopTrading);
             setConfirm(null);
           }}
         >
           <p>
             {confirm === "all"
               ? "계좌 전체의 신규 주문 판단을 멈추고, 기존 주문을 포함한 모든 미체결을 취소한 뒤 남은 포지션을 청산합니다."
-              : "현재 운용의 판단을 멈추고, 해당 운용의 미체결 주문과 포지션을 정리합니다. 기존 계좌의 주문과 포지션은 유지합니다."}
+              : "현재 운용의 판단을 멈추고, 해당 운용의 미체결 주문과 포지션을 정리합니다."}
           </p>
-          <p>화면 검토용 샘플 동작이며 실제 주문을 전송하지 않습니다.</p>
+          <p>NH 모의계좌에 실제로 취소·청산 주문이 전송됩니다.</p>
         </ConfirmDialog>
       )}
     </>

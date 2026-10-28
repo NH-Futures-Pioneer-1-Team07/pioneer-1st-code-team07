@@ -1,37 +1,44 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Instrument } from "../../../data/fixtures";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { Candle } from "../../../apis/types";
 import { formatNumber } from "../../../data/fixtures";
+import { chartLayout, timeTicks } from "../../../data/tradingView";
 import styles from "./PriceChart.module.css";
 
-const pattern = [
-  0, 3, 1, 6, 5, 9, 6, 3, 8, 11, 7, 12, 14, 10, 13, 17, 15, 20, 18, 15, 19, 23,
-  21, 25, 22, 26, 28, 25, 30, 32, 27, 31, 35, 33, 36, 39, 35, 38, 41, 39,
-];
+export const intervals = [
+  { label: "1분", value: "1" },
+  { label: "5분", value: "5" },
+  { label: "일봉", value: "day" },
+] as const;
 
 const BASE_WIDTH = 760;
 const BASE_HEIGHT = 270;
 const AXIS_WIDTH = 76;
 
-export default function PriceChart({ instrument }: { instrument: Instrument }) {
-  const [interval, setInterval] = useState("5분");
+export default function PriceChart({
+  name,
+  candles,
+  interval,
+  onIntervalChange,
+  error,
+}: {
+  name: string;
+  candles: Candle[] | null;
+  interval: string;
+  onIntervalChange: (value: string) => void;
+  error: string | null;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState({ w: BASE_WIDTH, h: BASE_HEIGHT });
-  const down = instrument.change < 0;
-  const values = pattern.map(
-    (v, i) =>
-      (down ? 42 - v : v) +
-      (interval === "1분"
-        ? (i % 3) * 2
-        : interval === "일봉"
-          ? -(i % 5) * 1.5
-          : 0),
-  );
-  const unit = instrument.id === "samsung" ? 40 : 0.04;
-  const base = instrument.price - values.at(-1)! * unit;
-  const lastY = 180 - values.at(-1)! * 3;
-  useEffect(() => {
+  const daily = interval === "day";
+  const layout = chartLayout(candles ?? [], size.w, size.h, AXIS_WIDTH);
+  const ticks = timeTicks(candles ?? [], daily);
+  const slot = candles?.length ? (size.w - AXIS_WIDTH) / candles.length : 0;
+  const lastPrice = candles?.length ? candles[candles.length - 1].close : null;
+  const label = intervals.find((item) => item.value === interval)?.label ?? interval;
+
+  useLayoutEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     const fit = () => {
@@ -55,138 +62,93 @@ export default function PriceChart({ instrument }: { instrument: Instrument }) {
     pill.style.width = `${selected.offsetWidth}px`;
     pill.style.transform = `translateX(${selected.offsetLeft}px)`;
   }, [interval]);
-  const sx = (size.w - AXIS_WIDTH) / (BASE_WIDTH - AXIS_WIDTH);
-  const sy = size.h / BASE_HEIGHT;
+
   const axisX = size.w - AXIS_WIDTH + 16;
   return (
     <div className={styles.chart}>
       <div className={styles.toolbar}>
         <div ref={groupRef} role="group" aria-label="차트 주기">
           <span ref={pillRef} className={styles.pill} aria-hidden="true" />
-          {["1분", "5분", "일봉"].map((item) => (
+          {intervals.map((item) => (
             <button
-              key={item}
-              aria-pressed={interval === item}
-              className={interval === item ? styles.active : ""}
-              onClick={() => setInterval(item)}
+              key={item.value}
+              aria-pressed={interval === item.value}
+              className={interval === item.value ? styles.active : ""}
+              onClick={() => onIntervalChange(item.value)}
             >
-              {item}
+              {item.label}
             </button>
           ))}
         </div>
-        <span>캔들 · 거래량</span>
+        <span>
+          {error
+            ? "차트를 불러오지 못했습니다"
+            : candles === null
+              ? "불러오는 중…"
+              : "캔들 · 거래량"}
+        </span>
       </div>
       <div ref={frameRef} className={styles.frame}>
         <svg
           viewBox={`0 0 ${size.w} ${size.h}`}
           role="img"
-          aria-label={`${instrument.name} ${interval} 가격 캔들 및 거래량 샘플 차트`}
+          aria-label={`${name} ${label} 가격 캔들 및 거래량 차트`}
           className={styles.svg}
         >
-          <g>
-            <g transform={`scale(${sx} ${sy})`}>
-              {[0, 1, 2, 3].map((row) => (
-                <line
-                  key={row}
-                  x1="0"
-                  y1={30 + row * 50}
-                  x2="684"
-                  y2={30 + row * 50}
-                  stroke="var(--data-line)"
-                  strokeDasharray="3 5"
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-              {values.map((value, index) => {
-                const previous = values[Math.max(0, index - 1)];
-                const rising = value >= previous;
-                const color = rising ? "var(--rise)" : "var(--fall)";
-                const x = 8 + index * 17;
-                return (
-                  <g key={index}>
-                    <line
-                      x1={x + 4}
-                      x2={x + 4}
-                      y1={180 - Math.max(value, previous) * 3 - 7}
-                      y2={180 - Math.min(value, previous) * 3 + 8}
-                      stroke={color}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <rect
-                      x={x}
-                      y={180 - Math.max(value, previous) * 3}
-                      width="8"
-                      height={Math.max(2, Math.abs(value - previous) * 3)}
-                      fill={color}
-                      rx="1"
-                    />
-                    <rect
-                      x={x}
-                      y={237 - (12 + ((index * 13) % 31))}
-                      width="8"
-                      height={12 + ((index * 13) % 31)}
-                      fill={color}
-                      opacity=".24"
-                      rx="1"
-                    />
-                  </g>
-                );
-              })}
+          {layout.ticks.map((tick) => (
+            <g key={tick.y}>
               <line
                 x1="0"
-                y1={lastY}
-                x2="684"
-                y2={lastY}
+                y1={tick.y}
+                x2={size.w - AXIS_WIDTH}
+                y2={tick.y}
+                stroke="var(--data-line)"
+                strokeDasharray="3 5"
+              />
+              <text x={axisX} y={tick.y + 4} fill="var(--text-tertiary)" fontSize="11">
+                {formatNumber(Math.round(tick.value))}
+              </text>
+            </g>
+          ))}
+          {layout.shapes.map((shape, index) => {
+            const color = shape.rising ? "var(--rise)" : "var(--fall)";
+            const center = shape.x + shape.width / 2;
+            return (
+              <g key={candles?.[index].time ?? index}>
+                <line x1={center} x2={center} y1={shape.wickTop} y2={shape.wickBottom} stroke={color} />
+                <rect x={shape.x} y={shape.bodyTop} width={shape.width} height={shape.bodyHeight} fill={color} rx="1" />
+                <rect x={shape.x} y={shape.volumeTop} width={shape.width} height={shape.volumeHeight} fill={color} opacity=".24" rx="1" />
+              </g>
+            );
+          })}
+          {layout.lastY !== null && lastPrice !== null && (
+            <>
+              <line
+                x1="0"
+                y1={layout.lastY}
+                x2={size.w - AXIS_WIDTH}
+                y2={layout.lastY}
                 stroke="var(--accent)"
                 strokeDasharray="4 4"
                 opacity=".65"
-                vectorEffect="non-scaling-stroke"
               />
-            </g>
-            {[0, 1, 2, 3].map((row) => (
-              <text
-                key={row}
-                x={axisX}
-                y={(34 + row * 50) * sy}
-                fill="var(--text-tertiary)"
-                fontSize="11"
-              >
-                {formatNumber(base + (50 - row * 16.6) * unit)}
+              <rect x={size.w - 67} y={layout.lastY - 11} width="67" height="22" rx="3" fill="var(--accent)" />
+              <text x={size.w - 33.5} y={layout.lastY + 4} textAnchor="middle" fill="#1b1402" fontSize="11" fontWeight="600">
+                {formatNumber(lastPrice)}
               </text>
-            ))}
-            <rect
-              x={size.w - 67}
-              y={lastY * sy - 11}
-              width="67"
-              height="22"
-              rx="3"
-              fill="var(--accent)"
-            />
+            </>
+          )}
+          {ticks.map((tick) => (
             <text
-              x={size.w - 33.5}
-              y={lastY * sy + 4}
-              textAnchor="middle"
-              fill="#1b1402"
+              key={tick.index}
+              x={Math.min(tick.index * slot + 5, size.w - AXIS_WIDTH - 36)}
+              y={size.h - 7}
+              fill="var(--text-tertiary)"
               fontSize="11"
-              fontWeight="600"
             >
-              {formatNumber(instrument.price)}
+              {tick.label}
             </text>
-            {(interval === "일봉"
-              ? ["09.01", "09.18", "10.08", "10.27"]
-              : ["09:00", "09:30", "10:00", "10:30"]
-            ).map((time, index) => (
-              <text
-                key={time}
-                x={index * 213 * sx + 5}
-                y={size.h - 7}
-                fill="var(--text-tertiary)"
-                fontSize="11"
-              >
-                {time}
-              </text>
-            ))}
-          </g>
+          ))}
         </svg>
       </div>
     </div>

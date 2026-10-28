@@ -35,7 +35,7 @@ export default function App() {
           <div className={styles.topbarRight}>
             <span className={styles.samplePill}>
               <i />
-              샘플 데이터
+              {page === "trading" ? "NH 모의계좌" : "샘플 데이터"}
             </span>
             <span className={styles.marketLabel}>국내선물 · KST</span>
           </div>
@@ -43,7 +43,9 @@ export default function App() {
         <main id="main-content" className={styles.main} tabIndex={-1}>
           <div className={styles.demoNotice}>
             <span>
-              샘플 데이터 · 실제 주문 및 API 호출 없음 · 새로고침 시 초기화
+              {page === "trading"
+                ? "NH 모의계좌 연동 · 운용 시작과 정리는 모의계좌에 실제로 주문을 전송합니다"
+                : "샘플 데이터 · 실제 주문 및 API 호출 없음 · 새로고침 시 초기화"}
             </span>
           </div>
           <div hidden={page !== "trading"}>

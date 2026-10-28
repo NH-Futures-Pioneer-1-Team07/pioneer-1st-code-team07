@@ -18,6 +18,23 @@
   font-size: 13px;
   font-weight: 500;
 }
+.action {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.action strong {
+  flex: none;
+}
+.action small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .decision > span:nth-child(4),
 .decision > span:nth-child(5),
 .decision > span:nth-child(6),

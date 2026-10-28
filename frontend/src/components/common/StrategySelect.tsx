@@ -1,15 +1,21 @@
-import { strategies } from "../../data/fixtures";
-import type { Strategy } from "../../data/fixtures";
 import styles from "./StrategySelect.module.css";
+
+export interface StrategyItem {
+  id: string;
+  name: string;
+  description: string;
+}
 
 export default function StrategySelect({
   id,
-  strategy,
+  items,
+  selectedId,
   disabled,
   onChange,
 }: {
   id: string;
-  strategy: Strategy;
+  items: StrategyItem[];
+  selectedId: string;
   disabled?: boolean;
   onChange: (id: string) => void;
 }) {
@@ -17,8 +23,8 @@ export default function StrategySelect({
     <fieldset className={styles.group} disabled={disabled}>
       <legend>전략 선택</legend>
       <div className={styles.list}>
-        {strategies.map((item) => {
-          const selected = item.id === strategy.id;
+        {items.map((item) => {
+          const selected = item.id === selectedId;
           return (
             <label
               key={item.id}
