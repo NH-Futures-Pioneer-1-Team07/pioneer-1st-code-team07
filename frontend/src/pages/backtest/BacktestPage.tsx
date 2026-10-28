@@ -594,16 +594,16 @@ export default function BacktestPage() {
                   </div>
                   <div>
                     <dt>비용</dt>
-                    <dd>
-                      체결대금의 {percentText(reportMeta.assumptions.fee.rate)} · 슬리피지{" "}
-                      {reportMeta.assumptions.slippage.ticks}틱
-                      {reportMeta.assumptions.slippage.tick_size !== null &&
-                        `(${formatNumber(reportMeta.assumptions.slippage.tick_size)})`}
-                    </dd>
+                    <dd>체결대금의 {percentText(reportMeta.assumptions.fee.rate)}</dd>
                   </div>
                   <div>
-                    <dt>체결 기준</dt>
-                    <dd>{reportMeta.assumptions.fill.on_bar}</dd>
+                    <dt>슬리피지</dt>
+                    <dd>
+                      {reportMeta.assumptions.slippage.ticks}틱
+                      {reportMeta.assumptions.slippage.tick_size !== null &&
+                        `(${formatNumber(reportMeta.assumptions.slippage.tick_size)})`}{" "}
+                      · {reportMeta.assumptions.slippage.direction}
+                    </dd>
                   </div>
                 </dl>
                 <RecordDetail meta={reportMeta} />
