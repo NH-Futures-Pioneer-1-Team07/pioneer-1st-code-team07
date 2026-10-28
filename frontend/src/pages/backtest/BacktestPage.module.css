@@ -138,6 +138,16 @@
   pointer-events: none;
   transition: opacity 0.15s;
 }
+.tipWrap {
+  left: auto;
+  right: -8px;
+  width: 220px;
+  white-space: normal;
+}
+.assumptions dd .info {
+  margin-left: 4px;
+  vertical-align: -2px;
+}
 .info:hover .tip,
 .info:focus-visible .tip {
   opacity: 1;
@@ -172,7 +182,9 @@
   gap: 12px;
 }
 .assumptions dt {
+  flex: none;
   color: #9299a4;
+  white-space: nowrap;
 }
 .assumptions dd {
   color: #afb4bd;

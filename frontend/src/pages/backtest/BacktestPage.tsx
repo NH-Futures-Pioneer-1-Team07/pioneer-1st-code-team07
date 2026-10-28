@@ -272,7 +272,15 @@ export default function BacktestPage() {
                   </div>
                   <div>
                     <dt>체결</dt>
-                    <dd>{assumptions.data.fill.on_bar}</dd>
+                    <dd>
+                      다음 봉 시가에 전량 체결
+                      <span className={styles.info} tabIndex={0} role="img" aria-label="체결 가정 자세히">
+                        <Icon name="info" size={13} />
+                        <span role="tooltip" className={`${styles.tip} ${styles.tipWrap}`}>
+                          {assumptions.data.fill.on_bar}
+                        </span>
+                      </span>
+                    </dd>
                   </div>
                   <div>
                     <dt>증거금</dt>
