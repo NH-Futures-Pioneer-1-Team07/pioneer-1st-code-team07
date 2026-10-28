@@ -81,3 +81,13 @@ def test_전략_폴더가_없으면_빈_목록이다(tmp_path):
     registry = StrategyRegistry(tmp_path / "missing")
 
     assert registry.all() == []
+
+
+def test_저장소의_전략_폴더에서_장중_전략이_등록된다():
+    from app.config import BACKEND_DIR
+
+    registry = StrategyRegistry(BACKEND_DIR / "strategies")
+
+    assert registry.errors == {}
+    assert "week02_samsung_futures_intraday" in [item.id for item in registry.all()]
+    assert "_template" not in [item.id for item in registry.all()]
