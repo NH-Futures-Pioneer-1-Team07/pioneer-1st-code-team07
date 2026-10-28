@@ -295,3 +295,44 @@ def test_환경과_등급이_다르면_서로_기다리지_않는다():
     assert limiter.wait("mock", Limit.QUOTE) == 0.0
     assert limiter.wait("real", Limit.QUOTE) == 0.0
     assert limiter.wait("mock", Limit.ORDER) == 0.0
+
+
+# ---- 웹소켓 접속키 ----
+
+
+def test_웹소켓_접속키를_토큰과_함께_GET으로_발급받는다():
+    client, server = make_client({"access_key": "WS-KEY"})
+
+    key = client.issue_websocket_key()
+
+    assert key == "WS-KEY"
+    [request] = server.api_requests()
+    assert (request.method, request.url.path) == ("GET", "/permission/v1/web-socket-key")
+    assert request.headers["authorization"] == f"Bearer {TOKEN}"
+
+
+def test_접속키는_발급할_때마다_새로_요청한다():
+    client, server = make_client({"access_key": "A"}, {"access_key": "B"})
+
+    assert [client.issue_websocket_key(), client.issue_websocket_key()] == ["A", "B"]
+    assert len(server.api_requests()) == 2
+
+
+def test_접속키_응답에_키가_없으면_오류다():
+    client, _ = make_client({"access_key": ""})
+
+    with pytest.raises(HttpError):
+        client.issue_websocket_key()
+
+
+def test_접속키_발급이_거절되면_예외가_된다():
+    client, _ = make_client({"errorCode": "EGW051", "errorMessage": "인증 정보 확인 불가"})
+
+    with pytest.raises(GatewayError):
+        client.issue_websocket_key()
+
+
+def test_세션_초기화용_토큰_값을_돌려준다():
+    client, _ = make_client()
+
+    assert client.session_token() == TOKEN

@@ -19,6 +19,7 @@ BASE_URLS = {"mock": "https://apidemo.futures.co.kr", "real": "https://api.futur
 TIMEOUT = httpx.Timeout(10.0)
 
 UNAUTHORIZED = 401
+WEBSOCKET_KEY_PATH = "/permission/v1/web-socket-key"
 # 접근토큰을 다시 받으면 풀리는 코드
 REISSUE_CODES = {"EG041", "EG042", "EG043", "EG044", "EG045", "EG047", "EG049", "EGW052"}
 GATEWAY_PREFIXES = ("EG", "EST")
@@ -53,6 +54,30 @@ class NHClient:
             self._limiter.wait(self.environment, limit)
             response, body = self._send(path, payload)
 
+        return self._checked(path, response, body)
+
+    def issue_websocket_key(self) -> str:
+        """실시간 연결에 쓰는 접속키를 발급받는다. 연결할 때마다 한 번 쓰고 보관하지 않는다."""
+        headers = {"Authorization": self._tokens.token().authorization}
+        try:
+            response = self._http.get(f"{self.base_url}{WEBSOCKET_KEY_PATH}", headers=headers)
+        except httpx.HTTPError as error:
+            raise TransportError(f"웹소켓 접속키 발급 요청에 실패했습니다: {type(error).__name__}") from None
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text.strip()
+        key = str(self._checked(WEBSOCKET_KEY_PATH, response, body).get("access_key") or "").strip()
+        if not key:
+            raise HttpError(WEBSOCKET_KEY_PATH, response.status_code, {"errorMessage": "access_key가 없습니다"})
+        return key
+
+    def session_token(self) -> str:
+        """실시간 세션 초기화에 쓰는 접근토큰 값."""
+        return self._tokens.token().access_token
+
+    def _checked(self, path: str, response: httpx.Response, body: Any) -> dict[str, Any]:
+        """응답이 실패인지 본문까지 보고 판단한다. 성공이면 본문을 돌려준다."""
         code = _error_code(body)
         if code:
             detail = _error_message(body)
