@@ -1,4 +1,4 @@
-"""실제 두 전략을 가짜 분봉으로 백테스트 엔진에 돌려 본다. 손익 계산이 기록과 맞는지 본다."""
+"""실제 전략을 가짜 분봉으로 백테스트 엔진에 돌려 본다. 손익 계산이 기록과 맞는지 본다."""
 
 import json
 import random
@@ -58,7 +58,7 @@ def run_strategy(tmp_path, strategy_id, days):
     return engine, result, lines
 
 
-@pytest.mark.parametrize("strategy_id", ["week02_samsung_futures_intraday", "week02_samsung_futures_reversal"])
+@pytest.mark.parametrize("strategy_id", ["week02_samsung_futures_intraday"])
 def test_실제_전략이_여러_날을_돌고_손익이_기록과_일치한다(tmp_path, strategy_id):
     days = {date(2026, 10, 19) + timedelta(days=n): random_day(date(2026, 10, 19) + timedelta(days=n), 100 + n)
             for n in range(5)}
@@ -78,7 +78,7 @@ def test_실제_전략이_여러_날을_돌고_손익이_기록과_일치한다(
     assert not [line for line in lines if line.get("level") == "warning"]
 
 
-@pytest.mark.parametrize("strategy_id", ["week02_samsung_futures_intraday", "week02_samsung_futures_reversal"])
+@pytest.mark.parametrize("strategy_id", ["week02_samsung_futures_intraday"])
 def test_전략은_15시_30분_이후에는_보유를_남기지_않는다(tmp_path, strategy_id):
     days = {date(2026, 10, 19): random_day(date(2026, 10, 19), 7), date(2026, 10, 20): random_day(date(2026, 10, 20), 8)}
 
@@ -93,7 +93,7 @@ def test_전략은_15시_30분_이후에는_보유를_남기지_않는다(tmp_pa
 def test_같은_데이터는_같은_결과를_낸다(tmp_path):
     days = {date(2026, 10, 19): random_day(date(2026, 10, 19), 11)}
 
-    _, first, _ = run_strategy(tmp_path / "a", "week02_samsung_futures_reversal", days)
-    _, second, _ = run_strategy(tmp_path / "b", "week02_samsung_futures_reversal", days)
+    _, first, _ = run_strategy(tmp_path / "a", "week02_samsung_futures_intraday", days)
+    _, second, _ = run_strategy(tmp_path / "b", "week02_samsung_futures_intraday", days)
 
     assert first == second

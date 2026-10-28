@@ -202,4 +202,4 @@
 - [국내 투자자 직전 매매동향](nh-api/apis/domestic_trend-investor.md)
 - [국내 주문·체결 실시간 정보](nh-api/apis/O1_K.md)
 - [삼성전자선물 장중 전략](strategies/week02_samsung_futures_intraday.md)
-- [삼성전자선물 고저점 역매매 전략](strategies/week02_samsung_futures_reversal.md)
+- [삼성전자선물 역매매 전략](strategies/week02_samsung_futures_reversal.md)
