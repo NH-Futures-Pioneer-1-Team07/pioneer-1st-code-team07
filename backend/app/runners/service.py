@@ -14,6 +14,7 @@ from app.nh.quotes import fetch_minute_bars, fetch_quote
 from app.records.store import RunRecorder, RunStore
 from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache, sparse_below
 from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
+from app.runners.minute_backtest import MinuteBacktestEngine
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
 from strategy_base.registry import RegisteredStrategy, StrategyRegistry
@@ -165,6 +166,8 @@ class BacktestService:
         if slippage_ticks is not None and not 0 <= slippage_ticks <= MAX_SLIPPAGE_TICKS:
             raise BacktestRejected(422, f"슬리피지는 0틱부터 {MAX_SLIPPAGE_TICKS}틱까지 입력할 수 있습니다")
         merged = self._merge_params(manifest, params)
+        if manifest.backtest and "tick_size" in merged and merged["tick_size"] != manifest.backtest.tick_size:
+            raise BacktestRejected(422, "전략의 틱 간격과 백테스트의 틱 간격이 일치해야 합니다")
         if not (self._settings.nh_app_key and self._settings.nh_app_secret):
             raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
         available = self._range(instrument.code, manifest.bar.size)
@@ -253,25 +256,42 @@ class BacktestService:
             recorder.update_meta(progress={"stage": "prepare", "done": done, "total": total})
 
         recorder.update_meta(progress={"stage": "prepare", "done": 0, "total": 0})
-        loaded = self._loader_factory()(instrument.code or "", minutes, start, end, prepare)
+        loader = self._loader_factory()
+        loaded = loader(instrument.code or "", minutes, start, end, prepare)
         if not loaded.days:
             raise RuntimeError("조회 기간에 분봉 데이터가 없습니다")
 
-        tick = infer_tick(loaded.days)
-        recorder.update_meta(assumptions=describe_assumptions(self._settings, tick, slippage_ticks))
+        price_data = None
+        if manifest.backtest is not None:
+            price_data = loader(instrument.code or "", manifest.backtest.price_minutes, start, end, prepare)
+            if set(price_data.days) != set(loaded.days):
+                raise ValueError("신호 봉과 1분 가격 자료의 거래일이 일치하지 않습니다")
+        tick = manifest.backtest.tick_size if manifest.backtest else infer_tick(loaded.days)
+        described = describe_assumptions(self._settings, tick, slippage_ticks)
+        if price_data is not None:
+            described["fill"]["on_bar"] = "봉 마감 청산 주문은 다음 관측 1분 시가에 체결. 진입은 다음 가격에서 조건 검사. 당일 청산 미완료는 오류"
+            described["fill"]["on_price"] = "관측 1분 가격 경로 판단의 시장가 주문은 해당 재현 가격에 전량 체결"
+            described["fill"]["intrabar_path"] = "관측 1분봉 시가 → 보유 방향에 불리한 극단 → 유리한 극단 → 종가"
+            described["fill"]["signal_minutes"] = minutes
+            described["fill"]["price_minutes"] = 1
+            described["fill"]["missing_minutes"] = "합성하지 않으며 다음 관측 가격에서 처리"
+        recorder.update_meta(assumptions=described)
         assumptions = Assumptions(
             fee_rate=self._settings.backtest_fee_rate,
             slippage_ticks=self._settings.backtest_slippage_ticks if slippage_ticks is None else slippage_ticks,
             multiplier=instrument.multiplier or 1,
             tick_size=tick,
         )
-        engine = BacktestEngine(
+        engine_type = MinuteBacktestEngine if price_data is not None else BacktestEngine
+        extra = {"minute_days": price_data.days} if price_data is not None else {}
+        engine = engine_type(
             registered.strategy_class(params),
             recorder,
             assumptions,
             initial_capital=initial_capital,
             minutes=minutes,
             last_trading_day=loaded.last_trading_day,
+            **extra,
         )
 
         def compute(done: int, total: int) -> None:
