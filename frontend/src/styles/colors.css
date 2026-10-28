@@ -10,6 +10,7 @@
   --text-tertiary: #9299a4;
   /* Representative yellow sampled from the NH Futures website logo. */
   --accent: #ffb819;
+  --focus-ring: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   --accent-soft: rgb(255 184 25 / 10%);
   --positive: #49c99b;
   --rise: #ff6675;
