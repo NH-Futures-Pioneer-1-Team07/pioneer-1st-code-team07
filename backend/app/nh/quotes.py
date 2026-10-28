@@ -83,13 +83,13 @@ def _fetch_day(client: NHClient, code: str, minutes: int, day: date, time_marks:
     shift = timedelta(minutes=minutes) if time_marks == "end" else timedelta()
     bars = []
     for row in rows:
-        bar = _bar(row, shift)
+        bar = parse_bar(row, shift)
         if bar is not None:
             bars.append(bar)
     return bars
 
 
-def _bar(row: dict[str, Any], shift: timedelta) -> Bar | None:
+def parse_bar(row: dict[str, Any], shift: timedelta = timedelta()) -> Bar | None:
     day, clock = str(row.get("occurs1_ref_dt") or "").strip(), str(row.get("occurs1_exch_tm") or "").strip()
     high, low = _number(row.get("occurs1_high_pric")), _number(row.get("occurs1_low_pric"))
     close, volume = _number(row.get("occurs1_close_pric")), _number(row.get("occurs1_cum_trd_qty"))
