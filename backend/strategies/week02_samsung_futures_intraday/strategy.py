@@ -1,4 +1,4 @@
-"""삼성전자선물 장중 전략. 판단 규칙은 docs/strategies/week-02/samsung-futures-intraday.md를 따른다."""
+"""삼성전자선물 장중 전략. 판단 규칙은 docs/strategies/week02_samsung_futures_intraday.md를 따른다."""
 
 import math
 from collections.abc import Sequence

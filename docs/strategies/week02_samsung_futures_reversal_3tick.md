@@ -68,4 +68,4 @@
 
 ## 12. 관련 API 문서
 
-판단 자료는 [국내 분봉](../../nh-api/apis/domestic_chart-minute.md)과 [국내 현재가](../../nh-api/apis/domestic_price.md)에서 얻는다.
+판단 자료는 [국내 분봉](../nh-api/apis/domestic_chart-minute.md)과 [국내 현재가](../nh-api/apis/domestic_price.md)에서 얻는다.

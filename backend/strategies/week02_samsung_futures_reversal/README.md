@@ -1,6 +1,6 @@
 # 삼성전자선물 고저점 역매매 전략
 
-- 판단 규칙: [samsung-futures-reversal.md](../../../docs/strategies/week-02/samsung-futures-reversal.md)
+- 판단 규칙: [week02_samsung_futures_reversal.md](../../../docs/strategies/week02_samsung_futures_reversal.md)
 - 구현: [strategy.py](strategy.py)
 - 파라미터: [manifest.json](manifest.json). 이름과 기본값은 전략 문서 10절과 같다.
 

@@ -1,4 +1,4 @@
-"""삼성전자선물 고저점 역매매 전략. 판단 규칙은 docs/strategies/week-02/samsung-futures-reversal.md를 따른다."""
+"""삼성전자선물 고저점 역매매 전략. 판단 규칙은 docs/strategies/week02_samsung_futures_reversal.md를 따른다."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field

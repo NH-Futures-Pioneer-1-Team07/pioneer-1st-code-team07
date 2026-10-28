@@ -14,7 +14,7 @@
 ## 2. 상품과 입력 자료
 
 - 테스트 대상은 삼성전자선물 2026년 11월물 `A116B000`이다.
-- 장중 전략(`samsung-futures-intraday.md`)과 같은 종목이다.
+- 장중 전략(`week02_samsung_futures_intraday.md`)과 같은 종목이다.
 - 거래승수는 10이다.
 - 최종거래일은 `20261112`다.
 - 실행 시 종목·월물·최종거래일을 다시 확인한다.
@@ -185,7 +185,7 @@
 
 ## 12. 관련 API 문서
 
-- [국내 분봉](../../nh-api/apis/domestic_chart-minute.md)
-- [국내 현재가·최종거래일](../../nh-api/apis/domestic_price.md)
-- [국내 주문](../../nh-api/apis/domestic_order.md)
-- [국내 취소주문](../../nh-api/apis/domestic_cancel.md)
+- [국내 분봉](../nh-api/apis/domestic_chart-minute.md)
+- [국내 현재가·최종거래일](../nh-api/apis/domestic_price.md)
+- [국내 주문](../nh-api/apis/domestic_order.md)
+- [국내 취소주문](../nh-api/apis/domestic_cancel.md)
