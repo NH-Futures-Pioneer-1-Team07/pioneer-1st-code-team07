@@ -30,6 +30,7 @@ uv run uvicorn app.main:create_app --factory --reload
 
 - `TRADING_ENV`는 필수다. `mock`(모의) 또는 `real`(실전)을 쓴다. 없으면 서버가 시작되지 않고 없는 변수 이름을 알려 준다.
 - `STRATEGIES_DIR`, `RUNS_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`를 쓴다.
+- `NH_APP_KEY`, `NH_APP_SECRET`는 NH선물 API를 부를 때만 필요하다. `TRADING_ENV`가 고른 환경(모의 또는 실전)의 키를 넣는다. 없으면 서버는 시작하지만 NH를 부르는 순간 필요한 변수 이름을 알려 주는 오류가 난다.
 - `.env`에는 비밀정보가 들어갈 수 있으므로 커밋하지 않는다.
 
 테스트는 다음 명령으로 실행한다.
@@ -46,6 +47,7 @@ uv run pytest
 | `strategy_base/` | 전략 인터페이스(`interface.py`), 입력·출력 형식(`models.py`), 전략 폴더 형식(`manifest.py`), 등록(`registry.py`), 공통 지표(`indicators.py`), 테스트 도우미(`testing.py`) |
 | `strategies/` | 전략 폴더. 폴더 하나가 전략 하나다 |
 | `strategies/_template/` | 새 전략을 만들 때 복사하는 템플릿. `_`로 시작하는 폴더는 등록하지 않는다 |
+| `app/nh/` | NH선물 API 호출(인증, 호출 제한, 시세 조회) |
 | `app/records/` | 실행 기록의 저장·조회와 비밀정보 제거 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `tests/` | 테스트 |
@@ -94,3 +96,27 @@ uv run pytest
 - `make_bars(rows, start, minutes)`: (고가, 저가, 종가, 거래량) 목록으로 연속한 봉을 만든다.
 - `run_on_bars(strategy, bars, lots=..., open_orders=..., last_trading_day=...)`: 봉이 하나씩 마감되는 것처럼 `on_bar`를 호출하고 호출마다 출력을 돌려준다. 체결은 흉내 내지 않는다.
 - 예시는 `tests/test_template_strategy.py`를 따른다.
+
+## NH선물 API
+
+`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `client.py` | `NHClient.call(경로, 본문, 호출 등급)`. 접근토큰을 붙이고, 호출 제한을 지키고, 실패를 예외로 바꾼다 |
+| `auth.py` | 접근토큰 발급·보관. 메모리에만 두고 만료 5분 전에 다시 발급한다 |
+| `rate_limit.py` | 주문 5건/초, 계좌 10건/초, 시세 10건/초 간격을 지킨다. 환경마다 따로 센다 |
+| `errors.py` | `TransportError`, `HttpError`, `BusinessError`, `GatewayError`, `NHConfigError` |
+| `quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
+
+- 환경: `TRADING_ENV=mock`이면 `apidemo.futures.co.kr`, `real`이면 `api.futures.co.kr`을 부른다.
+- 성공 판단: HTTP 200이어도 본문에 `errorCode`나 `msg_cd`가 있으면 실패로 본다. `EG`·`EST`로 시작하는 코드는 `GatewayError`, 그 밖은 `BusinessError`다.
+- 다시 보내기: 실패해도 다시 보내지 않는다. 예외는 토큰이 거부된 경우(HTTP 401, 토큰 재발급 코드)로, 토큰을 새로 받아 한 번만 다시 보낸다. 시간 초과는 처리 여부를 알 수 없으므로 다시 보내지 않는다.
+- 비밀정보: 키와 토큰은 로그, 예외 메시지, 객체 표시에 나오지 않는다.
+
+### 분봉 조회
+
+- `fetch_minute_bars(client, 종목코드, minutes=3, start=날짜, end=날짜)`는 하루씩 나눠 조회한다. 주말은 건너뛰고 휴장일은 빈 응답이라 봉이 없다. 하루 분량이 한 번에 오기 때문에 다음 데이터 키로 이어받지 않는다.
+- 주간(`nght_tp=1`)만 조회한다. 모의환경은 야간을 지원하지 않는다.
+- 거래량은 `occurs1_cum_trd_qty`를 봉 구간 거래량으로 쓴다. 이름은 누적이지만 모의환경의 삼성전자선물 2026-10-27 데이터에서는 봉 구간 값으로 관찰됐다는 것이 전략 문서의 기록이다.
+- **미확인**: 응답의 봉 시각(`occurs1_exch_tm`)이 봉의 시작인지 마감인지는 모의환경 호출로 확인하지 못했다. 기본값은 시작 시각(`time_marks="start"`)으로 본다. 마감 시각이면 `time_marks="end"`로 부르면 봉 길이를 빼서 시작 시각으로 바꾼다. 모의환경 키로 확인한 뒤 이 항목을 갱신해야 한다.

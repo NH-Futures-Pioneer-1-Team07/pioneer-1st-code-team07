@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     trading_env: Literal["mock", "real"]
     strategies_dir: Path = BACKEND_DIR / "strategies"
     runs_dir: Path = BACKEND_DIR / "runs"
+    nh_app_key: SecretStr | None = None
+    nh_app_secret: SecretStr | None = None
 
 
 def load_settings() -> Settings:
