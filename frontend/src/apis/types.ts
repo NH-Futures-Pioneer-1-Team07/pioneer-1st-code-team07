@@ -149,6 +149,8 @@ export interface RunSummary extends RunRef {
   started_at: string;
   ended_at: string | null;
   status: string;
+  period?: { start: string; end: string };
+  initial_capital?: number;
   net_pnl: number | null;
 }
 
@@ -180,3 +182,58 @@ export type MarketMessage =
   | ({ type: "orderbook" } & OrderBook)
   | { type: "reconnected" }
   | { type: "subscription_failed"; code: string | null; reason_code: string; message: string };
+
+export interface BacktestRange {
+  strategy_id: string;
+  instrument: { name: string; code: string };
+  start: string | null;
+  end: string | null;
+  last_trading_day: string | null;
+}
+
+export interface Assumptions {
+  fee: { rate: number; basis: string; source: string };
+  slippage: { ticks: number; tick_size: number | null; direction: string };
+  fill: { on_bar: string; on_price: string; intrabar_path: string };
+  margin: string;
+}
+
+export interface BacktestProgress {
+  stage: "prepare" | "compute" | "done";
+  done: number;
+  total: number;
+}
+
+export interface BacktestMeta extends RunRef {
+  strategy_name: string;
+  instrument: { name: string; code: string };
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  period: { start: string; end: string };
+  initial_capital: number;
+  assumptions: Assumptions;
+  progress?: BacktestProgress;
+}
+
+export interface BacktestResult {
+  initial_capital: number;
+  final_equity: number;
+  gross_pnl: number;
+  fee: number;
+  net_pnl: number;
+  return_rate: number;
+  trade_count: number;
+  win_count: number;
+  loss_count: number;
+  max_drawdown: number;
+  max_drawdown_rate: number;
+  days: number;
+  bars: number;
+  equity_curve: { time: string; equity: number }[];
+}
+
+export interface BacktestRun {
+  meta: BacktestMeta;
+  result: BacktestResult | null;
+}

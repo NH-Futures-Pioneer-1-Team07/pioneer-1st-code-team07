@@ -1,0 +1,96 @@
+import type { BacktestProgress, BacktestRange } from "../apis/types.ts";
+
+export const MIN_CAPITAL = 1_000_000;
+export const MAX_CAPITAL = 10_000_000_000;
+
+/** 데이터 준비를 앞 절반, 계산을 뒤 절반으로 보고 전체 진행률(0~100)을 만든다. */
+export function progressPercent(progress: BacktestProgress | undefined, status: string): number {
+  if (status === "completed" || progress?.stage === "done") return 100;
+  if (!progress || progress.total <= 0) return 0;
+  const ratio = Math.min(progress.done / progress.total, 1);
+  return Math.round((progress.stage === "prepare" ? ratio * 50 : 50 + ratio * 50));
+}
+
+export function progressLabel(progress: BacktestProgress | undefined): string {
+  if (!progress || progress.total <= 0) return "시작하는 중입니다";
+  if (progress.stage === "prepare") return `과거 데이터를 준비하고 있어요 (${progress.done}/${progress.total}일)`;
+  if (progress.stage === "compute") return `전략을 계산하고 있어요 (${progress.done}/${progress.total}일)`;
+  return "마무리하는 중입니다";
+}
+
+export const statusLabel = (status: string) =>
+  status === "running"
+    ? "실행 중"
+    : status === "completed"
+      ? "완료"
+      : status === "error"
+        ? "오류"
+        : status === "interrupted"
+          ? "중단"
+          : status;
+
+/** 입력이 틀렸으면 이유를, 맞으면 빈 문자열을 돌려준다. */
+export function validateInput(
+  start: string,
+  end: string,
+  capital: string,
+  range: BacktestRange | null,
+): string {
+  if (!range?.start || !range.end) return "테스트 가능 기간을 아직 알 수 없습니다.";
+  if (!start || !end || start > end) return "시작일과 종료일을 확인해 주세요. 시작일은 종료일보다 늦을 수 없습니다.";
+  if (start < range.start || end > range.end)
+    return `테스트 기간은 ${range.start}부터 ${range.end}까지 선택해 주세요.`;
+  const amount = Number(capital);
+  if (!Number.isSafeInteger(amount) || amount < MIN_CAPITAL || amount > MAX_CAPITAL)
+    return "초기자금은 1,000,000원부터 10,000,000,000원까지 정수로 입력해 주세요.";
+  return "";
+}
+
+/** `0.000085` → `0.0085%` */
+export const percentText = (rate: number) => `${Number((rate * 100).toPrecision(6))}%`;
+
+export const returnText = (rate: number) =>
+  `${rate > 0 ? "+" : ""}${(rate * 100).toFixed(2)}%`;
+
+export interface EquityLayout {
+  line: string;
+  area: string;
+  ticks: { y: number; value: number }[];
+  last: { x: number; y: number } | null;
+}
+
+/** 자산 곡선을 `left`~`right`, `top`~`bottom` 안에 그린다. 값이 모두 같아도 가운데 선으로 그린다. */
+export function equityLayout(
+  curve: { equity: number }[],
+  box: { left: number; right: number; top: number; bottom: number; baseline: number },
+): EquityLayout {
+  if (!curve.length) return { line: "", area: "", ticks: [], last: null };
+  const values = curve.map((point) => point.equity);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const x = (index: number) =>
+    curve.length === 1 ? box.right : box.left + (index * (box.right - box.left)) / (curve.length - 1);
+  const y = (value: number) =>
+    span === 0 ? (box.top + box.bottom) / 2 : box.top + ((max - value) / span) * (box.bottom - box.top);
+  const points = curve.map((point, index) => `${x(index)},${y(point.equity)}`);
+  const line = points.join(" ");
+  return {
+    line,
+    area: `${box.left},${box.baseline} ${line} ${box.right},${box.baseline}`,
+    ticks: [0, 1, 2, 3].map((row) => ({
+      y: box.top + (row * (box.bottom - box.top)) / 3,
+      value: span === 0 ? max : max - (span * row) / 3,
+    })),
+    last: { x: x(curve.length - 1), y: y(values[values.length - 1]) },
+  };
+}
+
+/** 처음 보여 줄 기간: 가능 기간의 마지막 7일(달력 기준). */
+export function defaultPeriod(range: BacktestRange | null): { start: string; end: string } | null {
+  if (!range?.start || !range.end) return null;
+  const last = new Date(`${range.end}T00:00:00Z`);
+  last.setUTCDate(last.getUTCDate() - 6);
+  const start = last.toISOString().slice(0, 10);
+  return { start: start < range.start ? range.start : start, end: range.end };
+}

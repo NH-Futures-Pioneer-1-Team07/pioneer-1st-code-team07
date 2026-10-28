@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { formatMoney, formatNumber } from "../../../data/fixtures";
-import type { TestRecord } from "../../../data/backtest";
+import { formatMoney, formatNumber } from "../../../data/format";
+import { equityLayout } from "../../../data/backtestView";
+import type { BacktestResult } from "../../../apis/types";
 import styles from "./EquityChart.module.css";
 
-export default function EquityChart({ record }: { record: TestRecord }) {
+export default function EquityChart({
+  id,
+  result,
+}: {
+  id: string;
+  result: BacktestResult | null;
+}) {
   const frameRef = useRef<HTMLElement>(null);
   const [size, setSize] = useState({ w: 800, h: 280 });
-  const curve = [
-    220, 230, 239, 217, 220, 201, 213, 192, 203, 185, 187, 160, 169, 154, 162,
-    138, 149, 132, 111, 119, 102, 113, 91, 82, 91, 72, 85, 60, 64, 48, 58, 40,
-  ];
+  const curve = result?.equity_curve ?? [];
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -27,83 +31,77 @@ export default function EquityChart({ record }: { record: TestRecord }) {
   const left = 4;
   const right = size.w - 76;
   const top = 16;
-  const gridBottom = size.h - 44;
+  const bottom = size.h - 44;
   const baseline = size.h - 26;
-  const x = (index: number) =>
-    left + (index * (right - left)) / (curve.length - 1);
-  const y = (value: number) =>
-    top + Math.min((value - 40) / 180, 1) * (gridBottom - top);
-  const line = curve.map((value, index) => `${x(index)},${y(value)}`).join(" ");
+  const layout = equityLayout(curve, { left, right, top, bottom, baseline });
+  const dayLabel = (time: string) => time.slice(5, 10).replace("-", ".");
   return (
     <figure ref={frameRef} className={styles.equity}>
       <svg
         viewBox={`0 0 ${size.w} ${size.h}`}
         role="img"
-        aria-label={`${record.title} 샘플 자산 변화: ${formatMoney(record.capital)}에서 ${formatMoney(record.capital + record.profit)}로 증가`}
+        aria-label={
+          result
+            ? `자산 변화: ${formatMoney(result.initial_capital)}에서 ${formatMoney(result.final_equity)}로 변함`
+            : "자산 변화 자료 없음"
+        }
       >
         <defs>
-          <linearGradient
-            id={`equity-fill-${record.id}`}
-            x1="0"
-            x2="0"
-            y1="0"
-            y2="1"
-          >
+          <linearGradient id={`equity-fill-${id}`} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#FFB819" stopOpacity=".20" />
             <stop offset="100%" stopColor="#FFB819" stopOpacity="0" />
           </linearGradient>
         </defs>
-        {[0, 1, 2, 3].map((row) => {
-          const gy = top + (row * (gridBottom - top)) / 3;
-          return (
-            <g key={row}>
-              <line
-                x1={left}
-                y1={gy}
-                x2={right + 8}
-                y2={gy}
-                stroke="#20242c"
-                strokeDasharray="3 7"
-              />
-              <text x={right + 20} y={gy + 4} fill="#9299a4" fontSize="11">
-                {formatNumber(
-                  Math.round(
-                    (record.capital + record.profit * (1 - row / 3)) / 10000,
-                  ),
-                )}
-                만
-              </text>
-            </g>
-          );
-        })}
-        <polygon
-          points={`${left},${baseline} ${line} ${right},${baseline}`}
-          fill={`url(#equity-fill-${record.id})`}
-        />
-        <polyline
-          points={line}
-          fill="none"
-          stroke="#FFB819"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        <circle cx={right} cy={top} r="4" fill="#FFB819" />
-        <text x={left} y={size.h - 6} fill="#9299a4" fontSize="11">
-          {record.startDate.slice(5).replace("-", ".")}
-        </text>
-        <text
-          x={right}
-          y={size.h - 6}
-          textAnchor="end"
-          fill="#9299a4"
-          fontSize="11"
-        >
-          {record.endDate.slice(5).replace("-", ".")}
-        </text>
+        {layout.ticks.map((tick) => (
+          <g key={tick.y}>
+            <line
+              x1={left}
+              y1={tick.y}
+              x2={right + 8}
+              y2={tick.y}
+              stroke="#20242c"
+              strokeDasharray="3 7"
+            />
+            <text x={right + 20} y={tick.y + 4} fill="#9299a4" fontSize="11">
+              {formatNumber(Math.round(tick.value / 10000))}만
+            </text>
+          </g>
+        ))}
+        {layout.line && (
+          <>
+            <polygon points={layout.area} fill={`url(#equity-fill-${id})`} />
+            <polyline
+              points={layout.line}
+              fill="none"
+              stroke="#FFB819"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </>
+        )}
+        {layout.last && (
+          <circle cx={layout.last.x} cy={layout.last.y} r="4" fill="#FFB819" />
+        )}
+        {curve.length > 0 && (
+          <>
+            <text x={left} y={size.h - 6} fill="#9299a4" fontSize="11">
+              {dayLabel(curve[0].time)}
+            </text>
+            <text
+              x={right}
+              y={size.h - 6}
+              textAnchor="end"
+              fill="#9299a4"
+              fontSize="11"
+            >
+              {dayLabel(curve[curve.length - 1].time)}
+            </text>
+          </>
+        )}
       </svg>
       <figcaption className={styles.screenReader}>
-        실제 전략 계산이 아닌 화면 확인용 자산 곡선입니다.
+        하루마다 한 점씩 그린 자산 곡선입니다.
       </figcaption>
     </figure>
   );

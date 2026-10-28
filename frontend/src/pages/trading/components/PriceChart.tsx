@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Candle } from "../../../apis/types";
-import { formatNumber } from "../../../data/fixtures";
+import { formatNumber } from "../../../data/format";
 import { chartLayout, timeTicks } from "../../../data/tradingView";
 import styles from "./PriceChart.module.css";
 
