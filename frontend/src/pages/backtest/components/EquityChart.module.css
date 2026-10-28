@@ -1,9 +1,19 @@
 .equity {
+  --strip: 56px;
   position: relative;
   flex: 1;
-  min-height: 240px;
-  max-height: 340px;
+  min-height: 296px;
+  max-height: 396px;
   margin: 18px 0 10px;
+}
+.main {
+  position: absolute;
+  inset: 0 0 var(--strip);
+}
+.strip {
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--strip);
 }
 .equity svg {
   position: absolute;
