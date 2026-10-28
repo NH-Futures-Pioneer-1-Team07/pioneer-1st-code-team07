@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 
-from app.api import health, runs, strategies
+from app.api import backtests, health, runs, strategies
 from app.config import Settings, load_settings
 from app.records.store import RunStore
+from app.runners.service import BacktestService
 from strategy_base.registry import StrategyRegistry
 
 
@@ -13,7 +14,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.registry = StrategyRegistry(settings.strategies_dir)
     app.state.run_store = RunStore(settings.runs_dir)
     app.state.run_store.mark_interrupted()
+    app.state.backtests = BacktestService(settings, app.state.registry, app.state.run_store)
     app.include_router(health.router)
     app.include_router(strategies.router)
     app.include_router(runs.router)
+    app.include_router(backtests.router)
     return app

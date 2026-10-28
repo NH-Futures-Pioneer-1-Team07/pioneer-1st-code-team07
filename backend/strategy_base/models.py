@@ -35,13 +35,14 @@ class DecisionResult(StrEnum):
 
 @dataclass(frozen=True)
 class Bar:
-    """완성된 봉. `time`은 봉이 시작한 시각(한국 시간)이다."""
+    """완성된 봉. `time`은 봉이 시작한 시각(한국 시간)이다. `open`은 백테스트 체결에 쓴다."""
 
     time: datetime
     high: float
     low: float
     close: float
     volume: int
+    open: float | None = None
 
 
 @dataclass(frozen=True)

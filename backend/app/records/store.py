@@ -95,6 +95,12 @@ class RunRecorder:
                 file.write(json.dumps(line, ensure_ascii=False, default=str) + "\n")
         return line
 
+    def update_meta(self, **fields: Any) -> None:
+        """실행 정보(`meta.json`)에 필드를 덧쓴다. 진행 상황처럼 실행 중에 바뀌는 값에 쓴다."""
+        with self._lock:
+            self.meta.update(sanitize(fields))
+            _write_json(self.folder / "meta.json", self.meta)
+
     def finish(self, result: dict[str, Any] | None = None, status: str = "completed") -> None:
         """실행을 마치고 결과와 상태를 확정한다."""
         if status not in STATUSES or status == "running":

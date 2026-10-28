@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     runs_dir: Path = BACKEND_DIR / "runs"
     nh_app_key: SecretStr | None = None
     nh_app_secret: SecretStr | None = None
+    backtest_fee_rate: float = Field(default=0.000085, ge=0)
+    backtest_slippage_ticks: int = Field(default=1, ge=0)
 
 
 def load_settings() -> Settings:

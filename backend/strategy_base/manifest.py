@@ -11,6 +11,7 @@ class Instrument(BaseModel):
 
     name: str = Field(min_length=1)
     code: str | None = None
+    multiplier: int | None = Field(default=None, gt=0)
 
 
 class BarSpec(BaseModel):
