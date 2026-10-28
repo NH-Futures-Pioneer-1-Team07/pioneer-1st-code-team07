@@ -400,10 +400,10 @@ export default function BacktestPage() {
               <div className={styles.chartHeading}>
                 <h3>자산 변화</h3>
                 <span>
-                  <i /> 하루마다 한 점
+                  <i /> 하루마다 한 점 · 아래 막대는 하루 거래 건수
                 </span>
               </div>
-              <EquityChart id={reportMeta.run_id} result={result} />
+              <EquityChart meta={reportMeta} result={result} />
               <div className={styles.resultFooter}>
                 <span>
                   수수료 합계 <strong>{result ? formatMoney(result.fee) : "—"}</strong>

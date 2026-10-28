@@ -17,7 +17,7 @@ npm run dev
 | 명령 | 확인할 내용 |
 | --- | --- |
 | `npm run typecheck` | TypeScript 타입 검사 |
-| `npm test` | 화면 변환(차트 배치·상태 문장·종목 이름·진행률·입력 검증·자산 곡선) 검증 |
+| `npm test` | 화면 변환(차트 배치·상태 문장·종목 이름·진행률·입력 검증·자산 곡선과 체결 묶기) 검증 |
 | `npm run build` | 타입 검사와 배포용 정적 파일 생성 |
 | `npm run preview` | 빌드한 `dist/` 로컬 미리보기 |
 
@@ -30,6 +30,7 @@ npm run dev
 | 개발 도구 | Vite | 로컬 개발 서버와 빌드 |
 | 패키지 관리 | npm | 의존성 설치와 스크립트 실행 |
 | HTTP 통신 | Axios | FastAPI에 조회·실행 요청 |
+| 차트 | Recharts | 백테스트 자산 변화 차트(거래 마커·호버 상세) |
 | 스타일 | CSS Modules | 컴포넌트별 스타일 관리 |
 
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.

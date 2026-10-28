@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   defaultPeriod,
-  equityLayout,
+  equityPoints,
   percentText,
   progressLabel,
   progressPercent,
@@ -48,16 +48,36 @@ test("수수료율과 수익률 표기", () => {
   assert.equal(returnText(-0.05), "-5.00%");
 });
 
-test("자산 곡선은 높은 값이 위에 오고 값이 같으면 가운데에 그린다", () => {
-  const box = { left: 0, right: 100, top: 0, bottom: 60, baseline: 80 };
-  const layout = equityLayout([{ equity: 100 }, { equity: 200 }], box);
-  assert.equal(layout.line, "0,60 100,0");
-  assert.deepEqual(layout.last, { x: 100, y: 0 });
-  assert.equal(layout.ticks[0].value, 200);
-  assert.equal(layout.ticks[3].value, 100);
-  const flat = equityLayout([{ equity: 5 }, { equity: 5 }], box);
-  assert.equal(flat.line, "0,30 100,30");
-  assert.equal(equityLayout([], box).last, null);
+test("자산 곡선의 날짜마다 그날의 체결과 전날 대비 손익을 붙인다", () => {
+  const curve = [
+    { time: "2026-08-14T15:03:00", equity: 1000 },
+    { time: "2026-08-18T15:03:00", equity: 1300 },
+    { time: "2026-08-19T15:03:00", equity: 1100 },
+  ];
+  const fill = (time: string, side: string) => ({
+    seq: 1,
+    kind: "fill",
+    time,
+    side,
+    quantity: 2,
+    price: 250,
+    reason: "당일 청산",
+  });
+  const points = equityPoints(curve, 1000, [
+    fill("2026-08-18T10:15:00+09:00", "buy"),
+    fill("2026-08-18T15:30:00+09:00", "sell"),
+    fill("2026-08-20T10:00:00+09:00", "buy"),
+  ]);
+  assert.deepEqual(
+    points.map((point) => [point.day, point.change, point.fills.length]),
+    [
+      ["2026-08-14", 0, 0],
+      ["2026-08-18", 300, 2],
+      ["2026-08-19", -200, 0],
+    ],
+  );
+  assert.deepEqual(points[1].fills[0], { time: "10:15", side: "buy", quantity: 2, price: 250, reason: "당일 청산" });
+  assert.deepEqual(equityPoints([], 1000, []), []);
 });
 
 test("처음 기간은 가능 기간의 마지막 7일이고 시작보다 앞서지 않는다", () => {
