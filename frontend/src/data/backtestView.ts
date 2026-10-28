@@ -1,4 +1,4 @@
-import type { BacktestProgress, BacktestRange, JournalLine } from "../apis/types.ts";
+import type { BacktestProgress, BacktestRange, DailyBar, JournalLine } from "../apis/types.ts";
 
 export const MIN_CAPITAL = 1_000_000;
 export const MAX_CAPITAL = 10_000_000_000;
@@ -66,14 +66,18 @@ export interface EquityPoint {
   /** 전날 자산(첫 날은 초기자금) 대비 손익 */
   change: number;
   fills: EquityFill[];
+  /** 그날의 일봉. 가격 자료가 없는 기록에는 null */
+  bar: DailyBar | null;
 }
 
-/** 자산 곡선의 날짜마다 그날의 체결을 붙인다. 곡선에 없는 날짜의 체결은 버린다. */
+/** 자산 곡선의 날짜마다 그날의 체결과 일봉을 붙인다. 곡선에 없는 날짜의 체결은 버린다. */
 export function equityPoints(
   curve: { time: string; equity: number }[],
   initialCapital: number,
   fills: JournalLine[],
+  bars: DailyBar[] = [],
 ): EquityPoint[] {
+  const barByDay = new Map(bars.map((bar) => [bar.date, bar]));
   const byDay = new Map<string, EquityFill[]>();
   for (const line of fills) {
     const day = line.time.slice(0, 10);
@@ -90,7 +94,13 @@ export function equityPoints(
   let previous = initialCapital;
   return curve.map((point) => {
     const day = point.time.slice(0, 10);
-    const row = { day, equity: point.equity, change: point.equity - previous, fills: byDay.get(day) ?? [] };
+    const row = {
+      day,
+      equity: point.equity,
+      change: point.equity - previous,
+      fills: byDay.get(day) ?? [],
+      bar: barByDay.get(day) ?? null,
+    };
     previous = point.equity;
     return row;
   });
