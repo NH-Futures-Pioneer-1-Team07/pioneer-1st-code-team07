@@ -110,6 +110,8 @@ uv run pytest
 | `quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
 | `account.py` | `fetch_deposit`(예탁금), `fetch_positions`(보유 포지션), `fetch_orders`(주문 내역), `fetch_orderable_quantity`(주문가능수량) |
 | `orders.py` | `place_order`(신규 주문), `cancel_order`(취소 주문). 모의 환경에서만 낸다 |
+| `realtime.py` | `RealtimeConnection`. 실시간 웹소켓 연결, 구독, 재연결 |
+| `realtime_data.py` | 실시간 구독(`Feed`)과 수신 데이터(`Trade`, `OrderBook`, `OrderEvent`), 알림(`SubscriptionFailed`, `Reconnected`) |
 | `values.py` | 응답의 문자열 값을 숫자·날짜로 바꾸는 함수 |
 
 - 환경: `TRADING_ENV=mock`이면 `apidemo.futures.co.kr`, `real`이면 `api.futures.co.kr`을 부른다.
@@ -135,3 +137,30 @@ uv run pytest
 - `cancel_order`의 매매구분은 원주문의 매매구분이다.
 - 주문 거부(`msg_cd`)는 `BusinessError`다. 시간 초과(`TransportError`)는 접수 여부를 알 수 없으므로 다시 보내지 않고 `fetch_orders`로 확인해야 한다.
 - 정정 주문은 구현하지 않았다.
+
+### 실시간 수신
+
+`RealtimeConnection`이 웹소켓 하나를 열어 구독을 지키고 끊기면 다시 붙는다. 이벤트 루프 안에서 쓴다.
+
+```python
+connection = RealtimeConnection(client, on_event=handle, on_state=show_state)
+await connection.subscribe(Feed("KA", "A116B000"))   # 체결
+await connection.subscribe(Feed("KB", "A116B000"))   # 호가
+await connection.subscribe(Feed("O1"))               # 주문/체결 알림(종목 없음)
+connection.start()
+...
+await connection.stop()
+```
+
+- `handle(event)`는 `Trade`, `OrderBook`, `OrderEvent`, `SubscriptionFailed`, `Reconnected` 중 하나를 받는다. 이벤트 루프에서 불리므로 오래 걸리는 일을 하지 않는다.
+- 상태는 `connecting`, `live`, `reconnecting`, `stopped`이고 `on_state(state, detail)`로 알린다.
+- 접속키는 연결할 때마다 새로 발급받고, 연결 후 접근토큰으로 세션을 초기화한 뒤 구독을 건다.
+- 서버의 `pingpong`은 받은 그대로 되돌린다. 웹소켓 핑 프레임은 끈다.
+- 서버가 90초 동안 아무것도 보내지 않으면 끊긴 연결로 보고 다시 붙는다.
+- 끊기면 0·1·2·5·10·30·60초로 기다리는 시간을 늘리며 다시 붙고, 60초 넘게 붙어 있었으면 바로 다시 붙는다. 붙고 나면 구독을 모두 다시 걸고 `Reconnected`를 알린다.
+- **`Reconnected`를 받으면 분봉·호가·미체결 주문을 조회로 다시 채워야 한다.** 끊긴 동안의 값은 다시 오지 않는다.
+- 구독은 `Feed` 단위로 전체 20건까지다. 넘기면 요청 없이 `SubscriptionLimitExceeded`를 낸다. 실시간 구독 상한은 계정 하나에 걸리므로 다른 곳에서 구독하면 서버가 거절할 수 있고, 이때 `SubscriptionFailed`로 알린다.
+- `Trade.is_trade`가 거짓이면 체결량이 0인 기타 틱이다. 체결로 쓰려면 `is_trade`인 것만 쓴다.
+- `OrderEvent`의 계좌번호는 읽지 않는다.
+- 접속 주소에 접속키가 붙으므로 주소와 연결 예외의 글은 로그에 남기지 않고 예외 종류만 남긴다.
+- **미확인**: 모의환경 서버로 직접 연결해 보지 못했다. 구독 거절 응답의 `code`·`data` 형식은 명세 문서와 참고한 구현을 따랐으므로, 키로 확인하며 다르면 고쳐야 한다.
