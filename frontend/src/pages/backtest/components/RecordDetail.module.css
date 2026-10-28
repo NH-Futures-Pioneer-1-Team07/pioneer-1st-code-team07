@@ -1,4 +1,13 @@
+.fills {
+  --table-height: 440px;
+}
 .recordTable td {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.recordTable .index {
+  width: 44px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: right;
 }

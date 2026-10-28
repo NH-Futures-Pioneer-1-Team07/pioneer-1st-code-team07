@@ -3,6 +3,25 @@ import type { BacktestProgress, BacktestRange, DailyBar, JournalLine } from "../
 export const MIN_CAPITAL = 1_000_000;
 export const MAX_CAPITAL = 10_000_000_000;
 
+/** 0~9999를 `5천`, `1천234`, `250`처럼 읽는다. 1000 미만은 숫자 그대로 쓴다. */
+const underTenThousand = (value: number) => {
+  const thousands = Math.floor(value / 1000);
+  const rest = value % 1000;
+  return `${thousands ? `${thousands}천` : ""}${rest || thousands === 0 ? rest : ""}`;
+};
+
+/** `150000000` → `1억 5천만 원`. 초기자금의 0 개수를 눈으로 세지 않게 한글 금액으로 읽어 준다. */
+export function koreanAmount(value: number): string {
+  if (!Number.isSafeInteger(value) || value <= 0) return "0 원";
+  const parts = [
+    [Math.floor(value / 100_000_000), "억"],
+    [Math.floor(value / 10_000) % 10_000, "만"],
+    [value % 10_000, ""],
+  ] as const;
+  const words = parts.filter(([count]) => count > 0).map(([count, unit]) => `${underTenThousand(count)}${unit}`);
+  return `${words.join(" ")} 원`;
+}
+
 /** 데이터 준비를 앞 절반, 계산을 뒤 절반으로 보고 전체 진행률(0~100)을 만든다. */
 export function progressPercent(progress: BacktestProgress | undefined, status: string): number {
   if (status === "completed" || progress?.stage === "done") return 100;

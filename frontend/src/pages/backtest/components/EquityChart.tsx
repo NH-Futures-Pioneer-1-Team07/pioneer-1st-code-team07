@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -141,19 +141,27 @@ export default function EquityChart({
   const max = Math.max(...values, initial);
   const min = Math.min(...values, initial);
   const pad = (max - min) * 0.1 || Math.abs(initial) * 0.01 || 1;
-  // 거래 건수 막대가 차트 아래쪽 1/5 안에 들어오도록 축 범위를 넓혀 둔다.
   const priced = points.flatMap((point) => (point.bar ? [point.bar.low, point.bar.high] : []));
   const priceMin = Math.min(...priced);
   const priceMax = Math.max(...priced);
   const pricePad = (priceMax - priceMin) * 0.08 || 1;
   const busiest = Math.max(1, ...points.map((point) => point.fills.length));
+  const chartData = points.map((point) => ({
+    ...point,
+    count: point.fills.length,
+    range: point.bar ? [point.bar.low, point.bar.high] : null,
+  }));
+  // 위 차트와 아래 거래 막대의 가로 위치가 어긋나지 않도록 같은 여백과 축 너비를 쓴다.
+  const margin = { top: 16, right: 8, bottom: 0, left: priced.length > 0 ? 0 : 8 };
+  const syncId = useId();
   const barColor = (change: number) => (change > 0 ? "var(--rise)" : change < 0 ? "var(--fall)" : "var(--text-tertiary)");
 
   return (
     <figure ref={frameRef} className={styles.equity}>
       {points.length > 0 && (
+        <div className={styles.main}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={points.map((point) => ({ ...point, count: point.fills.length, range: point.bar ? [point.bar.low, point.bar.high] : null }))} margin={{ top: 16, right: 8, bottom: 0, left: priced.length > 0 ? 0 : 8 }}>
+          <ComposedChart syncId={syncId} data={chartData} margin={margin}>
             <CartesianGrid vertical={false} stroke="var(--data-line)" strokeOpacity={0.6} />
             <XAxis
               dataKey="day"
@@ -185,14 +193,12 @@ export default function EquityChart({
                 tick={{ fill: "var(--text-tertiary)", fontSize: 11 }}
               />
             )}
-            <YAxis yAxisId="count" orientation="right" width={0} hide domain={[0, busiest * 5]} />
             <ReferenceLine
               yAxisId="equity"
               y={initial}
               stroke="var(--text-tertiary)"
               strokeOpacity={0.5}
               strokeDasharray="2 5"
-              label={{ value: "초기자금", position: "insideTopLeft", fill: "var(--text-tertiary)", fontSize: 11 }}
             />
             <Tooltip
               content={EquityTooltip}
@@ -203,11 +209,6 @@ export default function EquityChart({
             {priced.length > 0 && (
               <Bar yAxisId="price" dataKey="range" shape={Candle} maxBarSize={9} isAnimationActive={false} />
             )}
-            <Bar yAxisId="count" dataKey="count" maxBarSize={5} radius={[2, 2, 0, 0]} isAnimationActive={false}>
-              {points.map((point) => (
-                <Cell key={point.day} fill={barColor(point.change)} fillOpacity={0.75} />
-              ))}
-            </Bar>
             <Line
               yAxisId="equity"
               type="monotone"
@@ -220,6 +221,35 @@ export default function EquityChart({
             />
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
+      )}
+      {points.length > 0 && (
+        <div className={styles.strip}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart syncId={syncId} data={chartData} margin={{ ...margin, top: 4 }}>
+              <XAxis dataKey="day" hide />
+              {priced.length > 0 && <YAxis yAxisId="pad" orientation="left" width={56} tick={false} tickLine={false} axisLine={false} />}
+              <YAxis
+                yAxisId="count"
+                orientation="right"
+                width={64}
+                domain={[0, busiest]}
+                ticks={[busiest]}
+                interval={0}
+                tickFormatter={(value: number) => `${value}건`}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: "var(--text-tertiary)", fontSize: 11 }}
+              />
+              <Tooltip content={() => null} cursor={{ stroke: "var(--text-tertiary)", strokeOpacity: 0.4 }} isAnimationActive={false} />
+              <Bar yAxisId="count" dataKey="count" maxBarSize={5} radius={[2, 2, 0, 0]} isAnimationActive={false}>
+                {points.map((point) => (
+                  <Cell key={point.day} fill={barColor(point.change)} fillOpacity={0.75} />
+                ))}
+              </Bar>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       )}
       <figcaption className={styles.screenReader}>
         {result

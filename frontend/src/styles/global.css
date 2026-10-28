@@ -46,6 +46,11 @@ select:focus-visible,
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 0;
+}
 button {
   transition:
     background 0.15s,

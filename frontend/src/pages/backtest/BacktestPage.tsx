@@ -13,6 +13,7 @@ import { fetchRuns, fetchStrategies } from "../../apis/trading";
 import type { RunRef, RunSummary } from "../../apis/types";
 import {
   defaultPeriod,
+  koreanAmount,
   percentText,
   progressLabel,
   progressPercent,
@@ -223,27 +224,36 @@ export default function BacktestPage() {
                 </p>
               )}
               <label className="field" htmlFor={`${formId}-capital`}>
-                <span>초기자금</span>
+                <span className={styles.labelRow}>
+                  초기자금
+                  <span
+                    className={styles.info}
+                    tabIndex={0}
+                    role="img"
+                    aria-label="초기자금 입력 범위 안내"
+                    aria-describedby={`${formId}-capital-help`}
+                  >
+                    <Icon name="info" size={14} />
+                    <span role="tooltip" id={`${formId}-capital-help`} className={styles.tip}>
+                      100만 원부터 100억 원까지 입력할 수 있습니다.
+                    </span>
+                  </span>
+                </span>
                 <div className={styles.moneyInput}>
                   <input
                     id={`${formId}-capital`}
-                    type="number"
+                    type="text"
                     inputMode="numeric"
-                    min="1000000"
-                    max="10000000000"
-                    step="1"
-                    value={capital}
-                    onChange={(event) => setCapital(event.target.value)}
-                    aria-describedby={`${formId}-capital-help`}
+                    autoComplete="off"
+                    value={capital ? formatNumber(Number(capital)) : ""}
+                    onChange={(event) => setCapital(event.target.value.replace(/\D/g, "").slice(0, 11).replace(/^0+/, ""))}
+                    aria-describedby={`${formId}-capital-amount`}
                   />
                   <span>원</span>
                 </div>
               </label>
-              <span
-                className={styles.capitalHelp}
-                id={`${formId}-capital-help`}
-              >
-                100만 원부터 100억 원까지 입력할 수 있습니다.
+              <span className={styles.capitalAmount} id={`${formId}-capital-amount`}>
+                {capital ? koreanAmount(Number(capital)) : ""}
               </span>
             </fieldset>
             <div className={styles.assumptions}>
@@ -262,7 +272,15 @@ export default function BacktestPage() {
                   </div>
                   <div>
                     <dt>체결</dt>
-                    <dd>{assumptions.data.fill.on_bar}</dd>
+                    <dd>
+                      다음 봉 시가에 전량 체결
+                      <span className={styles.info} tabIndex={0} role="img" aria-label="체결 가정 자세히">
+                        <Icon name="info" size={13} />
+                        <span role="tooltip" className={`${styles.tip} ${styles.tipWrap}`}>
+                          {assumptions.data.fill.on_bar}
+                        </span>
+                      </span>
+                    </dd>
                   </div>
                   <div>
                     <dt>증거금</dt>

@@ -102,11 +102,64 @@
   transform: translateY(-50%);
   color: #9299a4;
 }
-.capitalHelp {
-  display: block;
-  font-size: 11px;
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.info {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   color: #9299a4;
+  cursor: help;
+}
+.info:hover,
+.info:focus-visible {
+  color: #afb4bd;
+}
+.tip {
+  position: absolute;
+  z-index: 10;
+  left: -8px;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  padding: 8px 10px;
+  white-space: nowrap;
+  border-radius: 8px;
+  background: #1a1e25;
+  box-shadow:
+    0 8px 24px #000b,
+    inset 0 0 0 1px #ffffff14;
+  color: #e4e6ea;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.tipWrap {
+  left: auto;
+  right: -8px;
+  width: 220px;
+  white-space: normal;
+}
+.assumptions dd .info {
+  margin-left: 4px;
+  vertical-align: -2px;
+}
+.info:hover .tip,
+.info:focus-visible .tip {
+  opacity: 1;
+}
+.capitalAmount {
+  display: block;
+  min-height: 15px;
   margin-top: -7px;
+  color: color-mix(in srgb, var(--accent) 80%, transparent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .assumptions {
   margin: 24px 0 20px;
@@ -129,7 +182,9 @@
   gap: 12px;
 }
 .assumptions dt {
+  flex: none;
   color: #9299a4;
+  white-space: nowrap;
 }
 .assumptions dd {
   color: #afb4bd;
@@ -311,9 +366,9 @@
   padding: 24px;
 }
 .history :global(.table-wrap) {
-  flex: 1;
-  height: 0;
-  min-height: var(--table-height, 220px);
+  flex: none;
+  height: auto;
+  max-height: 320px;
 }
 .history :global(.section-head) p {
   font-size: 11px;
@@ -462,7 +517,7 @@
     grid-template-columns: 1fr 1fr;
   }
   .availablePeriod,
-  .capitalHelp {
+  .capitalAmount {
     grid-column: 1 / -1;
     margin-top: -7px;
   }
@@ -521,7 +576,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
   column-gap: 0;
-  align-items: stretch;
+  align-items: start;
   transition:
     grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     column-gap 0.4s cubic-bezier(0.22, 1, 0.36, 1);

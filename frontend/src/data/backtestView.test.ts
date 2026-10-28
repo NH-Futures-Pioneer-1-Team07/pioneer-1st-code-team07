@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   defaultPeriod,
   equityPoints,
+  koreanAmount,
   percentText,
   progressLabel,
   progressPercent,
@@ -88,4 +89,13 @@ test("처음 기간은 가능 기간의 마지막 7일이고 시작보다 앞서
   assert.deepEqual(defaultPeriod(range), { start: "2026-10-21", end: "2026-10-27" });
   assert.deepEqual(defaultPeriod({ ...range, start: "2026-10-25" }), { start: "2026-10-25", end: "2026-10-27" });
   assert.equal(defaultPeriod(null), null);
+});
+
+test("초기자금을 한글 금액으로 읽어 준다", () => {
+  assert.equal(koreanAmount(50_000_000), "5천만 원");
+  assert.equal(koreanAmount(1_000_000), "100만 원");
+  assert.equal(koreanAmount(150_000_000), "1억 5천만 원");
+  assert.equal(koreanAmount(10_000_000_000), "100억 원");
+  assert.equal(koreanAmount(12_345_678), "1천234만 5천678 원");
+  assert.equal(koreanAmount(0), "0 원");
 });
