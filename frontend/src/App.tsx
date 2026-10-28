@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { marketSessionLabel, streamLabel } from "./data/tradingView";
+import type { MarketStatus } from "./data/tradingView";
 import Icon from "./components/common/Icon";
 import TradingPage from "./pages/trading/TradingPage";
 import BacktestPage from "./pages/backtest/BacktestPage";
@@ -6,6 +8,7 @@ import styles from "./App.module.css";
 
 export default function App() {
   const [page, setPage] = useState<"trading" | "backtest">("trading");
+  const [market, setMarket] = useState<MarketStatus>({ session: null, stream: "connecting", failure: null });
 
   return (
     <div className={styles.shell}>
@@ -37,7 +40,15 @@ export default function App() {
               <i />
               NH 모의환경
             </span>
-            <span className={styles.marketLabel}>국내선물 · KST</span>
+            <span className={`${styles.marketStatus} ${market.session === "regular" ? styles.statusOn : ""}`}>
+              <i />
+              국내장 {marketSessionLabel(market.session)}
+            </span>
+            <span className={`${styles.marketStatus} ${market.stream === "live" ? styles.statusOn : ""}`}>
+              <i />
+              {streamLabel(market.stream, market.failure)}
+            </span>
+            <span className={styles.marketLabel}>KST</span>
           </div>
         </header>
         <main id="main-content" className={styles.main} tabIndex={-1}>
@@ -49,7 +60,7 @@ export default function App() {
             </span>
           </div>
           <div hidden={page !== "trading"}>
-            <TradingPage />
+            <TradingPage onMarketStatus={setMarket} />
           </div>
           <div hidden={page !== "backtest"}>
             <BacktestPage />

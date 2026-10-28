@@ -78,6 +78,21 @@
   border-radius: 50%;
   background: var(--accent);
 }
+.marketStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+}
+.marketStatus i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.statusOn {
+  color: var(--positive);
+}
 .marketLabel {
   color: var(--text-tertiary);
 }
