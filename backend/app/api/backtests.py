@@ -38,6 +38,15 @@ def assumptions(request: Request) -> dict[str, Any]:
     return _service(request).assumptions()
 
 
+@router.get("/range")
+def available_range(strategy_id: str, request: Request) -> dict[str, Any]:
+    """전략의 종목으로 백테스트할 수 있는 기간(시작·종료·최종거래일)."""
+    try:
+        return _service(request).available_range(strategy_id)
+    except BacktestRejected as rejected:
+        raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
+
+
 @router.get("/current")
 def current(request: Request) -> dict[str, Any]:
     """실행 중인 백테스트. 없으면 `run`이 `null`이다."""
