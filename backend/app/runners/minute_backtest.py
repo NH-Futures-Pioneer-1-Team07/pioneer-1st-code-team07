@@ -12,8 +12,7 @@ class MinuteBacktestEngine(BacktestEngine):
         self.minute_days = minute_days
 
     def run(self, days, on_progress=None):
-        # A partial observed interval may exist (no-trade omission/market halt).
-        # Preserve its availability; never fabricate absent minute bars.
+        # 거래 없음·거래 정지로 관측 구간이 일부만 있을 수 있다. 없는 1분봉은 만들지 않는다.
         for day, bars in days.items():
             source = sorted(self.minute_days.get(day, []), key=lambda b: b.time)
             if len({m.time for m in source}) != len(source):
@@ -41,15 +40,14 @@ class MinuteBacktestEngine(BacktestEngine):
             for minute in group:
                 if minute.open is None:
                     raise ValueError(f"{minute.time}: 시가 없는 1분봉")
-                # Delayed exits execute only when a real observed price becomes available.
+                # 지연된 청산은 실제 관측 가격이 나온 시점에만 체결한다.
                 for order in pending:
                     self._fill(order, minute.open, minute.time, "next_open")
                 pending = []
                 output = self._call(self.strategy.on_price, minute.time, completed, minute.open)
                 for order in output.orders:
                     self._fill(order, minute.open, minute.time, "minute_path")
-                # The first price can establish a new position. Choose the adverse
-                # extreme using that filled position, rather than the earlier flat state.
+                # 첫 가격으로 새 포지션이 생길 수 있으므로, 체결 후 포지션 기준으로 불리한 극단을 고른다.
                 for price in price_path(minute, self._net(), self.assumptions.tick_size)[1:]:
                     moment = minute.time + timedelta(seconds=59)
                     output = self._call(self.strategy.on_price, moment, completed, price)

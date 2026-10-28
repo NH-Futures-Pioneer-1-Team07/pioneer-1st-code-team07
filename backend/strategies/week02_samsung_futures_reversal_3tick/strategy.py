@@ -259,13 +259,11 @@ class Strategy(BaseStrategy):
         highs, lows = latest_swings(before, SwingKind.HIGH), latest_swings(before, SwingKind.LOW)
         if not highs or not lows or highs[0].price <= lows[0].price:
             return
-        low = latest_swings(before, SwingKind.LOW)
-        high = latest_swings(before, SwingKind.HIGH)
-        buy = bool(low) and bar.low <= low[0].price and bar.close > low[0].price
-        sell = bool(high) and bar.high >= high[0].price and bar.close < high[0].price
+        buy = bar.low <= lows[0].price and bar.close > lows[0].price
+        sell = bar.high >= highs[0].price and bar.close < highs[0].price
         detail = {
-            "reference_low": low[0].price if low else None,
-            "reference_high": high[0].price if high else None,
+            "reference_low": lows[0].price,
+            "reference_high": highs[0].price,
             "close": bar.close,
         }
         if buy and sell:
@@ -276,20 +274,16 @@ class Strategy(BaseStrategy):
             return
         side = Side.BUY if buy else Side.SELL
         if ctx.net_quantity and (ctx.net_quantity > 0) != (side == Side.BUY):
+            self._skip(ctx, work, "보유 중 반대 방향 후보를 만들지 않음", side, detail)
             return
-        reference, opposite = (low[0], high) if buy else (high[0], low)
-        if not opposite:
-            name = "고점" if buy else "저점"
-            self._skip(ctx, work, f"반대쪽 확정 {name}이 없음", side, detail)
-            return
+        reference, opposite = (lows[0], highs[0]) if buy else (highs[0], lows[0])
         work.set(
             "candidate",
             {
                 "side": side.value,
                 "time": bar.time.isoformat(),
                 "reference": reference.price,
-                "target": opposite[0].price,
-                "target_index": opposite[0].index,
+                "target": opposite.price,
             },
         )
         self._hold(ctx, work, f"{side.value} 후보 봉 발생, 다음 봉에서 확인", detail)
@@ -350,8 +344,6 @@ class Strategy(BaseStrategy):
             "side": side.value,
             "stop": stop,
             "target": candidate["target"],
-            "target_index": candidate["target_index"],
-            "since_index": len(bars) - 1,
             "expires": expires.isoformat(),
         }
         reason = "저점을 깼다가 회복해 매수" if side == Side.BUY else "고점을 넘었다가 내려와 매도"
@@ -385,7 +377,7 @@ class Strategy(BaseStrategy):
             if not inside:
                 reason = "진입 가격이 손절·목표 범위 밖"
             elif distance < self.params["min_target_ticks"] * self.params["tick_size"]:
-                reason = "minimum_target_distance"
+                reason = "목표까지 거리가 최소 목표 틱 수 미만"
         if reason:
             self._skip(ctx, work, reason, side, {"entry_id": pending["entry_id"], "price": ctx.price})
             return
