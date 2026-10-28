@@ -1,0 +1,18 @@
+{
+  "name": "삼성전자선물 고저점 역매매 전략",
+  "description": "3분봉의 확정된 저점(고점)을 깼다가 되돌아오면 매수(매도)하는 역매매 전략입니다. 거래량이 직전 10개 평균의 0.5배 이상일 때 고정 5계약을 시장가로 진입하고, 진입분마다 반대쪽 확정 고저점을 목표로, 기준 고저점에서 1,500원 벗어난 가격을 손절로 관리합니다. 15:24 이후 신규 진입을 멈추고 15:30에 전량 청산합니다.",
+  "instruments": [{ "name": "삼성전자선물 2026년 11월물", "code": "A116B000" }],
+  "bar": { "unit": "minute", "size": 3 },
+  "parameters": {
+    "bar_minutes": { "default": 3, "description": "판단에 쓰는 봉의 분 단위" },
+    "swing_side_bars": { "default": 2, "description": "고점·저점 후보의 앞뒤 봉 개수" },
+    "volume_avg_bars": { "default": 10, "description": "평균 거래량에 쓰는 직전 봉 개수" },
+    "volume_min_ratio": { "default": 0.5, "description": "진입에 필요한 거래량의 평균 대비 최소 배수" },
+    "entry_quantity": { "default": 5, "description": "진입당 수량(계약)" },
+    "stop_offset": { "default": 1500, "description": "기준 고점·저점에서 손절 기준까지의 거리(원)" },
+    "order_valid_bars": { "default": 1, "description": "진입 주문의 유효 시한 봉 개수" },
+    "target_mode": { "default": "갱신", "description": "이익 청산 목표 관리 방식(갱신 또는 고정)" },
+    "entry_cutoff_time": { "default": "15:24", "description": "신규·추가 진입을 멈추는 시각(HH:MM, 한국 시간)" },
+    "flatten_time": { "default": "15:30", "description": "전량 청산 시각(HH:MM, 한국 시간)" }
+  }
+}
