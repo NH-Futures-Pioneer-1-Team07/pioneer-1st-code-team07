@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     trading_env: Literal["mock", "real"]
     strategies_dir: Path = BACKEND_DIR / "strategies"
+    runs_dir: Path = BACKEND_DIR / "runs"
 
 
 def load_settings() -> Settings:
