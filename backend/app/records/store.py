@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from app.records.events import RunEvents
 from app.records.sanitize import sanitize
 from strategy_base.manifest import STRATEGY_ID_PATTERN
 
@@ -60,9 +61,10 @@ def _read_json(path: Path) -> Any:
 class RunRecorder:
     """실행 하나의 기록을 남긴다."""
 
-    def __init__(self, folder: Path, meta: dict[str, Any]):
+    def __init__(self, folder: Path, meta: dict[str, Any], events: RunEvents | None = None):
         self.folder = folder
         self.meta = meta
+        self.events = events or RunEvents()
         self._seq = 0
         self._lock = threading.Lock()
         (folder / "journal").mkdir(exist_ok=True)
@@ -93,13 +95,27 @@ class RunRecorder:
             path = self.folder / "journal" / f"{moment.date().isoformat()}.jsonl"
             with path.open("a", encoding="utf-8") as file:
                 file.write(json.dumps(line, ensure_ascii=False, default=str) + "\n")
+        self.events.publish({"type": "journal", "line": line})
         return line
+
+    def notify_pnl(self, net_pnl: float) -> None:
+        """운용 중인 실행의 현재 순손익을 구독자에게 알린다. 기록에는 남기지 않는다."""
+        self.events.publish(
+            {
+                "type": "pnl",
+                "strategy_id": self.meta["strategy_id"],
+                "mode": self.meta["mode"],
+                "run_id": self.run_id,
+                "net_pnl": net_pnl,
+            }
+        )
 
     def update_meta(self, **fields: Any) -> None:
         """실행 정보(`meta.json`)에 필드를 덧쓴다. 진행 상황처럼 실행 중에 바뀌는 값에 쓴다."""
         with self._lock:
             self.meta.update(sanitize(fields))
             _write_json(self.folder / "meta.json", self.meta)
+        self.events.publish({"type": "run", "run": {**_summary(self.meta), "net_pnl": None}})
 
     def finish(self, result: dict[str, Any] | None = None, status: str = "completed") -> None:
         """실행을 마치고 결과와 상태를 확정한다."""
@@ -111,6 +127,8 @@ class RunRecorder:
             self.meta["status"] = status
             self.meta["ended_at"] = now_kst().isoformat()
             _write_json(self.folder / "meta.json", self.meta)
+        net_pnl = (result or {}).get("net_pnl")
+        self.events.publish({"type": "run", "run": {**_summary(self.meta), "net_pnl": net_pnl}})
 
 
 @dataclass(frozen=True)
@@ -124,6 +142,7 @@ class JournalPage:
 class RunStore:
     def __init__(self, root: Path):
         self.root = root
+        self.events = RunEvents()
 
     # ---- 시작 ----
 
@@ -163,8 +182,9 @@ class RunStore:
             meta["initial_capital"] = initial_capital
             meta["assumptions"] = {**BACKTEST_ASSUMPTIONS, **(assumptions or {})}
         meta = sanitize(meta)
-        recorder = RunRecorder(folder, meta)
+        recorder = RunRecorder(folder, meta, self.events)
         _write_json(folder / "meta.json", meta)
+        self.events.publish({"type": "run", "run": {**_summary(meta), "net_pnl": None}})
         return recorder
 
     def _new_folder(self, strategy_id: str, mode: str, started: datetime) -> tuple[Path, str]:

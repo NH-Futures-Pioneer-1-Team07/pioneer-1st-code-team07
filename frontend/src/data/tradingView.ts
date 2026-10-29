@@ -43,6 +43,10 @@ export const marketSessionLabel = (session: MarketSession | null | undefined): s
 export const streamLabel = (state: string, failure: string | null): string =>
   state === "live" ? "시세 연결됨" : failure ? `시세 연결 끊김: ${failure}` : "시세 연결 중";
 
+/** 이력 제목 옆에 보이는 이력 웹소켓 연결 문구. */
+export const runStreamLabel = (state: string): string =>
+  state === "live" ? "이력 실시간 연결됨" : state === "disconnected" ? "이력 연결 끊김" : "이력 연결 중";
+
 /** 상단바에 보일 국내장 장 상태와 시세 연결 상태. 모의매매 화면이 채운다. */
 export interface MarketStatus {
   session: MarketSession | null;

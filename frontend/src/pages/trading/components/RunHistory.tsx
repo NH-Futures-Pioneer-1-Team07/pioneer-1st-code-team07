@@ -1,9 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { errorMessage } from "../../../apis/client";
+import type { RunStream } from "../../../apis/runStream";
+import { fetchRuns } from "../../../apis/trading";
 import type { RunSummary } from "../../../apis/types";
 import { formatMoney } from "../../../data/format";
 import {
   formatDateTime,
   instrumentLabel,
+  runStreamLabel,
   signed,
 } from "../../../data/tradingView";
 import Icon from "../../../components/common/Icon";
@@ -22,19 +26,51 @@ const statusLabel = (run: RunSummary) =>
         : "종료"
     : "운용 중";
 
-export default function RunHistory({
-  runs,
-  error,
-  liveNetPnl,
-}: {
-  runs: RunSummary[] | null;
-  error: string | null;
-  /** 운용 중인 이력은 결과가 아직 없어, 지금까지의 실현 순손익을 대신 보여 준다. */
-  liveNetPnl: number | null;
-}) {
+/** 시작 시각이 최근인 실행이 앞에 오도록 목록에 실행 하나를 넣거나 바꾼다. */
+const upsert = (runs: RunSummary[], run: RunSummary) =>
+  [run, ...runs.filter((item) => runKey(item) !== runKey(run))].sort((a, b) =>
+    b.started_at.localeCompare(a.started_at),
+  );
+
+export default function RunHistory({ stream }: { stream: RunStream }) {
+  const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // 운용 중인 이력은 결과가 아직 없어, 서버가 알려 주는 지금까지의 순손익을 대신 보여 준다.
+  const [livePnl, setLivePnl] = useState<Record<string, number>>({});
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const splitRef = useRef<HTMLDivElement>(null);
+
+  // 처음과 연결이 (다시) 시작될 때마다 현재 상태를 조회하고, 이후 변경은 메시지로 받는다.
+  useEffect(() => {
+    let cancelled = false;
+    fetchRuns("paper")
+      .then((data) => {
+        if (cancelled) return;
+        setRuns(data);
+        setError(null);
+      })
+      .catch((failure) => !cancelled && setError(errorMessage(failure)));
+    return () => {
+      cancelled = true;
+    };
+  }, [stream.syncs]);
+
+  useEffect(
+    () =>
+      stream.subscribe((message) => {
+        if (message.type === "run") {
+          setRuns((current) => (current === null ? current : upsert(current, message.run)));
+        } else if (message.type === "pnl") {
+          setLivePnl((current) => ({
+            ...current,
+            [`${message.strategy_id}/${message.run_id}`]: message.net_pnl,
+          }));
+        }
+      }),
+    [stream.subscribe],
+  );
+
   const list = runs ?? [];
   const selected = list.find((run) => runKey(run) === selectedKey);
   return (
@@ -44,8 +80,12 @@ export default function RunHistory({
         aria-labelledby="trading-history-title"
       >
         <div className="section-head">
-          <div>
+          <div className={styles.headTitle}>
             <h2 id="trading-history-title">모의매매 이력</h2>
+            <span className={`${styles.streamStatus} ${stream.state === "live" ? styles.streamOn : ""}`}>
+              <i />
+              {runStreamLabel(stream.state)}
+            </span>
           </div>
           <span className="badge">{list.length}</span>
         </div>
@@ -71,7 +111,7 @@ export default function RunHistory({
               </thead>
               <tbody>
                 {list.map((run, index) => {
-                  const pnl = run.ended_at ? run.net_pnl : liveNetPnl;
+                  const pnl = run.ended_at ? run.net_pnl : (livePnl[runKey(run)] ?? null);
                   const active = open && selected && runKey(selected) === runKey(run);
                   return (
                     <tr
@@ -118,6 +158,7 @@ export default function RunHistory({
         <RunDetail
           key={runKey(selected)}
           run={selected}
+          stream={stream}
           open={open}
           onClose={() => setOpen(false)}
         />
@@ -128,10 +169,12 @@ export default function RunHistory({
 
 function RunDetail({
   run,
+  stream,
   open,
   onClose,
 }: {
   run: RunSummary;
+  stream: RunStream;
   open: boolean;
   onClose: () => void;
 }) {
@@ -162,7 +205,7 @@ function RunDetail({
             <Icon name="close" size={18} />
           </button>
         </div>
-        <RecordDetail meta={run} />
+        <RecordDetail meta={run} stream={stream} />
       </div>
     </section>
   );

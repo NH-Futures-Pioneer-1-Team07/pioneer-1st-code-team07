@@ -11,6 +11,7 @@ import {
   phaseLabel,
   sideLabel,
   statusMessage,
+  runStreamLabel,
   streamLabel,
   timeTicks,
 } from "./tradingView.ts";
@@ -136,4 +137,10 @@ test("시세 연결 문구는 연결 여부만 말한다", () => {
   assert.equal(streamLabel("live", null), "시세 연결됨");
   assert.equal(streamLabel("connecting", null), "시세 연결 중");
   assert.equal(streamLabel("disconnected", "연결이 거부되었습니다 (1006)"), "시세 연결 끊김: 연결이 거부되었습니다 (1006)");
+});
+
+test("이력 연결 문구는 웹소켓 연결 여부를 말한다", () => {
+  assert.equal(runStreamLabel("live"), "이력 실시간 연결됨");
+  assert.equal(runStreamLabel("connecting"), "이력 연결 중");
+  assert.equal(runStreamLabel("disconnected"), "이력 연결 끊김");
 });

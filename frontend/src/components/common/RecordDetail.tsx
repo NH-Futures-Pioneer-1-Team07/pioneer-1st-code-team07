@@ -1,7 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { errorMessage } from "../../apis/client";
 import { fetchJournal } from "../../apis/trading";
-import type { RunRef } from "../../apis/types";
+import type { RunStream } from "../../apis/runStream";
+import type { JournalLine, RunRef } from "../../apis/types";
 import { formatMoney, formatNumber } from "../../data/format";
 import { mapDecisions, mapFills } from "../../data/tradingView";
 import type { DecisionRowView, FillRowView } from "../../data/tradingView";
@@ -25,11 +26,29 @@ interface Detail {
 
 export type RecordMeta = RunRef & { status: string; ended_at: string | null };
 
-export default function RecordDetail({ meta }: { meta: RecordMeta }) {
+/** 이미 있는 기록(`key`가 같은 것)은 건너뛰고 새 기록만 뒤에 붙인다. */
+function addLines(detail: Detail, lines: JournalLine[]): Detail {
+  const keys = new Set([...detail.decisions, ...detail.fills].map((row) => row.key));
+  const fresh = lines.filter((line) => !keys.has(String(line.seq)));
+  const decisions = fresh.filter((line) => line.kind === "decision");
+  const fills = fresh.filter((line) => line.kind === "fill");
+  if (!decisions.length && !fills.length) return detail;
+  return {
+    ...detail,
+    decisions: [...detail.decisions, ...mapDecisions(decisions)],
+    fills: [...detail.fills, ...mapFills(fills)],
+  };
+}
+
+/** `stream`을 주면 운용 중인 이력의 새 기록을 메시지로 받고, 없으면 주기적으로 다시 조회한다. */
+export default function RecordDetail({ meta, stream }: { meta: RecordMeta; stream?: RunStream }) {
   const [tab, setTab] = useState<"decisions" | "fills">("decisions");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const prefix = useId();
+  // 조회가 끝나기 전에 도착한 기록은 모아 두었다가 조회 결과와 합친다.
+  const loading = useRef(false);
+  const pending = useRef<JournalLine[]>([]);
 
   useEffect(() => {
     setDetail(null);
@@ -40,6 +59,7 @@ export default function RecordDetail({ meta }: { meta: RecordMeta }) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      loading.current = true;
       try {
         const [decisions, fills, events] = await Promise.all([
           fetchJournal(meta, "decision"),
@@ -48,24 +68,42 @@ export default function RecordDetail({ meta }: { meta: RecordMeta }) {
         ]);
         if (cancelled) return;
         const failed = events.filter((line) => line.level === "error").pop();
-        setDetail({
+        const loaded: Detail = {
           decisions: mapDecisions(decisions),
           fills: mapFills(fills),
           error: typeof failed?.text === "string" ? failed.text : null,
-        });
+        };
+        setDetail(addLines(loaded, pending.current));
         setFailure(null);
       } catch (error) {
         if (!cancelled) setFailure(errorMessage(error));
+      } finally {
+        if (!cancelled) {
+          loading.current = false;
+          pending.current = [];
+        }
       }
     };
     void load();
-    // 운용 중인 이력은 기록이 계속 늘어나므로 다시 불러온다.
-    const timer = meta.ended_at ? undefined : window.setInterval(load, 3000);
+    // 스트림이 없으면 운용 중인 이력은 기록이 계속 늘어나므로 다시 불러온다.
+    const timer = meta.ended_at || stream ? undefined : window.setInterval(load, 3000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [meta.strategy_id, meta.mode, meta.run_id, meta.status, meta.ended_at]);
+  }, [meta.strategy_id, meta.mode, meta.run_id, meta.status, meta.ended_at, stream?.syncs]);
+
+  useEffect(
+    () =>
+      stream?.subscribe((message) => {
+        if (message.type !== "journal") return;
+        const line = message.line;
+        if (line.run_id !== meta.run_id || line.strategy_id !== meta.strategy_id) return;
+        if (loading.current) pending.current.push(line);
+        else setDetail((current) => (current ? addLines(current, [line]) : current));
+      }),
+    [stream?.subscribe, meta.strategy_id, meta.run_id],
+  );
 
   // 가장 최근 기록이 맨 위에 오도록 뒤집고, 번호는 오래된 기록부터 1번으로 매긴다.
   const decisions = detail ? [...detail.decisions].reverse() : [];
