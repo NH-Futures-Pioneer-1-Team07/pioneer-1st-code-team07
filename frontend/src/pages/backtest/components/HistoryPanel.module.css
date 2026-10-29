@@ -1,0 +1,121 @@
+.history {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+.history :global(.table-wrap) {
+  flex: none;
+  height: auto;
+  max-height: 320px;
+}
+.history :global(.section-head) p {
+  font-size: 11px;
+  margin-top: 7px;
+}
+.historyTable {
+  min-width: 860px;
+  margin-top: 20px;
+}
+.historyTable td {
+  font-size: 12px;
+}
+.historyTable td strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.historyTable td small {
+  display: block;
+  margin-top: 5px;
+  color: #9299a4;
+  font-size: 11px;
+}
+.historyButton {
+  border: 0;
+  background: none;
+  color: #afb4bd;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.historyTable .historyButton {
+  padding: 0;
+}
+tr:global(.selected) .historyButton {
+  color: #ffb819;
+}
+.complete {
+  color: #afb4bd;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.snapshot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 30px;
+  background: #12151a;
+  padding: 18px;
+  border-radius: 10px;
+  margin: 22px 0;
+}
+.snapshot > div {
+  display: flex;
+  gap: 18px;
+  font-size: 11px;
+}
+.snapshot dt {
+  color: #9299a4;
+  min-width: 64px;
+}
+.snapshot dd {
+  margin: 0;
+  color: #afb4bd;
+}
+.endNotice {
+  padding: 13px 16px;
+  background: #12151a;
+  color: #9299a4;
+  font-size: 11px;
+  line-height: 1.7;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+.endNotice > span {
+  margin-right: 7px;
+}
+.endNotice strong {
+  color: #afb4bd;
+  font-weight: 500;
+}
+@media (max-width: 1250px) {
+.history {
+    padding: 20px;
+  }
+  .snapshot {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+.history {
+    padding: 18px;
+  }
+  .snapshot > div {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+[data-open="true"] .historyTable {
+  min-width: 0;
+}
+[data-open="true"] .historyTable th:nth-child(6),
+[data-open="true"] .historyTable td:nth-child(6),
+[data-open="true"] .historyTable th:nth-child(7),
+[data-open="true"] .historyTable td:nth-child(7),
+[data-open="true"] .historyTable th:nth-child(9),
+[data-open="true"] .historyTable td:nth-child(9) {
+  display: none;
+}
