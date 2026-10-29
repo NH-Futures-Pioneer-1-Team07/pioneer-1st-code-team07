@@ -114,7 +114,6 @@ export default function RecordDetail({ meta }: { meta: RecordMeta }) {
                   <th>체결 수량</th>
                   <th>체결 가격</th>
                   <th>수수료</th>
-                  <th>주문 당시 점수</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,7 +125,6 @@ export default function RecordDetail({ meta }: { meta: RecordMeta }) {
                     <td>{row.quantity}계약</td>
                     <td>{formatNumber(row.price)}</td>
                     <td>{row.fee === null ? "—" : formatMoney(row.fee)}</td>
-                    <td>{row.score === null ? "—" : `${row.score}점`}</td>
                   </tr>
                 ))}
               </tbody>

@@ -9,7 +9,6 @@ export interface DecisionRow {
   action: string;
   price: number | null;
   quantity: number | null;
-  score: number | null;
 }
 
 export const sideClass = (side: string) =>
@@ -34,7 +33,6 @@ export default function DecisionTimeline({
         <span>판단</span>
         <span>가격</span>
         <span>수량</span>
-        <span>점수</span>
       </div>
       {rows.map((row, index) => (
         <div key={row.key ?? `${row.at}-${index}`} className={styles.decision}>
@@ -47,16 +45,6 @@ export default function DecisionTimeline({
           </span>
           <span>{row.price === null ? "—" : formatNumber(row.price)}</span>
           <span>{row.quantity === null ? "—" : `${row.quantity}계약`}</span>
-          <span className={row.score === null ? styles.noScore : styles.score}>
-            {row.score === null ? (
-              "—"
-            ) : (
-              <>
-                {row.score}
-                <small>점</small>
-              </>
-            )}
-          </span>
         </div>
       ))}
     </div>

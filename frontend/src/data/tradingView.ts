@@ -67,7 +67,6 @@ export interface DecisionRowView {
   reason: string;
   price: number | null;
   quantity: number | null;
-  score: number | null;
 }
 
 export interface FillRowView {
@@ -77,7 +76,6 @@ export interface FillRowView {
   quantity: number;
   price: number;
   fee: number | null;
-  score: number | null;
 }
 
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
@@ -93,7 +91,6 @@ export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
       reason: typeof line.reason === "string" ? line.reason : "",
       price: null,
       quantity: quantity > 0 ? quantity : null,
-      score: num(line.score),
     };
   });
 }
@@ -106,7 +103,6 @@ export function mapFills(lines: JournalLine[]): FillRowView[] {
     quantity: num(line.quantity) ?? 0,
     price: num(line.price) ?? 0,
     fee: num(line.fee),
-    score: num(line.score),
   }));
 }
 
