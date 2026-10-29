@@ -144,6 +144,18 @@ svg {
   color: var(--text-secondary);
   white-space: nowrap;
 }
+.badge.state i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.badge.state.running {
+  color: var(--positive);
+}
+.badge.state.running i {
+  background: var(--positive);
+}
 .positive {
   color: var(--rise);
 }

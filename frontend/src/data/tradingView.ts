@@ -67,7 +67,6 @@ export interface DecisionRowView {
   reason: string;
   price: number | null;
   quantity: number | null;
-  score: number | null;
 }
 
 export interface FillRowView {
@@ -77,7 +76,6 @@ export interface FillRowView {
   quantity: number;
   price: number;
   fee: number | null;
-  score: number | null;
 }
 
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
@@ -93,7 +91,6 @@ export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
       reason: typeof line.reason === "string" ? line.reason : "",
       price: null,
       quantity: quantity > 0 ? quantity : null,
-      score: num(line.score),
     };
   });
 }
@@ -106,7 +103,6 @@ export function mapFills(lines: JournalLine[]): FillRowView[] {
     quantity: num(line.quantity) ?? 0,
     price: num(line.price) ?? 0,
     fee: num(line.fee),
-    score: num(line.score),
   }));
 }
 
@@ -122,7 +118,7 @@ export function statusMessage(status: TradingStatus | null, actionError: string 
   if (status.phase === "stopping") return "운용을 종료하는 중입니다. 미체결 주문을 취소하고 보유 포지션을 청산합니다.";
   if (status.phase === "running") {
     const blocks = status.entry_blocks ?? [];
-    return blocks.length ? `신규 주문을 멈췄습니다: ${blocks.join(", ")}` : "운용 중입니다.";
+    return blocks.length ? `신규 주문을 멈췄습니다: ${blocks.join(", ")}` : "";;
   }
   if (clear?.state === "done" && clear.result) {
     const result = clear.result;

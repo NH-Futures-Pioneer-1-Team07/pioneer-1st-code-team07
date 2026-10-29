@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   fetchAssumptions,
@@ -27,7 +27,8 @@ import StrategySelect from "../../components/common/StrategySelect";
 import Icon from "../../components/common/Icon";
 import DateRangeCalendar from "../../components/common/DateRangeCalendar";
 import EquityChart from "./components/EquityChart";
-import RecordDetail from "./components/RecordDetail";
+import RecordDetail from "../../components/common/RecordDetail";
+import { scrollToPanel } from "../../components/common/scrollToPanel";
 import styles from "./BacktestPage.module.css";
 
 const runKey = (run: RunRef) => `${run.strategy_id}/${run.run_id}`;
@@ -45,6 +46,7 @@ export default function BacktestPage() {
   const [active, setActive] = useState<RunRef | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const splitRef = useRef<HTMLDivElement>(null);
   const [announcement, setAnnouncement] = useState("");
   const formId = useId();
 
@@ -469,7 +471,7 @@ export default function BacktestPage() {
         </section>
       </div>
 
-      <div className={`${styles.split} ${detailOpen ? styles.splitOpen : ""}`}>
+      <div ref={splitRef} className={`${styles.split} ${detailOpen ? styles.splitOpen : ""}`}>
         <section
           className={`panel ${styles.history}`}
           aria-labelledby={`${formId}-history-title`}
@@ -490,18 +492,20 @@ export default function BacktestPage() {
               <table className={`data-table ${styles.historyTable}`}>
                 <thead>
                   <tr>
+                    <th>번호</th>
                     <th>실행 일시</th>
                     <th>전략</th>
                     <th>종목</th>
                     <th>테스트 기간</th>
                     <th>초기자금</th>
+                    <th>슬리피지</th>
                     <th>순손익</th>
                     <th>상태</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((run) => {
-                    const chosen = selected !== undefined && runKey(selected) === runKey(run);
+                  {list.map((run, index) => {
+                    const chosen = detailOpen && selected !== undefined && runKey(selected) === runKey(run);
                     return (
                       <tr
                         key={runKey(run)}
@@ -509,8 +513,10 @@ export default function BacktestPage() {
                         onClick={() => {
                           setSelectedKey(runKey(run));
                           setDetailOpen(true);
+                          scrollToPanel(splitRef.current);
                         }}
                       >
+                        <td className={styles.historyIndex}>{list.length - index}</td>
                         <td>
                           <button
                             type="button"
@@ -534,6 +540,11 @@ export default function BacktestPage() {
                           {run.initial_capital === undefined
                             ? "—"
                             : formatMoney(run.initial_capital)}
+                        </td>
+                        <td>
+                          {run.assumptions?.slippage?.ticks == null
+                            ? "—"
+                            : `${run.assumptions.slippage.ticks}틱`}
                         </td>
                         <td className={run.net_pnl === null ? "" : pnlClass(run.net_pnl)}>
                           {run.net_pnl === null ? "—" : signed(run.net_pnl, formatMoney)}

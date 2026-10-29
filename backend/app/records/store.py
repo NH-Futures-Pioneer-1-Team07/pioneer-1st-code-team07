@@ -283,6 +283,7 @@ def _summary(meta: dict[str, Any]) -> dict[str, Any]:
         "status",
         "period",
         "initial_capital",
+        "assumptions",
     )
     return {key: meta.get(key) for key in keys}
 

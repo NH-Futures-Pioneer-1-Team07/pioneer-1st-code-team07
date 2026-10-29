@@ -154,6 +154,7 @@ export interface RunSummary extends RunRef {
   status: string;
   period?: { start: string; end: string };
   initial_capital?: number;
+  assumptions?: Assumptions;
   net_pnl: number | null;
 }
 

@@ -5,7 +5,7 @@
 .decision {
   --row: 44px;
   display: grid;
-  grid-template-columns: 44px 132px 5px minmax(0, 1fr) 110px 80px 90px;
+  grid-template-columns: 44px 132px 5px minmax(0, 1fr) 110px 80px;
   align-items: center;
   gap: 16px;
   height: var(--row);
@@ -36,19 +36,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.decision > span:nth-child(5),
-.decision > span:nth-child(6),
-.decision > span:nth-child(7),
-.decisionHead > span:nth-child(5),
-.decisionHead > span:nth-child(6),
-.decisionHead > span:nth-child(7) {
-  text-align: right;
-}
 .index {
   color: var(--text-tertiary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 .decisionHead {
   position: sticky;
@@ -87,17 +78,4 @@
 }
 .decision:nth-child(2) .timelineDot::after {
   background: linear-gradient(var(--accent), var(--data-line));
-}
-.score {
-  color: var(--accent);
-  font-size: 22px;
-  font-weight: 600;
-}
-.score small {
-  margin-left: 5px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-.noScore {
-  color: var(--text-tertiary);
 }

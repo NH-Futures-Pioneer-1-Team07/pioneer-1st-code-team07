@@ -99,7 +99,7 @@
 .main {
   max-width: 1800px;
   margin: auto;
-  padding: 0 34px 30px;
+  padding: 0 34px 120px;
 }
 .demoNotice {
   display: flex;
@@ -179,7 +179,7 @@
 
 @media (max-width: 1150px) {
   .main {
-    padding: 0 22px 30px;
+    padding: 0 22px 120px;
   }
   .topbar {
     padding: 0 22px;
@@ -206,7 +206,7 @@
     display: none;
   }
   .main {
-    padding: 0 18px 80px;
+    padding: 0 18px 160px;
   }
   .demoNotice {
     margin-bottom: 24px;

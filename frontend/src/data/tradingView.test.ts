@@ -39,22 +39,21 @@ test("매매구분과 단계 이름", () => {
 test("매매 판단 기록을 화면 행으로 바꾼다", () => {
   const rows = mapDecisions([
     line({ seq: 1, result: "buy", reason: "상승 추세에서 기준 고점 돌파", orders: [{ side: "buy", quantity: 12, entry_id: "a" }] }),
-    line({ seq: 2, result: "hold", reason: "돌파 없음", score: null, orders: [] }),
-    line({ seq: 3, result: "skip", reason: "평균 거래량이 0", score: 0.5 }),
+    line({ seq: 2, result: "hold", reason: "돌파 없음", orders: [] }),
+    line({ seq: 3, result: "skip", reason: "평균 거래량이 0" }),
   ]);
   assert.deepEqual(rows[0], {
     key: "1", at: "2026.10.28 10:03:00", action: "매수", reason: "상승 추세에서 기준 고점 돌파",
-    price: null, quantity: 12, score: null,
+    price: null, quantity: 12,
   });
   assert.equal(rows[1].action, "진입 보류");
   assert.equal(rows[1].quantity, null);
   assert.equal(rows[2].action, "건너뜀");
-  assert.equal(rows[2].score, 0.5);
 });
 
 test("체결 기록을 화면 행으로 바꾼다", () => {
-  const [row] = mapFills([line({ seq: 7, kind: "fill", side: "sell", quantity: 3, price: 243500, fee: 62, score: null })]);
-  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62, score: null });
+  const [row] = mapFills([line({ seq: 7, kind: "fill", side: "sell", quantity: 3, price: 243500, fee: 62 })]);
+  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62 });
 });
 
 const status = (fields: Partial<TradingStatus>): TradingStatus => ({ phase: "idle", run: null, ...fields });
@@ -66,7 +65,7 @@ test("상태 줄은 방금 한 동작의 오류를 먼저 보여 준다", () => 
 });
 
 test("상태 줄은 단계와 차단 사유와 정리 결과를 알려 준다", () => {
-  assert.match(statusMessage(status({ phase: "running", entry_blocks: [] }), null), /운용 중/);
+  assert.equal(statusMessage(status({ phase: "running", entry_blocks: [] }), null), "");
   assert.match(statusMessage(status({ phase: "running", entry_blocks: ["분봉 조회가 계속 실패함"] }), null), /분봉 조회가 계속 실패함/);
   assert.match(statusMessage(status({ phase: "stopping" }), null), /종료하는 중/);
   const running = { state: "running" as const, step: "cancel", detail: "미체결을 취소합니다", result: null };
