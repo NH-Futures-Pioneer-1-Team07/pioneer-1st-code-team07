@@ -10,9 +10,9 @@ import {
   runStreamLabel,
   signed,
 } from "../../../data/tradingView";
-import Icon from "../../../components/common/Icon";
 import RecordDetail from "../../../components/common/RecordDetail";
 import { scrollToPanel } from "../../../components/common/scrollToPanel";
+import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
 import styles from "./RunHistory.module.css";
 
 const runKey = (run: RunSummary) => `${run.strategy_id}/${run.run_id}`;
@@ -74,7 +74,12 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
   const list = runs ?? [];
   const selected = list.find((run) => runKey(run) === selectedKey);
   return (
-    <div ref={splitRef} className={`${styles.split} ${open ? styles.splitOpen : ""}`}>
+    <SplitPanel
+      open={open}
+      innerRef={splitRef}
+      className={styles.split}
+      detailLabelledBy="run-detail-title"
+      list={
       <section
         className={`panel ${styles.history}`}
         aria-labelledby="trading-history-title"
@@ -96,7 +101,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
         )}
         {list.length > 0 && (
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table run-table">
               <caption className="sr-only">모의매매 운용 목록</caption>
               <thead>
                 <tr>
@@ -116,14 +121,14 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
                   return (
                     <tr
                       key={runKey(run)}
-                      className={styles.row + (active ? " " + styles.selected : "")}
+                      className={`clickable ${active ? "selected" : ""}`}
                       onClick={() => {
                         setSelectedKey(runKey(run));
                         setOpen(true);
                         scrollToPanel(splitRef.current);
                       }}
                     >
-                      <td className={styles.index}>{list.length - index}</td>
+                      <td className="index">{list.length - index}</td>
                       <td>
                         <button
                           type="button"
@@ -154,59 +159,45 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
           </div>
         )}
       </section>
-      {selected && (
-        <RunDetail
-          key={runKey(selected)}
-          run={selected}
-          stream={stream}
-          open={open}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </div>
+      }
+      detail={
+        selected && (
+          <RunDetail
+            key={runKey(selected)}
+            run={selected}
+            stream={stream}
+            onClose={() => setOpen(false)}
+          />
+        )
+      }
+    />
   );
 }
 
 function RunDetail({
   run,
   stream,
-  open,
   onClose,
 }: {
   run: RunSummary;
   stream: RunStream;
-  open: boolean;
   onClose: () => void;
 }) {
   return (
-    <section
-      className={`panel ${styles.detailPanel}`}
-      aria-labelledby="run-detail-title"
-      aria-hidden={!open}
-      inert={!open}
-    >
-      <div className={styles.detailInner}>
-        <div className={styles.detailHeading}>
-          <div>
-            <h3 id="run-detail-title">
-              {run.strategy_name}
-              <span className={`badge state ${run.ended_at ? "" : "running"}`}>
-                <i />
-                {statusLabel(run)}
-              </span>
-            </h3>
-          </div>
-          <button
-            type="button"
-            className={styles.close}
-            aria-label="운용 상세 닫기"
-            onClick={onClose}
-          >
-            <Icon name="close" size={18} />
-          </button>
+    <>
+      <div className={styles.detailHeading}>
+        <div>
+          <h3 id="run-detail-title">
+            {run.strategy_name}
+            <span className={`badge state ${run.ended_at ? "" : "running"}`}>
+              <i />
+              {statusLabel(run)}
+            </span>
+          </h3>
         </div>
-        <RecordDetail meta={run} stream={stream} />
+        <PanelCloseButton label="운용 상세 닫기" onClick={onClose} />
       </div>
-    </section>
+      <RecordDetail meta={run} stream={stream} />
+    </>
   );
 }
