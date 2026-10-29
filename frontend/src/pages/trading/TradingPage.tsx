@@ -15,7 +15,7 @@ import {
   startTrading,
   stopTrading,
 } from "../../apis/trading";
-import { formatMoney, formatNumber } from "../../data/format";
+import { formatMoney, formatNumber, pnlClass } from "../../data/format";
 import {
   formatClock,
   instrumentLabel,
@@ -37,12 +37,6 @@ const won = (value: number | null | undefined) =>
   value === null || value === undefined ? dash : formatNumber(value);
 const sideClassName = (side: string | null) =>
   side === "buy" ? "positive" : "negative";
-const pnlClass = (value: number | null | undefined) =>
-  value === null || value === undefined || value === 0
-    ? ""
-    : value > 0
-      ? "positive"
-      : "negative";
 
 export default function TradingPage({ onMarketStatus }: { onMarketStatus: (status: MarketStatus) => void }) {
   const [selected, setSelected] = useState<string | null>(null);

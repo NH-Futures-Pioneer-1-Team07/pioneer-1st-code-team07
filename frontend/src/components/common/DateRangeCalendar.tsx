@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { dotted } from "../../data/format";
 import Icon from "./Icon";
 import styles from "./DateRangeCalendar.module.css";
 
@@ -6,7 +7,6 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const pad = (value: number) => String(value).padStart(2, "0");
 const toKey = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
-const dotted = (key: string) => (key ? key.replaceAll("-", ".") : "");
 
 export default function DateRangeCalendar({
   start,

@@ -1,4 +1,4 @@
-import type { Candle, JournalLine, MarketSession, Phase, TradingStatus } from "../apis/types.ts";
+import type { Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -207,3 +207,22 @@ export function timeTicks(candles: Candle[], daily: boolean): { index: number; l
     return { index, label: daily ? time.slice(5).replace("-", ".") : time.slice(11, 16) };
   });
 }
+
+/** 실행 하나를 가리키는 키. 목록에서 선택·갱신할 때 쓴다. */
+export const runKey = (run: RunRef) => `${run.strategy_id}/${run.run_id}`;
+
+/** 모의매매 이력 목록과 상세에 보이는 운용 상태 문구. */
+export const runStatusLabel = (run: Pick<RunSummary, "ended_at" | "status">): string =>
+  run.ended_at
+    ? run.status === "error"
+      ? "오류"
+      : run.status === "interrupted"
+        ? "중단"
+        : "종료"
+    : "운용 중";
+
+/** 시작 시각이 최근인 실행이 앞에 오도록 목록에 실행 하나를 넣거나 바꾼다. */
+export const upsertRun = (runs: RunSummary[], run: RunSummary): RunSummary[] =>
+  [run, ...runs.filter((item) => runKey(item) !== runKey(run))].sort((a, b) =>
+    b.started_at.localeCompare(a.started_at),
+  );
