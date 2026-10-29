@@ -17,14 +17,35 @@
 .history td strong {
   font-weight: 500;
 }
+.history th,
+.history td {
+  text-align: left;
+}
+.history thead th:first-child,
+.history tbody td:first-child {
+  padding-left: 16px;
+}
+.history td.index,
+.history th:first-child {
+  width: 44px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .row {
   cursor: pointer;
 }
-.row:hover {
-  background: #15171c;
+.history tbody tr.row {
+  transition: background 0.15s;
 }
-.history tr.selected {
-  background: #1b1a13;
+.history tbody tr.row:hover {
+  background: rgb(255 255 255 / 8%);
+  box-shadow: inset 2px 0 0 #ffb819;
+}
+.history tbody tr.selected,
+.history tbody tr.selected:hover {
+  background: rgb(255 184 25 / 10%);
+  box-shadow: inset 2px 0 0 #ffb819;
 }
 .close {
   display: grid;
@@ -41,21 +62,12 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
 }
-.summary {
-  margin-bottom: 20px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.summary span {
-  margin-left: 12px;
-  color: var(--text-tertiary);
-}
 .detailHeading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 0 14px;
+  padding: 0 0 20px;
 }
 .detailHeading h3 {
   display: flex;
@@ -66,15 +78,15 @@
 .split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
-  align-items: stretch;
-  margin-top: 18px;
+  align-items: start;
+  margin-top: 20px;
   transition:
     grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     column-gap 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .splitOpen {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 14px;
+  column-gap: 20px;
 }
 .detailPanel {
   min-width: 0;
@@ -90,7 +102,7 @@
 }
 .detailInner {
   min-width: 460px;
-  padding: 22px;
+  padding: 24px;
 }
 .rowButton {
   display: flex;
@@ -101,10 +113,6 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-.splitOpen .history th:nth-child(2),
-.splitOpen .history td:nth-child(2) {
-  display: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .split,

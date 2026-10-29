@@ -197,7 +197,12 @@ def test_이력_목록은_최근_시작한_순서이고_모드와_전략으로_�
 
 def test_이력_목록에는_모드별_요구_항목이_있다(tmp_path):
     store = RunStore(tmp_path)
-    start(store, period={"start": "2026-10-20", "end": "2026-10-27"}, initial_capital=1e8).finish({"net_pnl": 3})
+    start(
+        store,
+        period={"start": "2026-10-20", "end": "2026-10-27"},
+        initial_capital=1e8,
+        assumptions={"slippage": {"ticks": 2}},
+    ).finish({"net_pnl": 3})
     start(store, mode="paper", started_at=STARTED + timedelta(hours=1)).finish({"net_pnl": 4})
 
     paper, backtest = store.list_runs()
@@ -205,6 +210,7 @@ def test_이력_목록에는_모드별_요구_항목이_있다(tmp_path):
     assert {"strategy_name", "instrument", "started_at", "ended_at", "net_pnl"} <= paper.keys()
     assert backtest["period"] == {"start": "2026-10-20", "end": "2026-10-27"}
     assert backtest["initial_capital"] == 1e8
+    assert backtest["assumptions"]["slippage"] == {"ticks": 2}
 
 
 def test_이력_상세는_메타와_결과를_돌려준다(tmp_path):

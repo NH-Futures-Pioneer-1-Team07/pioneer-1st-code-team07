@@ -14,8 +14,8 @@
 }
 .list {
   display: grid;
-  gap: 4px;
-  max-height: 180px;
+  gap: 6px;
+  max-height: 220px;
   margin: -8px;
   padding: 8px;
   overflow-y: auto;
@@ -27,14 +27,11 @@
   position: relative;
   display: grid;
   gap: 5px;
-  padding: 6px 12px;
+  padding: 11px 12px;
   border-radius: 9px;
   background: #14171c;
-  box-shadow: inset 0 0 0 1px #ffffff0d;
   cursor: pointer;
-  transition:
-    background 0.15s,
-    box-shadow 0.15s;
+  transition: background 0.15s;
 }
 .card:hover {
   background: #181c22;
@@ -56,11 +53,7 @@
 }
 .selected,
 .selected:hover {
-  background: #14171c;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
-    inset 0 0 10px color-mix(in srgb, var(--accent) 8%, transparent),
-    0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, #14171c);
 }
 .led {
   flex-shrink: 0;

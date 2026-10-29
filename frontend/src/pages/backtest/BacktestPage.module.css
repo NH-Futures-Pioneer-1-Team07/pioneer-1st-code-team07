@@ -424,19 +424,20 @@
   color: #9299a4;
   font-size: 11px;
 }
-.historyTable td:nth-child(5),
-.historyTable td:nth-child(6),
-.historyTable th:nth-child(5),
-.historyTable th:nth-child(6) {
-  text-align: right;
-}
-.historyTable td:nth-child(2),
-.historyTable td:nth-child(3),
-.historyTable td:nth-child(4),
-.historyTable th:nth-child(2),
-.historyTable th:nth-child(3),
-.historyTable th:nth-child(4) {
+.historyTable th,
+.historyTable td {
   text-align: left;
+}
+.historyTable thead th:first-child,
+.historyTable tbody td:first-child {
+  padding-left: 16px;
+}
+.historyTable td.historyIndex,
+.historyTable th:first-child {
+  width: 44px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .historyButton {
   border: 0;
@@ -456,11 +457,17 @@
 .historyRow {
   cursor: pointer;
 }
-.historyRow:hover {
-  background: rgba(255, 255, 255, 0.025);
+.historyTable tbody tr.historyRow {
+  transition: background 0.15s;
 }
-.historyTable tbody tr.selectedRow {
-  background: rgba(255, 184, 25, 0.045);
+.historyTable tbody tr.historyRow:hover {
+  background: rgb(255 255 255 / 8%);
+  box-shadow: inset 2px 0 0 #ffb819;
+}
+.historyTable tbody tr.selectedRow,
+.historyTable tbody tr.selectedRow:hover {
+  background: rgb(255 184 25 / 10%);
+  box-shadow: inset 2px 0 0 #ffb819;
 }
 .selectedRow .historyButton {
   color: #ffb819;
@@ -655,12 +662,12 @@
 .splitOpen .historyTable {
   min-width: 0;
 }
-.splitOpen .historyTable th:nth-child(3),
-.splitOpen .historyTable td:nth-child(3),
-.splitOpen .historyTable th:nth-child(5),
-.splitOpen .historyTable td:nth-child(5),
+.splitOpen .historyTable th:nth-child(6),
+.splitOpen .historyTable td:nth-child(6),
 .splitOpen .historyTable th:nth-child(7),
-.splitOpen .historyTable td:nth-child(7) {
+.splitOpen .historyTable td:nth-child(7),
+.splitOpen .historyTable th:nth-child(9),
+.splitOpen .historyTable td:nth-child(9) {
   display: none;
 }
 @media (prefers-reduced-motion: reduce) {

@@ -122,7 +122,7 @@ export function statusMessage(status: TradingStatus | null, actionError: string 
   if (status.phase === "stopping") return "운용을 종료하는 중입니다. 미체결 주문을 취소하고 보유 포지션을 청산합니다.";
   if (status.phase === "running") {
     const blocks = status.entry_blocks ?? [];
-    return blocks.length ? `신규 주문을 멈췄습니다: ${blocks.join(", ")}` : "운용 중입니다.";
+    return blocks.length ? `신규 주문을 멈췄습니다: ${blocks.join(", ")}` : "";;
   }
   if (clear?.state === "done" && clear.result) {
     const result = clear.result;

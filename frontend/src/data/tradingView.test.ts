@@ -66,7 +66,7 @@ test("상태 줄은 방금 한 동작의 오류를 먼저 보여 준다", () => 
 });
 
 test("상태 줄은 단계와 차단 사유와 정리 결과를 알려 준다", () => {
-  assert.match(statusMessage(status({ phase: "running", entry_blocks: [] }), null), /운용 중/);
+  assert.equal(statusMessage(status({ phase: "running", entry_blocks: [] }), null), "");
   assert.match(statusMessage(status({ phase: "running", entry_blocks: ["분봉 조회가 계속 실패함"] }), null), /분봉 조회가 계속 실패함/);
   assert.match(statusMessage(status({ phase: "stopping" }), null), /종료하는 중/);
   const running = { state: "running" as const, step: "cancel", detail: "미체결을 취소합니다", result: null };

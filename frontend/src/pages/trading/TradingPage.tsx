@@ -54,7 +54,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
   const strategies = usePolling(fetchStrategies, 60000);
   const status = usePolling(fetchStatus, 2000);
   const account = usePolling(fetchAccount, 5000);
-  const runs = usePolling(() => fetchRuns("paper"), 10000);
+  const runs = usePolling(() => fetchRuns("paper"), 3000);
 
   const phase = status.data?.phase ?? "idle";
   const items = strategies.data ?? [];
@@ -183,7 +183,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
           <div className="section-head">
             <h2 id="run-title">전략 운용</h2>
             <span
-              className={`${styles.stateBadge} ${phase === "running" ? styles.running : ""}`}
+              className={`badge state ${phase === "running" ? "running" : ""}`}
             >
               <i />
               {phaseLabel(phase)}
@@ -309,16 +309,18 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
             error={candles.error}
           />
           <div className={styles.bookSummary}>
-            <span>
-              매도 잔량 <strong>{won(totalAsk)}</strong>
-            </span>
-            <div>
-              <i style={{ width: `${askShare}%` }} />
+            <div className={styles.bookLegend}>
+              <span className={styles.askLabel}>
+                매도 잔량 <strong>{won(totalAsk)}</strong>
+              </span>
+              <span className={styles.bidLabel}>
+                매수 잔량 <strong>{won(totalBid)}</strong>
+              </span>
+            </div>
+            <div className={styles.bookBar}>
+              <i style={{ flexBasis: `${askShare}%` }} />
               <b />
             </div>
-            <span>
-              매수 잔량 <strong>{won(totalBid)}</strong>
-            </span>
           </div>
         </section>
         <section className={`panel ${styles.orderbook}`} aria-label="호가">
@@ -478,7 +480,11 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
           )}
         </section>
       </div>
-      <RunHistory runs={runs.data} error={runs.error} />
+      <RunHistory
+        runs={runs.data}
+        error={runs.error}
+        liveNetPnl={pnl ? pnl.realized_pnl - pnl.fee : null}
+      />
       {confirm && (
         <ConfirmDialog
           title={

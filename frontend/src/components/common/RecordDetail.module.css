@@ -1,0 +1,20 @@
+/* 기록을 불러오는 동안에도 높이를 유지해, 펼칠 때 화면 스크롤 위치가 어긋나지 않게 한다. */
+.panel {
+  min-height: 440px;
+}
+.fills {
+  --table-height: 440px;
+}
+.recordTable th,
+.recordTable td {
+  text-align: left;
+}
+.recordTable td {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recordTable .index {
+  width: 44px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}

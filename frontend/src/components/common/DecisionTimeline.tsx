@@ -17,9 +17,12 @@ export const sideClass = (side: string) =>
 
 export default function DecisionTimeline({
   rows,
+  total,
   onScroll,
 }: {
   rows: DecisionRow[];
+  /** 전체 기록 수. 번호는 가장 오래된 기록이 1번이고, 가장 최근 기록이 맨 위에 온다. */
+  total: number;
   onScroll?: UIEventHandler<HTMLElement>;
 }) {
   return (
@@ -35,7 +38,7 @@ export default function DecisionTimeline({
       </div>
       {rows.map((row, index) => (
         <div key={row.key ?? `${row.at}-${index}`} className={styles.decision}>
-          <span className={styles.index}>{index + 1}</span>
+          <span className={styles.index}>{total - index}</span>
           <time>{row.at}</time>
           <span className={styles.timelineDot} />
           <span className={styles.action}>
