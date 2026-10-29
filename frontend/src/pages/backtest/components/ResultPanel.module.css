@@ -1,0 +1,224 @@
+.result {
+  min-width: 0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.result h2 {
+  margin-top: 5px;
+}
+.reportHeading {
+  margin: 20px 0 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.reportHeading strong {
+  font-size: 14px;
+}
+.reportHeading p {
+  margin: 7px 0 0;
+  color: #9299a4;
+  font-size: 11px;
+}
+.performanceCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+.performanceCards > div {
+  padding: 12px 14px;
+  background: #12151a;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.performanceCards span {
+  color: #afb4bd;
+  font-size: 11px;
+}
+.performanceCards span small {
+  display: inline;
+  font-size: 11px;
+  margin-left: 3px;
+  color: #9299a4;
+}
+.performanceCards strong {
+  font-size: clamp(17px, 1.6vw, 23px);
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.performanceCards small {
+  font-size: 11px;
+}
+.chartHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+}
+.chartHeading h3 {
+  font-size: 13px;
+}
+.chartLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #9299a4;
+  font-size: 11px;
+}
+.chartLegend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chartLegend i {
+  flex: none;
+  display: block;
+  width: 12px;
+  height: 2px;
+  background: #ffb819;
+}
+.chartLegend i[data-mark="candle"] {
+  height: 10px;
+  width: 6px;
+  margin: 0 3px;
+  background: linear-gradient(var(--rise) 50%, var(--fall) 50%);
+}
+.chartLegend i[data-mark="bar"] {
+  height: 8px;
+  width: 8px;
+  margin: 0 2px;
+  background: linear-gradient(90deg, var(--rise) 50%, var(--fall) 50%);
+}
+.resultFooter {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: #9299a4;
+  font-size: 11px;
+}
+.resultFooter strong {
+  font-weight: 500;
+  margin-left: 8px;
+  color: #afb4bd;
+}
+.progressPanel {
+  min-height: 80px;
+  margin: 12px 0 -4px;
+  padding: 12px 16px;
+  background: #171a20;
+  border-radius: 10px;
+}
+.progressPanel > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.progressPanel > div > span {
+  color: #ffb819;
+}
+.progressPanel progress {
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  display: block;
+  margin: 8px 0;
+  border: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #292d35;
+}
+.progressPanel progress::-webkit-progress-bar {
+  background: #292d35;
+}
+.progressPanel progress::-webkit-progress-value {
+  background: #ffb819;
+  transition: width 0.4s;
+}
+.progressPanel progress::-moz-progress-bar {
+  background: #ffb819;
+}
+.progressPanel p {
+  font-size: 11px;
+  color: #afb4bd;
+}
+.progressPanel small {
+  display: block;
+  font-size: 11px;
+  color: #9299a4;
+  margin-top: 4px;
+}
+.done progress::-webkit-progress-value {
+  background: var(--positive);
+}
+.done progress::-moz-progress-bar {
+  background: var(--positive);
+}
+.doneTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--positive);
+}
+.progressPanel > div > .doneSide {
+  color: var(--positive);
+}
+.idle > div > span {
+  color: var(--text-tertiary);
+}
+@media (max-width: 1250px) {
+.result {
+    padding: 20px;
+  }
+  .performanceCards {
+    gap: 8px;
+  }
+  .performanceCards > div {
+    padding: 14px 10px;
+  }
+  .performanceCards strong {
+    font-size: 16px;
+  }
+  .reportHeading {
+    flex-direction: column;
+  }
+}
+@media (max-width: 1000px) {
+  .performanceCards strong {
+    font-size: 21px;
+  }
+  .reportHeading {
+    flex-direction: row;
+  }
+}
+@media (max-width: 600px) {
+.result {
+    padding: 18px;
+  }
+  .performanceCards {
+    grid-template-columns: 1fr;
+  }
+  .performanceCards > div {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .performanceCards strong {
+    font-size: 18px;
+  }
+  .reportHeading {
+    flex-direction: column;
+  }
+}
