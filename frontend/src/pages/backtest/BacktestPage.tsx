@@ -21,8 +21,8 @@ import {
   statusLabel,
   validateInput,
 } from "../../data/backtestView";
-import { formatMoney, formatNumber } from "../../data/format";
-import { formatDateTime, instrumentLabel, signed } from "../../data/tradingView";
+import { dotted, formatMoney, formatNumber, pnlClass } from "../../data/format";
+import { formatDateTime, instrumentLabel, runKey, signed } from "../../data/tradingView";
 import StrategySelect from "../../components/common/StrategySelect";
 import Icon from "../../components/common/Icon";
 import DateRangeCalendar from "../../components/common/DateRangeCalendar";
@@ -32,9 +32,6 @@ import { scrollToPanel } from "../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../components/common/SplitPanel";
 import styles from "./BacktestPage.module.css";
 
-const runKey = (run: RunRef) => `${run.strategy_id}/${run.run_id}`;
-const dotted = (day: string) => day.replaceAll("-", ".");
-const pnlClass = (value: number) => (value > 0 ? "positive" : value < 0 ? "negative" : "");
 
 export default function BacktestPage() {
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);

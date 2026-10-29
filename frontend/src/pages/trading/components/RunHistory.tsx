@@ -7,30 +7,18 @@ import { formatMoney } from "../../../data/format";
 import {
   formatDateTime,
   instrumentLabel,
+  runKey,
+  runStatusLabel,
   runStreamLabel,
   signed,
+  upsertRun,
 } from "../../../data/tradingView";
 import RecordDetail from "../../../components/common/RecordDetail";
 import { scrollToPanel } from "../../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
 import styles from "./RunHistory.module.css";
 
-const runKey = (run: RunSummary) => `${run.strategy_id}/${run.run_id}`;
 const signedMoney = (value: number) => signed(value, formatMoney);
-const statusLabel = (run: RunSummary) =>
-  run.ended_at
-    ? run.status === "error"
-      ? "오류"
-      : run.status === "interrupted"
-        ? "중단"
-        : "종료"
-    : "운용 중";
-
-/** 시작 시각이 최근인 실행이 앞에 오도록 목록에 실행 하나를 넣거나 바꾼다. */
-const upsert = (runs: RunSummary[], run: RunSummary) =>
-  [run, ...runs.filter((item) => runKey(item) !== runKey(run))].sort((a, b) =>
-    b.started_at.localeCompare(a.started_at),
-  );
 
 export default function RunHistory({ stream }: { stream: RunStream }) {
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
@@ -60,7 +48,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
     () =>
       stream.subscribe((message) => {
         if (message.type === "run") {
-          setRuns((current) => (current === null ? current : upsert(current, message.run)));
+          setRuns((current) => (current === null ? current : upsertRun(current, message.run)));
         } else if (message.type === "pnl") {
           setLivePnl((current) => ({
             ...current,
@@ -148,7 +136,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
                       <td>
                         <span className={`badge state ${run.ended_at ? "" : "running"}`}>
                           <i />
-                          {statusLabel(run)}
+                          {runStatusLabel(run)}
                         </span>
                       </td>
                     </tr>
@@ -191,7 +179,7 @@ function RunDetail({
             {run.strategy_name}
             <span className={`badge state ${run.ended_at ? "" : "running"}`}>
               <i />
-              {statusLabel(run)}
+              {runStatusLabel(run)}
             </span>
           </h3>
         </div>

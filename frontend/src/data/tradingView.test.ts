@@ -11,11 +11,14 @@ import {
   phaseLabel,
   sideLabel,
   statusMessage,
+  runKey,
+  runStatusLabel,
   runStreamLabel,
   streamLabel,
   timeTicks,
+  upsertRun,
 } from "./tradingView.ts";
-import type { Candle, JournalLine, TradingStatus } from "../apis/types.ts";
+import type { Candle, JournalLine, RunSummary, TradingStatus } from "../apis/types.ts";
 
 const line = (fields: Record<string, unknown>): JournalLine => ({ seq: 1, time: "2026-10-28T10:03:00+09:00", kind: "decision", ...fields });
 
@@ -143,4 +146,27 @@ test("이력 연결 문구는 웹소켓 연결 여부를 말한다", () => {
   assert.equal(runStreamLabel("live"), "이력 실시간 연결됨");
   assert.equal(runStreamLabel("connecting"), "이력 연결 중");
   assert.equal(runStreamLabel("disconnected"), "이력 연결 끊김");
+});
+
+const summary = (run_id: string, started_at: string, fields: Partial<RunSummary> = {}): RunSummary => ({
+  strategy_id: "s", mode: "paper", run_id, strategy_name: "전략", instrument: { name: "선물", code: "A1" },
+  started_at, ended_at: null, status: "running", net_pnl: null, ...fields,
+});
+
+test("운용 상태 문구는 끝났는지와 종료 사유로 정한다", () => {
+  assert.equal(runStatusLabel({ ended_at: null, status: "running" }), "운용 중");
+  assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "completed" }), "종료");
+  assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "error" }), "오류");
+  assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "interrupted" }), "중단");
+});
+
+test("실행 목록에 넣으면 같은 실행은 바꾸고 최근에 시작한 것이 앞에 온다", () => {
+  const first = summary("a", "2026-10-29T09:00:00");
+  const second = summary("b", "2026-10-29T10:00:00");
+  assert.equal(runKey(first), "s/a");
+  assert.deepEqual(upsertRun([first], second).map((run) => run.run_id), ["b", "a"]);
+  const finished = summary("a", "2026-10-29T09:00:00", { status: "completed", net_pnl: 5 });
+  const merged = upsertRun([second, first], finished);
+  assert.deepEqual(merged.map((run) => run.run_id), ["b", "a"]);
+  assert.equal(merged[1].net_pnl, 5);
 });
