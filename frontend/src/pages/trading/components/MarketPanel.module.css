@@ -1,0 +1,109 @@
+.market {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 16px;
+}
+.marketHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.marketName {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.marketName h2 {
+  font-size: 15px;
+}
+.symbolAvatar {
+  width: 27px;
+  height: 27px;
+  background: #172539;
+  color: #7fa8e0;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.instrumentMeta {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  margin-top: 9px;
+  padding-left: 36px;
+}
+.quoteBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.quote {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.quote strong {
+  font-size: 31px;
+  line-height: 1.2;
+  font-weight: 550;
+  letter-spacing: -0.04em;
+}
+.quote > span {
+  font-size: 12px;
+}
+.connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 16px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  font-size: 11px;
+}
+.bookSummary {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.bookLegend {
+  display: flex;
+  justify-content: space-between;
+}
+.bookLegend strong {
+  margin-left: 5px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.bookBar {
+  display: flex;
+  height: 8px;
+  gap: 2px;
+}
+.bookBar i {
+  background: #5795ff88;
+  border-radius: 4px 0 0 4px;
+  transition: flex-basis 0.3s;
+}
+.bookBar b {
+  flex: 1;
+  background: #ff667588;
+  border-radius: 0 4px 4px 0;
+}
+@media (max-width: 1350px) {
+  .marketHeader {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 500px) {
+  .marketName {
+    gap: 6px;
+  }
+  .marketName h2 {
+    font-size: 13px;
+  }
+}

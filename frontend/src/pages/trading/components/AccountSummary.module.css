@@ -1,0 +1,86 @@
+.pageHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+.pageHeading h1 {
+  margin: 0;
+}
+.accountLabel {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.accountLabel strong {
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.summaryHeading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.summaryHeading span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.metric {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 20px;
+}
+.metric > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.metric strong {
+  display: block;
+  font-size: clamp(18px, 1.6vw, 27px);
+  font-weight: 550;
+  letter-spacing: -0.03em;
+  margin-top: 10px;
+}
+.metric small {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 5px;
+  font-weight: 400;
+}
+.metric p {
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+@media (max-width: 1080px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 500px) {
+  .pageHeading {
+    margin-bottom: 25px;
+  }
+  .summaryHeading span {
+    font-size: 11px;
+  }
+  .metric {
+    padding: 16px;
+  }
+  .metric strong {
+    font-size: 21px;
+  }
+}

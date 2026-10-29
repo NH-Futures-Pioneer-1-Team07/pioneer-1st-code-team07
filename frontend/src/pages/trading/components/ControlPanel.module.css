@@ -1,0 +1,131 @@
+.control {
+  padding: 20px;
+}
+.strategyField {
+  margin: 14px 0 12px;
+}
+.instrument {
+  display: grid;
+  gap: 8px;
+}
+.instrumentLabel {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.instrumentCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #14171c;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #ffffff0d;
+}
+.instrumentCard > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.instrumentCard strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.instrumentCard small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.activeRun {
+  padding: 14px 12px;
+  margin-top: 18px;
+  background: var(--bg-elevated);
+  border-radius: 7px;
+}
+.activeRun > span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.activeRun strong {
+  font-size: 11px;
+  font-weight: 500;
+  display: block;
+  margin: 5px 0;
+}
+.activeRun p {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.performance {
+  margin: 20px 0;
+}
+.performance > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+.performance > div > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.performance strong {
+  font-size: 24px;
+  font-weight: 550;
+}
+.performance strong small {
+  margin-left: 5px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.performance p {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-top: 7px;
+}
+.fullButton {
+  width: 100%;
+  min-height: 44px;
+  font-size: 13px;
+}
+.stopButton {
+  box-shadow: inset 0 0 0 1px rgb(255 113 129 / 35%);
+}
+@media (max-width: 1350px) {
+  .control {
+    padding: 18px 16px;
+  }
+}
+@media (max-width: 1080px) {
+  .control {
+    grid-column: 1/-1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 30px;
+  }
+  .control > .section-head {
+    grid-column: 1/-1;
+  }
+  .activeRun {
+    grid-column: 2;
+    grid-row: 2/5;
+    margin: 0;
+    align-self: start;
+  }
+  .performance {
+    grid-column: 1;
+  }
+  .fullButton {
+    grid-column: 2;
+    grid-row: 5;
+    align-self: end;
+  }
+}
+@media (max-width: 500px) {
+  .control {
+    display: block;
+  }
+  .activeRun {
+    margin-top: 15px;
+  }
+}
