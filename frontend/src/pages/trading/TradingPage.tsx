@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { errorMessage } from "../../apis/client";
 import { useMarketStream } from "../../apis/marketStream";
 import { usePolling } from "../../apis/polling";
+import { useRunStream } from "../../apis/runStream";
 import {
   clearAccount,
   fetchAccount,
   fetchCandles,
   fetchOrderBook,
   fetchQuote,
-  fetchRuns,
   fetchStatus,
   fetchStrategies,
   fetchStrategy,
@@ -54,7 +54,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
   const strategies = usePolling(fetchStrategies, 60000);
   const status = usePolling(fetchStatus, 2000);
   const account = usePolling(fetchAccount, 5000);
-  const runs = usePolling(() => fetchRuns("paper"), 3000);
+  const runStream = useRunStream("paper");
 
   const phase = status.data?.phase ?? "idle";
   const items = strategies.data ?? [];
@@ -120,7 +120,6 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
       setBusy(false);
       status.reload();
       account.reload();
-      runs.reload();
     }
   };
 
@@ -480,11 +479,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
           )}
         </section>
       </div>
-      <RunHistory
-        runs={runs.data}
-        error={runs.error}
-        liveNetPnl={pnl ? pnl.realized_pnl - pnl.fee : null}
-      />
+      <RunHistory stream={runStream} />
       {confirm && (
         <ConfirmDialog
           title={

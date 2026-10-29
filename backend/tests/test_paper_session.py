@@ -321,6 +321,27 @@ def test_전략의_진입_의도가_시장가_주문으로_나가고_체결로_�
     run(scenario)
 
 
+def test_순손익이_바뀔_때만_구독자에게_알린다(tmp_path):
+    async def scenario():
+        h = Harness(tmp_path, Script(on_bar=buy_once(valid_bars=2)))
+        subscriber = h.recorder.events.subscribe(asyncio.get_running_loop(), "paper")
+        await h.send(trade_event(243000.0))
+        await fill_entry(h)
+        h.session.publish()
+        h.session.publish()
+        await asyncio.sleep(0.01)
+
+        messages = []
+        while not subscriber.queue.empty():
+            messages.append(subscriber.queue.get_nowait())
+        pnl = [m["net_pnl"] for m in messages if m["type"] == "pnl"]
+        fee = 243000 * 10 * 5 * 0.001
+        assert pnl[-1] == pytest.approx(-fee)
+        assert len(pnl) == 1
+
+    run(scenario)
+
+
 def test_진행_중인_주문은_전략에_미체결_주문으로_전달된다(tmp_path):
     async def scenario():
         h = Harness(tmp_path, Script(on_bar=buy_once()))

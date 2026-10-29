@@ -176,6 +176,7 @@ class PaperSession:
         self.scores: dict[str, float | None] = {}
         self.logged_errors: dict[str, datetime] = {}
         self.snapshot: dict[str, Any] = {}
+        self._notified_pnl: float | None = None
 
     # ---- 실행 ----
 
@@ -767,6 +768,9 @@ class PaperSession:
         now = self.clock()
         price = self.last_price
         unrealized = self.ledger.unrealized(price) if price is not None else 0.0
+        if self.ledger.net_pnl != self._notified_pnl:
+            self._notified_pnl = self.ledger.net_pnl
+            self.recorder.notify_pnl(self._notified_pnl)
         self.snapshot = {
             "phase": self.phase,
             "feed": self.feed_state,

@@ -123,3 +123,24 @@
 .history .rowButton {
   padding: 0;
 }
+.headTitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.streamStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.streamStatus i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.streamOn {
+  color: var(--positive);
+}
