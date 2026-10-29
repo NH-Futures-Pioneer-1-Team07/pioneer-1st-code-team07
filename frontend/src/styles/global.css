@@ -284,3 +284,33 @@ svg {
     animation-duration: 2.4s;
   }
 }
+
+/* 모의매매·백테스트 이력 표: 컬럼명과 데이터를 왼쪽에 맞추고, 눌러서 상세를 여는 행을 강조한다. */
+.run-table th,
+.run-table td {
+  text-align: left;
+}
+.run-table thead th:first-child,
+.run-table tbody td:first-child {
+  padding-left: 16px;
+}
+.run-table td.index,
+.run-table th:first-child {
+  width: 44px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.run-table tbody tr.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.run-table tbody tr.clickable:hover {
+  background: rgb(255 255 255 / 8%);
+  box-shadow: inset 2px 0 0 #ffb819;
+}
+.run-table tbody tr.selected,
+.run-table tbody tr.selected:hover {
+  background: rgb(255 184 25 / 10%);
+  box-shadow: inset 2px 0 0 #ffb819;
+}

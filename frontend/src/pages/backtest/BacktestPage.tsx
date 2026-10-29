@@ -29,6 +29,7 @@ import DateRangeCalendar from "../../components/common/DateRangeCalendar";
 import EquityChart from "./components/EquityChart";
 import RecordDetail from "../../components/common/RecordDetail";
 import { scrollToPanel } from "../../components/common/scrollToPanel";
+import SplitPanel, { PanelCloseButton } from "../../components/common/SplitPanel";
 import styles from "./BacktestPage.module.css";
 
 const runKey = (run: RunRef) => `${run.strategy_id}/${run.run_id}`;
@@ -471,7 +472,11 @@ export default function BacktestPage() {
         </section>
       </div>
 
-      <div ref={splitRef} className={`${styles.split} ${detailOpen ? styles.splitOpen : ""}`}>
+      <SplitPanel
+        open={detailOpen}
+        innerRef={splitRef}
+        detailLabelledBy={`${formId}-detail-title`}
+        list={
         <section
           className={`panel ${styles.history}`}
           aria-labelledby={`${formId}-history-title`}
@@ -489,7 +494,7 @@ export default function BacktestPage() {
           )}
           {list.length > 0 && (
             <div className="table-wrap">
-              <table className={`data-table ${styles.historyTable}`}>
+              <table className={`data-table run-table ${styles.historyTable}`}>
                 <thead>
                   <tr>
                     <th>번호</th>
@@ -509,14 +514,14 @@ export default function BacktestPage() {
                     return (
                       <tr
                         key={runKey(run)}
-                        className={`${styles.historyRow} ${chosen ? styles.selectedRow : ""}`}
+                        className={`clickable ${chosen ? "selected" : ""}`}
                         onClick={() => {
                           setSelectedKey(runKey(run));
                           setDetailOpen(true);
                           scrollToPanel(splitRef.current);
                         }}
                       >
-                        <td className={styles.historyIndex}>{list.length - index}</td>
+                        <td className="index">{list.length - index}</td>
                         <td>
                           <button
                             type="button"
@@ -564,14 +569,9 @@ export default function BacktestPage() {
             </div>
           )}
         </section>
-
-        <section
-          className={`panel ${styles.detail}`}
-          aria-labelledby={`${formId}-detail-title`}
-          aria-hidden={!detailOpen}
-          inert={!detailOpen}
-        >
-          <div className={styles.detailInner}>
+        }
+        detail={
+          <>
             <div className="section-head">
               <div>
                 <span className="eyebrow">
@@ -579,16 +579,7 @@ export default function BacktestPage() {
                 </span>
                 <h2 id={`${formId}-detail-title`}>실행 상세 기록</h2>
               </div>
-              <div className={styles.detailHead}>
-                <button
-                  type="button"
-                  className={styles.detailClose}
-                  aria-label="실행 상세 기록 닫기"
-                  onClick={() => setDetailOpen(false)}
-                >
-                  <Icon name="close" size={18} />
-                </button>
-              </div>
+              <PanelCloseButton label="실행 상세 기록 닫기" onClick={() => setDetailOpen(false)} />
             </div>
             {reportMeta && (
               <>
@@ -626,9 +617,9 @@ export default function BacktestPage() {
                 </p>
               </>
             )}
-          </div>
-        </section>
-      </div>
+          </>
+        }
+      />
     </div>
   );
 }
