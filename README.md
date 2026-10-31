@@ -218,13 +218,25 @@ pioneer-1st-code-team07/
 - 수익성·위험·거래·비용·곡선 묶음에서 비교할 수치를 복수 선택하면 수치마다 비교 카드 추가
 - 설정값 카드에서 이력 간 값이 다른 파라미터를 강조
 
-| 화면 | 설명 |
-|---|---|
-| ![이력 선택과 수치 선택](docs/images/backtest-compare-select.png) | 이력 선택(기준 A, 비교 B)과 비교할 수치 선택 |
-| ![설정값 비교](docs/images/backtest-compare-settings.png) | 전략 파라미터·슬리피지·수수료율 비교. 다른 값은 강조 |
-| ![수치 카드](docs/images/backtest-compare-cards.png) | 이력별 막대, 기준 대비 증감, 최고값 표시 |
-| ![수익률·낙폭 곡선](docs/images/backtest-compare-curves.png) | 이력별 수익률 곡선과 낙폭 곡선 겹쳐 보기 |
-| ![일별 손익](docs/images/backtest-compare-daily.png) | 같은 날짜끼리 이력별 일별 손익 나란히 보기 |
+![이력 선택과 수치 선택](docs/images/backtest-compare-select.png)
+
+이력 선택(기준 A, 비교 B)과 비교할 수치 선택.
+
+![설정값 비교](docs/images/backtest-compare-settings.png)
+
+전략 파라미터·슬리피지·수수료율 비교. 다른 값은 강조.
+
+![수치 카드](docs/images/backtest-compare-cards.png)
+
+이력별 막대, 기준 대비 증감, 최고값 표시.
+
+![수익률·낙폭 곡선](docs/images/backtest-compare-curves.png)
+
+이력별 수익률 곡선과 낙폭 곡선 겹쳐 보기.
+
+![일별 손익](docs/images/backtest-compare-daily.png)
+
+같은 날짜끼리 이력별 일별 손익 나란히 보기.
 
 ### 공통
 
