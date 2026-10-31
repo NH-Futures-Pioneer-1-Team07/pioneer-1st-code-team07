@@ -219,6 +219,8 @@ export interface BacktestMeta extends RunRef {
   period: { start: string; end: string };
   initial_capital: number;
   assumptions: Assumptions;
+  /** 전략마다 키가 다른 실행 파라미터 */
+  params?: Record<string, unknown>;
   progress?: BacktestProgress;
 }
 
