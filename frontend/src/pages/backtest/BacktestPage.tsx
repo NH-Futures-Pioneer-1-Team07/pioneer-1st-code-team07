@@ -1,4 +1,5 @@
 import ConfigPanel from "./components/ConfigPanel";
+import CompareSection from "./components/CompareSection";
 import HistoryPanel from "./components/HistoryPanel";
 import ResultPanel from "./components/ResultPanel";
 import { useBacktestPage } from "./useBacktestPage";
@@ -22,6 +23,7 @@ export default function BacktestPage() {
         <ResultPanel ctl={ctl} />
       </div>
       <HistoryPanel ctl={ctl} />
+      <CompareSection ctl={ctl} />
     </div>
   );
 }
