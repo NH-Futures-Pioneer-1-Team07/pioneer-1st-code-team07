@@ -1,7 +1,7 @@
 {
   "name": "삼성전자선물 장중 전략",
   "description": "3분봉 추세 방향의 기준 고저점을 돌파하면 거래량 비례 수량을 매매합니다.",
-  "instruments": [{ "name": "삼성전자선물 2026년 11월물", "code": "A116B000", "multiplier": 10 }],
+  "instruments": [{ "name": "삼성전자선물 2026년 11월물", "market": "domestic", "code": "A116B000", "multiplier": 10 }],
   "bar": { "unit": "minute", "size": 3 },
   "parameters": {
     "bar_minutes": { "default": 3, "description": "판단에 쓰는 봉의 분 단위" },

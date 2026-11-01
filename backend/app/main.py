@@ -5,8 +5,8 @@ from fastapi import FastAPI
 
 from app.api import backtests, health, market, runs, strategies, stream, trading
 from app.config import Settings, load_settings
+from app.nh.domestic.market import MarketService
 from app.nh.hub import MarketHub
-from app.nh.market import MarketService
 from app.records.store import RunStore
 from app.runners.paper_service import PaperService
 from app.runners.service import BacktestService

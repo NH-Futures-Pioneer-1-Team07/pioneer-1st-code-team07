@@ -30,6 +30,7 @@ uv run uvicorn app.main:create_app --factory --reload
 
 - `TRADING_ENV`는 필수다. `mock`(모의) 또는 `real`(실전)을 쓴다. 없으면 서버가 시작되지 않고 없는 변수 이름을 알려 준다.
 - `STRATEGIES_DIR`, `RUNS_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`를 쓴다.
+- `NH_OVERSEAS_APP_KEY`, `NH_OVERSEAS_APP_SECRET`는 해외 API(`/trade/v1/overseas/*`)용 키다. 국내 키로는 해외 API가 `EGW016`(호출 권한 없음)으로 거절된다. 해외 전략을 쓸 때만 필요하다.
 - `NH_APP_KEY`, `NH_APP_SECRET`는 NH선물 API를 부를 때만 필요하다. `TRADING_ENV`가 고른 환경(모의 또는 실전)의 키를 넣는다. 없으면 서버는 시작하지만 NH를 부르는 순간 필요한 변수 이름을 알려 주는 오류가 난다.
 - `.env`에는 비밀정보가 들어갈 수 있으므로 커밋하지 않는다.
 
@@ -47,7 +48,7 @@ uv run pytest
 | `strategy_base/` | 전략 인터페이스(`interface.py`), 입력·출력 형식(`models.py`), 전략 폴더 형식(`manifest.py`), 등록(`registry.py`), 공통 지표(`indicators.py`), 테스트 도우미(`testing.py`) |
 | `strategies/` | 전략 폴더. 폴더 하나가 전략 하나다 |
 | `strategies/_template/` | 새 전략을 만들 때 복사하는 템플릿. `_`로 시작하는 폴더는 등록하지 않는다 |
-| `app/nh/` | NH선물 API 호출(인증, 호출 제한, 시세 조회) |
+| `app/nh/` | NH선물 API 호출. 공통(인증, 호출 제한)은 바로 아래, 국내 종목은 `domestic/`, 해외 종목은 `overseas/` |
 | `app/records/` | 실행 기록의 저장·조회와 비밀정보 제거 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `tests/` | 테스트 |
@@ -58,7 +59,7 @@ uv run pytest
    - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week02_samsung_futures_intraday`
 2. `manifest.json`을 고친다.
    - `name`, `description`: UI에 표시한다.
-   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다.
+   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다.
    - `bar`: 봉 단위. 예: `{"unit": "minute", "size": 3}`
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
 3. `strategy.py`의 `Strategy` 클래스에 전략 문서의 판단 규칙을 구현한다.
@@ -99,7 +100,7 @@ uv run pytest
 
 ## NH선물 API
 
-`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다.
+`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 구현할 자리만 있고, 구현 전까지 백테스트·모의매매 시작을 `422`로 거부한다.
 
 | 파일 | 내용 |
 | --- | --- |
@@ -107,9 +108,9 @@ uv run pytest
 | `auth.py` | 접근토큰 발급·보관. 메모리에만 두고 만료 5분 전에 다시 발급한다 |
 | `rate_limit.py` | 주문 5건/초, 계좌 10건/초, 시세 10건/초 간격을 지킨다. 환경마다 따로 세고, 모든 `NHClient`가 제한기 하나(`SHARED_LIMITER`)를 함께 쓴다 |
 | `errors.py` | `TransportError`, `HttpError`, `BusinessError`, `GatewayError`, `NHConfigError` |
-| `quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
-| `account.py` | `fetch_deposit`(예탁금), `fetch_positions`(보유 포지션), `fetch_orders`(주문 내역), `fetch_orderable_quantity`(주문가능수량) |
-| `orders.py` | `place_order`(신규 주문), `cancel_order`(취소 주문). 모의 환경에서만 낸다 |
+| `domestic/quotes.py` | `fetch_minute_bars`(국내 분봉 → `Bar`), `fetch_quote`(현재가·최종거래일) |
+| `domestic/account.py` | `fetch_deposit`(예탁금), `fetch_positions`(보유 포지션), `fetch_orders`(주문 내역), `fetch_orderable_quantity`(주문가능수량) |
+| `domestic/orders.py` | `place_order`(신규 주문), `cancel_order`(취소 주문). 모의 환경에서만 낸다 |
 | `realtime.py` | `RealtimeConnection`. 실시간 웹소켓 연결, 구독, 재연결 |
 | `realtime_data.py` | 실시간 구독(`Feed`)과 수신 데이터(`Trade`, `OrderBook`, `OrderEvent`), 알림(`SubscriptionFailed`, `Reconnected`) |
 | `values.py` | 응답의 문자열 값을 숫자·날짜로 바꾸는 함수 |
@@ -201,7 +202,7 @@ await connection.stop()
 
 시작 요청 본문은 `strategy_id`, `start_date`, `end_date`, `initial_capital`이고, 전략 파라미터를 바꾸려면 `params`를 더한다.
 
-- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 한다.
+- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 하고, `market`은 `domestic`이어야 한다(`overseas`는 `422`).
 - 거부: 없는 전략 `404`, 잘못된 기간·초기자금·파라미터·일봉 전략·종목 정보 부족 `422`, 이미 실행 중 `409`, NH 인증 정보 없음 `503`.
 - 종료일은 오늘보다 이전이어야 하고 기간은 366일 이하다. 시작일과 종료일은 아래 가능 기간 안이어야 하고 밖이면 `422`다.
 - 한 번에 하나만 실행한다. 실행은 백그라운드에서 한다.
@@ -399,11 +400,11 @@ await connection.stop()
 
 ## 시세 조회
 
-`app/nh/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 종목코드는 영문·숫자 6~16자여야 하고(`422`), NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
+`app/nh/domestic/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 종목코드는 영문·숫자 6~16자여야 하고(`422`), NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
 
 | 요청 | 내용 |
 | --- | --- |
-| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
+| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
 | `GET /api/market/<종목코드>/candles?interval=&count=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
 | `GET /api/market/<종목코드>/orderbook` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
 

@@ -1,7 +1,7 @@
 {
   "name": "템플릿 전략",
   "description": "전략 폴더를 만들 때 복사해서 시작하는 예시입니다. 직전 봉의 고가를 종가가 넘으면 고정 수량을 매수하고, 청산 시각이 되면 전량 청산합니다.",
-  "instruments": [{ "name": "삼성전자선물" }],
+  "instruments": [{ "name": "삼성전자선물", "market": "domestic" }],
   "bar": { "unit": "minute", "size": 3 },
   "parameters": {
     "quantity": { "default": 1, "description": "진입당 수량(계약)" },

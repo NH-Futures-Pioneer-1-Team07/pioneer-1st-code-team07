@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from app.nh.market_hours import market_session
+from app.nh.domestic.market_hours import market_session
 
 NAME = "삼성전자 F 202611 ( 10)"
 WEEKDAY = (2026, 10, 28)

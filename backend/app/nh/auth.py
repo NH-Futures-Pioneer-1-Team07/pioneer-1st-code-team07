@@ -63,12 +63,14 @@ class TokenManager:
         app_key: str | None,
         app_secret: str | None,
         client: httpx.Client,
+        key_names: str = "NH_APP_KEY, NH_APP_SECRET",
         clock: Callable[[], datetime] = now_kst,
     ):
         self._base_url = base_url
         self._app_key = app_key
         self._app_secret = app_secret
         self._client = client
+        self._key_names = key_names
         self._clock = clock
         self._lock = threading.Lock()
         self._token: Token | None = None
@@ -87,7 +89,7 @@ class TokenManager:
 
     def _issue(self) -> Token:
         if not self._app_key or not self._app_secret:
-            raise NHConfigError("NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+            raise NHConfigError(f"{self._key_names} 환경변수를 설정하세요")
         # 토큰 발급만 form 형식을 받는다. JSON으로 보내면 본문을 읽지 못한다.
         form = {"grant_type": "client_credentials", "appkey": self._app_key, "appsecret": self._app_secret}
         try:

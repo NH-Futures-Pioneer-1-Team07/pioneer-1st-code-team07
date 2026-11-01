@@ -9,10 +9,17 @@ from typing import Any
 from app.config import Settings
 from app.nh.auth import KST
 from app.nh.client import NHClient
+from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 from app.nh.errors import NHError
-from app.nh.quotes import fetch_minute_bars, fetch_quote
+from app.nh.overseas import OVERSEAS_UNSUPPORTED
 from app.records.store import RunRecorder, RunStore
-from app.runners.availability import AvailableRange, NHProbe, ProbeSource, RangeCache, sparse_below
+from app.runners.availability import (
+    AvailableRange,
+    NHProbe,
+    ProbeSource,
+    RangeCache,
+    sparse_below,
+)
 from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
 from app.runners.minute_backtest import MinuteBacktestEngine
 from strategy_base.manifest import Manifest
@@ -114,6 +121,8 @@ class BacktestService:
         if registered is None:
             raise BacktestRejected(404, "전략을 찾을 수 없습니다")
         instrument = registered.manifest.instruments[0]
+        if instrument.market != "domestic":
+            raise BacktestRejected(422, OVERSEAS_UNSUPPORTED)
         if not instrument.code:
             raise BacktestRejected(422, "전략의 종목에 종목코드가 필요합니다")
         if not (self._settings.nh_app_key and self._settings.nh_app_secret):
@@ -121,7 +130,7 @@ class BacktestService:
         found = self._range(instrument.code, registered.manifest.bar.size)
         return {
             "strategy_id": strategy_id,
-            "instrument": {"name": instrument.name, "code": instrument.code},
+            "instrument": {"name": instrument.name, "market": instrument.market, "code": instrument.code},
             "start": found.start.isoformat() if found else None,
             "end": found.end.isoformat() if found else None,
             "last_trading_day": found.last_trading_day.isoformat() if found and found.last_trading_day else None,
@@ -158,6 +167,8 @@ class BacktestService:
             raise BacktestRejected(404, "전략을 찾을 수 없습니다")
         manifest = registered.manifest
         instrument = manifest.instruments[0]
+        if instrument.market != "domestic":
+            raise BacktestRejected(422, OVERSEAS_UNSUPPORTED)
         if manifest.bar.unit != "minute":
             raise BacktestRejected(422, "분봉 전략만 백테스트할 수 있습니다")
         if not instrument.code or not instrument.multiplier:
@@ -185,7 +196,7 @@ class BacktestService:
                 strategy_id=strategy_id,
                 strategy_name=manifest.name,
                 mode="backtest",
-                instrument={"name": instrument.name, "code": instrument.code, "multiplier": instrument.multiplier},
+                instrument={"name": instrument.name, "market": instrument.market, "code": instrument.code, "multiplier": instrument.multiplier},
                 params=merged,
                 period={"start": start.isoformat(), "end": end.isoformat()},
                 initial_capital=initial_capital,

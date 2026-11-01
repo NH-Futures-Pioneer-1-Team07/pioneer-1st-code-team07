@@ -10,6 +10,7 @@ class Instrument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
+    market: Literal["domestic", "overseas"]
     code: str | None = None
     multiplier: int | None = Field(default=None, gt=0)
 

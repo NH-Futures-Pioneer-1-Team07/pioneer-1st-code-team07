@@ -6,6 +6,7 @@ export interface StrategySummary {
 
 export interface StrategyInstrument {
   name: string;
+  market: "domestic" | "overseas";
   code: string | null;
   multiplier: number | null;
 }

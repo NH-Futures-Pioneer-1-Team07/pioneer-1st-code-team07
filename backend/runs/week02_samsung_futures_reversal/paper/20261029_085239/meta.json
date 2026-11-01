@@ -5,6 +5,7 @@
   "mode": "paper",
   "instrument": {
     "name": "삼성전자선물 2026년 11월물",
+    "market": "domestic",
     "code": "A116B000",
     "multiplier": 10
   },

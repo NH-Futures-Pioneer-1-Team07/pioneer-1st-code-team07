@@ -6,7 +6,7 @@ import pytest
 from websockets.exceptions import ConnectionClosedError
 
 from app.nh import realtime
-from app.nh.account import OrderStatus
+from app.nh.domestic.account import OrderStatus
 from app.nh.realtime import (
     MAX_SUBSCRIPTIONS,
     RealtimeConnection,

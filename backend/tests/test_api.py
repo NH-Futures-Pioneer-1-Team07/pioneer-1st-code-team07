@@ -34,7 +34,7 @@ def test_전략_상세가_매니페스트_내용을_돌려준다(client):
     assert response.status_code == 200
     body = response.json()
     assert body["name"] == "테스트 전략"
-    assert body["instruments"] == [{"name": "삼성전자선물", "code": "A116B000", "multiplier": None}]
+    assert body["instruments"] == [{"name": "삼성전자선물", "market": "domestic", "code": "A116B000", "multiplier": None}]
     assert body["bar"] == {"unit": "minute", "size": 3}
     assert body["parameters"] == {"quantity": {"default": 5, "description": "수량"}}
 

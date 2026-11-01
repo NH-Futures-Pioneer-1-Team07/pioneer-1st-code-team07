@@ -24,6 +24,7 @@ runs/<전략 id>/<backtest|paper>/<실행 일시>/
 - 기록이 남은 전략은 고치지 않는다.
 - 전략을 바꿀 때는 전략 폴더를 복사해 새 이름으로 만든다. 예: `week02_samsung_futures_intraday` → `week02_samsung_futures_intraday_v2`
 - 옛 전략 폴더와 그 전략의 기록은 그대로 둔다.
+- 종목 메타데이터(`manifest.json`의 `market` 등)를 보강하는 수정은 허용한다. 전략 로직과 파라미터는 고치지 않는다.
 - 기록 경로의 전략 id가 그 기록을 만든 전략 코드를 가리킨다.
 
 ## meta.json
@@ -33,7 +34,7 @@ runs/<전략 id>/<backtest|paper>/<실행 일시>/
 | `run_id` | 실행 일시 폴더 이름 |
 | `strategy_id`, `strategy_name` | 전략 폴더 이름, 화면에 표시하는 이름 |
 | `mode` | `backtest` 또는 `paper` |
-| `instrument` | 종목(`name`, `code`) |
+| `instrument` | 종목(`name`, `market`, `code`, `multiplier`). `market`은 `domestic` 또는 `overseas` |
 | `params` | 실행에 쓴 파라미터 값 |
 | `started_at`, `ended_at` | 시작·종료 시각. 종료 전에는 `ended_at`이 `null` |
 | `status` | `running`(실행 중), `completed`(완료), `interrupted`(서버가 멈춰 중단), `error`(오류로 끝남) |

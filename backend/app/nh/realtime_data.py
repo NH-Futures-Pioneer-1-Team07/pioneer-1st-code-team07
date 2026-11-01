@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.nh.account import STATUS_CODES, OrderStatus
+from app.nh.domestic.account import STATUS_CODES, OrderStatus
 from app.nh.values import count, number, text
 from strategy_base.models import Side
 
