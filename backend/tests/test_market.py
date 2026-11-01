@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.nh.client import NHClient
-from app.nh.market import MarketService
+from app.nh.domestic.market import MarketService
 from tests.test_nh_client import TOKEN_BODY, FakeLimiter
 
 CODE = "A116B000"

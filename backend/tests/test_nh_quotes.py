@@ -5,8 +5,8 @@ import pytest
 
 from app.config import Settings
 from app.nh.client import NHClient
+from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 from app.nh.errors import NHError
-from app.nh.quotes import fetch_minute_bars, fetch_quote
 from tests.test_nh_client import FakeLimiter, Server
 
 

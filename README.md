@@ -123,13 +123,15 @@ pioneer-1st-code-team07/
 │   │   │   ├── auth.py, client.py    인증·HTTP 호출
 │   │   │   ├── rate_limit.py         호출 제한
 │   │   │   ├── errors.py, values.py  오류, 응답 값 숫자·날짜 변환
-│   │   │   ├── quotes.py             국내 분봉·현재가 조회
-│   │   │   ├── account.py            계좌·잔고 조회
-│   │   │   ├── orders.py             주문
 │   │   │   ├── realtime.py, realtime_data.py  실시간 수신·메시지 변환
 │   │   │   ├── hub.py                실시간 연결 하나를 여러 화면이 공유
-│   │   │   ├── market.py             종목 시세·차트·호가 조회 (화면용)
-│   │   │   └── market_hours.py       장 종류·운영 시간
+│   │   │   ├── domestic/             국내 종목
+│   │   │   │   ├── quotes.py         분봉·현재가 조회
+│   │   │   │   ├── account.py        계좌·잔고 조회
+│   │   │   │   ├── orders.py         주문
+│   │   │   │   ├── market.py         종목 시세·차트·호가 조회 (화면용)
+│   │   │   │   └── market_hours.py   장 종류·운영 시간
+│   │   │   └── overseas/             해외 종목 (구현 전, 해외 키 필요)
 │   │   ├── runners/                  전략 실행
 │   │   │   ├── backtest.py           백테스트 시뮬레이션
 │   │   │   ├── service.py            백테스트 실행 서비스

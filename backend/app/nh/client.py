@@ -9,7 +9,7 @@
 
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -17,6 +17,8 @@ from app.config import Settings
 from app.nh.auth import TokenManager
 from app.nh.errors import BusinessError, GatewayError, HttpError, TransportError
 from app.nh.rate_limit import SHARED_LIMITER, Limit, RateLimiter
+
+Market = Literal["domestic", "overseas"]
 
 BASE_URLS = {"mock": "https://apidemo.futures.co.kr", "real": "https://api.futures.co.kr"}
 TIMEOUT = httpx.Timeout(10.0)
@@ -37,11 +39,18 @@ class NHClient:
         self,
         settings: Settings,
         *,
+        market: Market = "domestic",
         http_client: httpx.Client | None = None,
         limiter: RateLimiter | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ):
         self.environment = settings.trading_env
+        self.market = market
+        key, secret = (
+            (settings.nh_overseas_app_key, settings.nh_overseas_app_secret)
+            if market == "overseas"
+            else (settings.nh_app_key, settings.nh_app_secret)
+        )
         self.base_url = BASE_URLS[self.environment]
         self._http = http_client or httpx.Client(timeout=TIMEOUT)
         # 클라이언트가 여러 개여도 같은 계정의 호출 한도를 함께 지키도록 기본은 하나를 공유한다.
@@ -49,8 +58,9 @@ class NHClient:
         self._sleep = sleep
         self._tokens = TokenManager(
             base_url=self.base_url,
-            app_key=settings.nh_app_key.get_secret_value() if settings.nh_app_key else None,
-            app_secret=settings.nh_app_secret.get_secret_value() if settings.nh_app_secret else None,
+            app_key=key.get_secret_value() if key else None,
+            app_secret=secret.get_secret_value() if secret else None,
+            key_names="NH_OVERSEAS_APP_KEY, NH_OVERSEAS_APP_SECRET" if market == "overseas" else "NH_APP_KEY, NH_APP_SECRET",
             client=self._http,
         )
 

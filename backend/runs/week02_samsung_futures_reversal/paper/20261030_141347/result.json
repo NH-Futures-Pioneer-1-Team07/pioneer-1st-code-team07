@@ -1,0 +1,28 @@
+{
+  "gross_pnl": 0.0,
+  "fee": 0.0,
+  "fee_estimated": true,
+  "net_pnl": 0.0,
+  "trade_count": 0,
+  "win_count": 0,
+  "loss_count": 0,
+  "open_lots": [],
+  "account": {
+    "before": {
+      "cash": 100000000.0,
+      "total_assets": 100000000.0,
+      "fee": 0.0,
+      "futures_realized_pnl": 0.0,
+      "total_pnl": 0.0
+    },
+    "after": {
+      "cash": 100000000.0,
+      "total_assets": 100000000.0,
+      "fee": 0.0,
+      "futures_realized_pnl": 0.0,
+      "total_pnl": 0.0
+    },
+    "fee_change": 0.0,
+    "realized_pnl_change": 0.0
+  }
+}

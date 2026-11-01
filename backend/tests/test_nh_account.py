@@ -5,14 +5,14 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.nh.account import (
+from app.nh.client import NHClient
+from app.nh.domestic.account import (
     OrderStatus,
     fetch_deposit,
     fetch_orderable_quantity,
     fetch_orders,
     fetch_positions,
 )
-from app.nh.client import NHClient
 from app.nh.errors import NHError
 from strategy_base.models import Side
 from tests.test_nh_client import FakeLimiter, Server

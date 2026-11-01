@@ -6,12 +6,12 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.nh.domestic.account import OrderStatus
 from app.nh.realtime_data import OrderEvent, Trade
-from app.nh.account import OrderStatus
 from app.runners import paper
+from app.runners.clearing import ClearConfig
 from app.runners.paper_service import PaperService
 from strategy_base.models import Side
-from app.runners.clearing import ClearConfig
 from tests.test_clearing import FakeGateway
 from tests.test_clearing import order as gateway_order
 from tests.test_clearing import position as gateway_position
@@ -36,7 +36,7 @@ class Strategy(BaseStrategy):
 MANIFEST = {
     "name": "모의매매 테스트 전략",
     "description": "테스트용",
-    "instruments": [{"name": "삼성전자선물", "code": CODE, "multiplier": 10}],
+    "instruments": [{"name": "삼성전자선물", "market": "domestic", "code": CODE, "multiplier": 10}],
     "bar": {"unit": "minute", "size": 3},
     "parameters": {"quantity": {"default": 1, "description": "수량"}},
 }
@@ -134,7 +134,7 @@ def test_시작하면_식별자를_돌려주고_실시간을_구독하며_상태
     assert status["strategy"] == "모의매매 테스트 전략" and status["instrument"] == CODE
     meta = env.detail(started)["meta"]
     assert meta["status"] == "running" and meta["mode"] == "paper"
-    assert meta["instrument"]["code"] == CODE
+    assert meta["instrument"]["code"] == CODE and meta["instrument"]["market"] == "domestic"
     events = env.journal(started, "event")
     assert events[0]["text"] == "운용 전 계좌" and events[0]["deposit"]["cash"] == 1e8
 
@@ -269,11 +269,19 @@ def test_인증_정보가_없으면_503이다(tmp_path, monkeypatch):
 
 
 def test_종목_정보가_모자라거나_일봉_전략은_거부한다(tmp_path, monkeypatch):
-    no_code = {**MANIFEST, "instruments": [{"name": "삼성전자선물", "code": CODE}]}
+    no_code = {**MANIFEST, "instruments": [{"name": "삼성전자선물", "market": "domestic", "code": CODE}]}
     assert Env(tmp_path, monkeypatch, manifest=no_code).start().status_code == 422
 
     daily = {**MANIFEST, "bar": {"unit": "day", "size": 1}}
     assert Env(tmp_path / "b", monkeypatch, manifest=daily).start().status_code == 422
+
+
+def test_해외_종목은_아직_지원하지_않아_거부한다(tmp_path, monkeypatch):
+    overseas = {**MANIFEST, "instruments": [{"name": "미국 10년 국채", "market": "overseas", "code": "ZNZ26", "multiplier": 1000}]}
+
+    response = Env(tmp_path, monkeypatch, manifest=overseas).start()
+
+    assert response.status_code == 422 and "해외" in response.json()["detail"]
 
 
 def test_전략_파라미터를_덮어쓸_수_있고_기록에_남는다(env):

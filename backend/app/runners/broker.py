@@ -3,7 +3,8 @@
 from datetime import date
 from typing import Protocol
 
-from app.nh.account import (
+from app.nh.client import NHClient
+from app.nh.domestic.account import (
     Deposit,
     OrderableQuantity,
     OrderRecord,
@@ -13,9 +14,8 @@ from app.nh.account import (
     fetch_orders,
     fetch_positions,
 )
-from app.nh.client import NHClient
-from app.nh.orders import cancel_order, place_order
-from app.nh.quotes import Quote, fetch_minute_bars, fetch_quote
+from app.nh.domestic.orders import cancel_order, place_order
+from app.nh.domestic.quotes import Quote, fetch_minute_bars, fetch_quote
 from strategy_base.models import Bar, Side
 
 

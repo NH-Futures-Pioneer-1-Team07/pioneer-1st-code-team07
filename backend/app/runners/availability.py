@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from typing import Protocol
 
 from app.nh.client import NHClient
-from app.nh.quotes import fetch_minute_bars, fetch_quote
+from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 
 MAX_BACK_DAYS = 400
 EMPTY_WEEKS = 3

@@ -30,7 +30,7 @@ class Strategy(BaseStrategy):
 MANIFEST = {
     "name": "서비스 테스트 전략",
     "description": "테스트용",
-    "instruments": [{"name": "삼성전자선물", "code": "A116B000", "multiplier": 10}],
+    "instruments": [{"name": "삼성전자선물", "market": "domestic", "code": "A116B000", "multiplier": 10}],
     "bar": {"unit": "minute", "size": 3},
     "parameters": {"quantity": {"default": 1, "description": "수량"}},
 }
@@ -230,13 +230,23 @@ def test_종료일이_오늘이면_거부한다(make_client):
 
 
 def test_종목_정보가_모자란_전략은_거부한다(make_client):
-    no_multiplier = {**MANIFEST, "instruments": [{"name": "삼성전자선물", "code": "A116B000"}]}
+    no_multiplier = {**MANIFEST, "instruments": [{"name": "삼성전자선물", "market": "domestic", "code": "A116B000"}]}
     client, _ = make_client(manifest=no_multiplier)
 
     response = client.post("/api/backtests", json=body())
 
     assert response.status_code == 422
     assert "거래승수" in response.json()["detail"]
+
+
+def test_해외_종목은_아직_지원하지_않아_거부한다(make_client):
+    overseas = {**MANIFEST, "instruments": [{"name": "미국 10년 국채", "market": "overseas", "code": "ZNZ26", "multiplier": 1000}]}
+    client, _ = make_client(manifest=overseas)
+
+    response = client.post("/api/backtests", json=body())
+
+    assert response.status_code == 422
+    assert "해외" in response.json()["detail"]
 
 
 def test_일봉_전략은_거부한다(make_client):
@@ -311,7 +321,7 @@ def test_가능_기간_조회는_분봉이_있는_첫_날과_마지막_날과_�
     assert response.status_code == 200
     assert response.json() == {
         "strategy_id": "week02_stub",
-        "instrument": {"name": "삼성전자선물", "code": "A116B000"},
+        "instrument": {"name": "삼성전자선물", "market": "domestic", "code": "A116B000"},
         "start": "2026-10-01",
         "end": "2026-10-27",
         "last_trading_day": "2026-11-12",

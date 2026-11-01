@@ -6,7 +6,7 @@ from strategy_base.registry import StrategyRegistry
 VALID_MANIFEST = {
     "name": "테스트 전략",
     "description": "테스트용",
-    "instruments": [{"name": "삼성전자선물", "code": "A116B000"}],
+    "instruments": [{"name": "삼성전자선물", "market": "domestic", "code": "A116B000"}],
     "bar": {"unit": "minute", "size": 3},
     "parameters": {"quantity": {"default": 5, "description": "수량"}},
 }
@@ -39,6 +39,21 @@ def test_폴더를_추가하면_전략으로_등록된다(tmp_path):
     assert [item.id for item in registry.all()] == ["week02_sample"]
     assert registry.errors == {}
     assert registry.get("week02_sample").manifest.default_params() == {"quantity": 5}
+
+
+def test_종목에_market이_없거나_잘못되면_등록하지_않는다(tmp_path):
+    def with_market(**market):
+        return {**VALID_MANIFEST, "instruments": [{"name": "삼성전자선물", "code": "A116B000", **market}]}
+
+    make_folder(tmp_path, "no_market", manifest=with_market())
+    make_folder(tmp_path, "bad_market", manifest=with_market(market="japan"))
+    make_folder(tmp_path, "overseas", manifest=with_market(market="overseas"))
+
+    registry = StrategyRegistry(tmp_path)
+
+    assert [item.id for item in registry.all()] == ["overseas"]
+    assert set(registry.errors) == {"no_market", "bad_market"}
+    assert "market" in registry.errors["no_market"]
 
 
 def test_밑줄이나_점으로_시작하는_폴더는_건너뛴다(tmp_path):
