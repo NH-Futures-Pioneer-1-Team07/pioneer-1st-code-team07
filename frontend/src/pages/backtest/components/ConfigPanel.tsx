@@ -3,8 +3,8 @@ import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
 import Icon from "../../../components/common/Icon";
 import DateRangeCalendar from "../../../components/common/DateRangeCalendar";
-import { formatNumber } from "../../../data/format";
-import { koreanAmount, percentText } from "../../../data/backtestView";
+import { currencyUnit, formatNumber } from "../../../data/format";
+import { capitalHelp, koreanAmount, percentText } from "../../../data/backtestView";
 import { instrumentLabel } from "../../../data/tradingView";
 import styles from "./ConfigPanel.module.css";
 
@@ -27,6 +27,7 @@ export default function ConfigPanel({ ctl }: { ctl: BacktestController }) {
     strategy,
     strategyId,
     paramInputs,
+    currency,
     range,
     assumptions,
     busy,
@@ -125,7 +126,7 @@ export default function ConfigPanel({ ctl }: { ctl: BacktestController }) {
               >
                 <Icon name="info" size={14} />
                 <span role="tooltip" id={`${formId}-capital-help`} className={styles.tip}>
-                  100만 원부터 100억 원까지 입력할 수 있습니다.
+                  {capitalHelp(currency)}
                 </span>
               </span>
             </span>
@@ -139,11 +140,11 @@ export default function ConfigPanel({ ctl }: { ctl: BacktestController }) {
                 onChange={(event) => setCapital(event.target.value.replace(/\D/g, "").slice(0, 11).replace(/^0+/, ""))}
                 aria-describedby={`${formId}-capital-amount`}
               />
-              <span>원</span>
+              <span>{currencyUnit(currency)}</span>
             </div>
           </label>
           <span className={styles.capitalAmount} id={`${formId}-capital-amount`}>
-            {capital ? koreanAmount(Number(capital)) : ""}
+            {capital ? koreanAmount(Number(capital), currency) : ""}
           </span>
         </fieldset>
         <EditableParams inputs={paramInputs} disabled={busy} idPrefix={`${formId}-param`} />

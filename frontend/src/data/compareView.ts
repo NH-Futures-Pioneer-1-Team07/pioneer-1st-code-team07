@@ -1,5 +1,6 @@
 import type { BacktestMeta, BacktestResult, RunSummary } from "../apis/types.ts";
 import { formatMoney, formatNumber } from "./format.ts";
+import type { Currency } from "./format.ts";
 
 /** 한 번에 비교할 수 있는 이력 수 */
 export const MAX_COMPARE = 4;
@@ -24,18 +25,18 @@ export function compareBlocker(base: RunSummary | undefined, run: RunSummary): s
 
 export type Unit = "money" | "rate" | "count" | "ratio";
 
-export function formatValue(unit: Unit, value: number): string {
-  if (unit === "money") return formatMoney(value);
+export function formatValue(unit: Unit, value: number, currency: Currency = "KRW"): string {
+  if (unit === "money") return formatMoney(value, currency);
   if (unit === "rate") return `${(value * 100).toFixed(2)}%`;
   if (unit === "count") return `${formatNumber(value)}건`;
   return value.toFixed(2);
 }
 
 /** 기준과의 차이. 비율은 %p로 쓴다. */
-export function formatDelta(unit: Unit, delta: number): string {
+export function formatDelta(unit: Unit, delta: number, currency: Currency = "KRW"): string {
   const sign = delta > 0 ? "+" : "";
   if (unit === "rate") return `${sign}${(delta * 100).toFixed(2)}%p`;
-  return `${sign}${formatValue(unit, delta)}`;
+  return `${sign}${formatValue(unit, delta, currency)}`;
 }
 
 export type MetricGroup = "수익성" | "위험" | "거래" | "비용" | "곡선";

@@ -1,7 +1,20 @@
 import type { BacktestProgress, BacktestRange, DailyBar, JournalLine } from "../apis/types.ts";
+import type { Currency } from "./format.ts";
 
 export const MIN_CAPITAL = 1_000_000;
 export const MAX_CAPITAL = 10_000_000_000;
+
+/** 통화별 초기자금의 기본값과 입력 범위 */
+export const CAPITAL: Record<Currency, { default: number; min: number; max: number }> = {
+  KRW: { default: 50_000_000, min: MIN_CAPITAL, max: MAX_CAPITAL },
+  USD: { default: 100_000, min: 1_000, max: 10_000_000 },
+};
+
+/** 초기자금 입력 범위 안내 문구 */
+export const capitalHelp = (currency: Currency): string =>
+  currency === "USD"
+    ? "1,000달러부터 1,000만 달러까지 입력할 수 있습니다."
+    : "100만 원부터 100억 원까지 입력할 수 있습니다.";
 export const MAX_SLIPPAGE_TICKS = 20;
 
 /** 0~9999를 `5천`, `1천234`, `250`처럼 읽는다. 1000 미만은 숫자 그대로 쓴다. */
@@ -12,15 +25,16 @@ const underTenThousand = (value: number) => {
 };
 
 /** `150000000` → `1억 5천만 원`. 초기자금의 0 개수를 눈으로 세지 않게 한글 금액으로 읽어 준다. */
-export function koreanAmount(value: number): string {
-  if (!Number.isSafeInteger(value) || value <= 0) return "0 원";
+export function koreanAmount(value: number, currency: Currency = "KRW"): string {
+  const unit = currency === "USD" ? "달러" : "원";
+  if (!Number.isSafeInteger(value) || value <= 0) return `0 ${unit}`;
   const parts = [
     [Math.floor(value / 100_000_000), "억"],
     [Math.floor(value / 10_000) % 10_000, "만"],
     [value % 10_000, ""],
   ] as const;
   const words = parts.filter(([count]) => count > 0).map(([count, unit]) => `${underTenThousand(count)}${unit}`);
-  return `${words.join(" ")} 원`;
+  return `${words.join(" ")} ${unit}`;
 }
 
 /** 데이터 준비를 앞 절반, 계산을 뒤 절반으로 보고 전체 진행률(0~100)을 만든다. */
@@ -56,14 +70,18 @@ export function validateInput(
   capital: string,
   range: BacktestRange | null,
   slippage = "0",
+  currency: Currency = "KRW",
 ): string {
   if (!range?.start || !range.end) return "테스트 가능 기간을 아직 알 수 없습니다.";
   if (!start || !end || start > end) return "시작일과 종료일을 확인해 주세요. 시작일은 종료일보다 늦을 수 없습니다.";
   if (start < range.start || end > range.end)
     return `테스트 기간은 ${range.start}부터 ${range.end}까지 선택해 주세요.`;
   const amount = Number(capital);
-  if (!Number.isSafeInteger(amount) || amount < MIN_CAPITAL || amount > MAX_CAPITAL)
-    return "초기자금은 1,000,000원부터 10,000,000,000원까지 정수로 입력해 주세요.";
+  const limit = CAPITAL[currency];
+  if (!Number.isSafeInteger(amount) || amount < limit.min || amount > limit.max)
+    return currency === "USD"
+      ? "초기자금은 1,000달러부터 10,000,000달러까지 정수로 입력해 주세요."
+      : "초기자금은 1,000,000원부터 10,000,000,000원까지 정수로 입력해 주세요.";
   if (!/^\d+$/.test(slippage) || Number(slippage) > MAX_SLIPPAGE_TICKS)
     return `슬리피지는 0틱부터 ${MAX_SLIPPAGE_TICKS}틱까지 정수로 입력해 주세요.`;
   return "";

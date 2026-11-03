@@ -19,3 +19,16 @@ test("손익에 맞는 색상 클래스를 고른다", () => {
   assert.equal(pnlClass(null), "");
   assert.equal(pnlClass(undefined), "");
 });
+
+test("금액은 종목의 거래 통화로 표시한다", async () => {
+  const { currencyOf, formatMoney, moneyIn, currencyUnit } = await import("./format.ts");
+  assert.equal(currencyOf("overseas"), "USD");
+  assert.equal(currencyOf("domestic"), "KRW");
+  assert.equal(currencyOf(undefined), "KRW");
+  assert.equal(formatMoney(1234567.891), "1,234,568원");
+  assert.equal(formatMoney(103211, "USD"), "$103,211.00");
+  assert.equal(formatMoney(-5.5, "USD"), "-$5.50");
+  assert.equal(moneyIn("USD")(0.4), "$0.40");
+  assert.equal(currencyUnit("USD"), "USD");
+  assert.equal(currencyUnit("KRW"), "원");
+});

@@ -16,7 +16,8 @@ import { fetchJournal } from "../../../apis/trading";
 import type { BacktestMeta, BacktestResult, DailyBar } from "../../../apis/types";
 import { equityPoints, returnText } from "../../../data/backtestView";
 import type { EquityPoint } from "../../../data/backtestView";
-import { formatMoney, formatNumber } from "../../../data/format";
+import { currencyOf, formatMoney, formatNumber, moneyIn } from "../../../data/format";
+import type { Currency } from "../../../data/format";
 import { sideLabel, signed } from "../../../data/tradingView";
 import styles from "./EquityChart.module.css";
 
@@ -45,7 +46,7 @@ function Candle({ x, y, width, height, payload }: { x?: number; y?: number; widt
   );
 }
 
-function EquityTooltip({ active, payload }: TooltipContentProps) {
+function EquityTooltip({ active, payload, currency }: TooltipContentProps & { currency: Currency }) {
   const point = payload?.[0]?.payload as EquityPoint | undefined;
   if (!active || !point) return null;
   const scrolls = point.fills.length > SCROLL_FROM;
@@ -57,9 +58,9 @@ function EquityTooltip({ active, payload }: TooltipContentProps) {
         <strong>{point.day.replaceAll("-", ".")}</strong>
         {point.fills.length > 0 && <span>거래 {point.fills.length}건</span>}
       </header>
-      <div className={styles.equityValue}>{formatMoney(point.equity)}</div>
+      <div className={styles.equityValue}>{formatMoney(point.equity, currency)}</div>
       <div className={`${styles.change} ${pnlClass(point.change)}`}>
-        {signed(point.change, formatMoney)} <small>({returnText(rate)})</small>
+        {signed(point.change, moneyIn(currency))} <small>({returnText(rate)})</small>
       </div>
       {point.bar && (
         <dl className={styles.ohlc}>
@@ -101,6 +102,7 @@ export default function EquityChart({
   meta: BacktestMeta;
   result: BacktestResult | null;
 }) {
+  const currency = currencyOf(meta.instrument.market);
   const frameRef = useRef<HTMLElement>(null);
   const [fills, setFills] = useState<Awaited<ReturnType<typeof fetchJournal>>>([]);
 
@@ -201,7 +203,7 @@ export default function EquityChart({
               strokeDasharray="2 5"
             />
             <Tooltip
-              content={EquityTooltip}
+              content={(props) => <EquityTooltip {...props} currency={currency} />}
               cursor={{ stroke: "var(--text-tertiary)", strokeOpacity: 0.4 }}
               isAnimationActive={false}
               wrapperStyle={{ zIndex: 10 }}
@@ -253,7 +255,7 @@ export default function EquityChart({
       )}
       <figcaption className={styles.screenReader}>
         {result
-          ? `자산 변화: ${formatMoney(result.initial_capital)}에서 ${formatMoney(result.final_equity)}로 변함. 하루마다 한 점이고 거래가 있던 날은 아래쪽 막대로 거래 건수를 표시합니다.`
+          ? `자산 변화: ${formatMoney(result.initial_capital, currency)}에서 ${formatMoney(result.final_equity, currency)}로 변함. 하루마다 한 점이고 거래가 있던 날은 아래쪽 막대로 거래 건수를 표시합니다.`
           : "자산 변화 자료 없음"}
       </figcaption>
     </figure>
