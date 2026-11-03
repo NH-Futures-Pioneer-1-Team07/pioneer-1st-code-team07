@@ -11,8 +11,8 @@ from app.nh.auth import KST
 from app.nh.client import NHClient
 from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 from app.nh.errors import NHError
+from app.nh.overseas.quotes import fetch_minute_bars as fetch_overseas_minutes
 from app.data.vix import load as load_vix
-from app.nh.overseas import OVERSEAS_UNSUPPORTED
 from app.records.store import RunRecorder, RunStore
 from app.runners.availability import (
     AvailableRange,
@@ -24,6 +24,13 @@ from app.runners.availability import (
 from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
 from app.runners.inputs import ExtraInputs
 from app.runners.minute_backtest import MinuteBacktestEngine
+from app.runners.overseas import (
+    OVERSEAS_SESSION_MINUTES,
+    OverseasProbe,
+    has_keys,
+    key_names,
+    overseas_instrument_ready,
+)
 from app.runners.series import DailyFetcher, days_needed, nh_daily_fetcher, warmup_start
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
@@ -97,6 +104,20 @@ def nh_loader(client: NHClient) -> DataLoader:
     return load
 
 
+def overseas_loader(client: NHClient, exchange: str) -> DataLoader:
+    """기간의 분봉을 한 번에 받아 한국 시간 날짜별로 나눈다. 최종거래일은 알 수 없다."""
+
+    def load(code: str, minutes: int, start: date, end: date, on_progress: Callable[[int, int], None]) -> LoadedData:
+        bars = fetch_overseas_minutes(client, exchange, code, minutes=minutes, start=start, end=end)
+        days: dict[date, list[Bar]] = {}
+        for bar in bars:
+            days.setdefault(bar.time.date(), []).append(bar)
+        on_progress(1, 1)
+        return LoadedData(days, None)
+
+    return load
+
+
 class BacktestService:
     def __init__(
         self,
@@ -111,8 +132,8 @@ class BacktestService:
         self._settings = settings
         self._registry = registry
         self._store = store
-        self._loader_factory = loader_factory or (lambda: nh_loader(NHClient(settings)))
-        self._probe_factory = probe_factory or (lambda code, minutes: NHProbe(NHClient(settings), code, minutes))
+        self._loader_factory = loader_factory
+        self._probe_factory = probe_factory
         self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
         self._ranges = RangeCache(lambda: datetime.now(KST).date())
         self._lock = threading.Lock()
@@ -128,13 +149,10 @@ class BacktestService:
         if registered is None:
             raise BacktestRejected(404, "전략을 찾을 수 없습니다")
         instrument = registered.manifest.instruments[0]
-        if instrument.market != "domestic":
-            raise BacktestRejected(422, OVERSEAS_UNSUPPORTED)
         if not instrument.code:
             raise BacktestRejected(422, "전략의 종목에 종목코드가 필요합니다")
-        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
-            raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
-        found = self._range(instrument.code, registered.manifest.bar.size)
+        self._check_market(instrument)
+        found = self._range(instrument, registered.manifest.bar.size)
         return {
             "strategy_id": strategy_id,
             "instrument": {"name": instrument.name, "market": instrument.market, "code": instrument.code},
@@ -144,9 +162,37 @@ class BacktestService:
             "sparse_days": {day.isoformat(): bars for day, bars in found.sparse_days.items()} if found else {},
         }
 
-    def _range(self, code: str, minutes: int) -> AvailableRange | None:
+    def _check_market(self, instrument: Any) -> None:
+        """종목의 시장에 필요한 값과 NH 인증 정보가 있는지 확인한다."""
+        if instrument.market == "overseas":
+            problem = overseas_instrument_ready(instrument)
+            if problem:
+                raise BacktestRejected(422, problem)
+        if not has_keys(self._settings, instrument.market):
+            raise BacktestRejected(503, f"{key_names(instrument.market)} 환경변수를 설정하세요")
+
+    def _make_loader(self, instrument: Any) -> DataLoader:
+        if self._loader_factory is not None:
+            return self._loader_factory()
+        if instrument.market == "overseas":
+            return overseas_loader(NHClient(self._settings, market="overseas"), instrument.exchange or "")
+        return nh_loader(NHClient(self._settings))
+
+    def _make_probe(self, instrument: Any, minutes: int) -> ProbeSource:
+        if self._probe_factory is not None:
+            return self._probe_factory(instrument.code or "", minutes)
+        if instrument.market == "overseas":
+            return OverseasProbe(NHClient(self._settings, market="overseas"), instrument.exchange or "", instrument.code or "", minutes)
+        return NHProbe(NHClient(self._settings), instrument.code or "", minutes)
+
+    def _range(self, instrument: Any, minutes: int) -> AvailableRange | None:
+        session = OVERSEAS_SESSION_MINUTES if instrument.market == "overseas" else None
         try:
-            return self._ranges.get(code, self._probe_factory(code, minutes), sparse_below(minutes))
+            return self._ranges.get(
+                f"{instrument.market}:{instrument.code}",
+                self._make_probe(instrument, minutes),
+                sparse_below(minutes, session) if session else sparse_below(minutes),
+            )
         except NHError as error:
             raise BacktestRejected(502, f"가능 기간을 확인하지 못했습니다: {type(error).__name__}") from error
 
@@ -174,8 +220,6 @@ class BacktestService:
             raise BacktestRejected(404, "전략을 찾을 수 없습니다")
         manifest = registered.manifest
         instrument = manifest.instruments[0]
-        if instrument.market != "domestic":
-            raise BacktestRejected(422, OVERSEAS_UNSUPPORTED)
         if manifest.bar.unit != "minute":
             raise BacktestRejected(422, "분봉 전략만 백테스트할 수 있습니다")
         if not instrument.code or not instrument.multiplier:
@@ -186,9 +230,8 @@ class BacktestService:
         merged = self._merge_params(manifest, params)
         if manifest.backtest and "tick_size" in merged and merged["tick_size"] != manifest.backtest.tick_size:
             raise BacktestRejected(422, "전략의 틱 간격과 백테스트의 틱 간격이 일치해야 합니다")
-        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
-            raise BacktestRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
-        available = self._range(instrument.code, manifest.bar.size)
+        self._check_market(instrument)
+        available = self._range(instrument, manifest.bar.size)
         if available is None:
             raise BacktestRejected(422, "백테스트할 수 있는 분봉이 없습니다")
         if start < available.start or end > available.end:
@@ -281,7 +324,7 @@ class BacktestService:
             recorder.update_meta(progress={"stage": "prepare", "done": done, "total": total})
 
         recorder.update_meta(progress={"stage": "prepare", "done": 0, "total": 0})
-        loader = self._loader_factory()
+        loader = self._make_loader(instrument)
         loaded = loader(instrument.code or "", minutes, start, end, prepare)
         if not loaded.days:
             raise RuntimeError("조회 기간에 분봉 데이터가 없습니다")

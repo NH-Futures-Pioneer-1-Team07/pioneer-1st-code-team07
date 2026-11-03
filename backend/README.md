@@ -114,7 +114,7 @@ uv run python -m app.data.vix
 
 ## NH선물 API
 
-`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 시세(`quotes`)·주문(`orders`)·계좌와 상품 조회(`account`)가 구현되어 있다. 러너는 아직 해외 종목의 백테스트·모의매매 시작을 `422`로 거부한다.
+`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 시세(`quotes`)·주문(`orders`)·계좌와 상품 조회(`account`)가 구현되어 있다. 러너는 해외 종목도 실행한다. 해외 종목은 전략 종목에 `exchange`가 있어야 하고(없으면 `422`) 해외 키가 없으면 `503`이다. 해외 분봉은 국내와 같이 한국 시간이며 봉이 시작한 시각이다(모의환경에서 진행 중인 봉의 거래량이 늘어나는 것으로 확인). 해외 모의매매는 실시간 체결 연결 없이 5초마다 현재가를 조회하고, 최종거래일은 알 수 없어 `None`이다.
 
 | 파일 | 내용 |
 | --- | --- |
@@ -216,7 +216,7 @@ await connection.stop()
 
 시작 요청 본문은 `strategy_id`, `start_date`, `end_date`, `initial_capital`이고, 전략 파라미터를 바꾸려면 `params`를 더한다.
 
-- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 하고, `market`은 `domestic`이어야 한다(`overseas`는 `422`).
+- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 하고, `market`이 `overseas`이면 `exchange`도 있어야 한다.
 - 거부: 없는 전략 `404`, 잘못된 기간·초기자금·파라미터·일봉 전략·종목 정보 부족 `422`, 이미 실행 중 `409`, NH 인증 정보 없음 `503`.
 - 종료일은 오늘보다 이전이어야 하고 기간은 366일 이하다. 시작일과 종료일은 아래 가능 기간 안이어야 하고 밖이면 `422`다.
 - 한 번에 하나만 실행한다. 실행은 백그라운드에서 한다.
