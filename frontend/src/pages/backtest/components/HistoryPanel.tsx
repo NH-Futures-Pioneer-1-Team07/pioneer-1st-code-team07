@@ -5,6 +5,8 @@ import { percentText, statusLabel } from "../../../data/backtestView";
 import RecordDetail from "../../../components/common/RecordDetail";
 import { scrollToPanel } from "../../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
+import { useStrategySpecs } from "../../../apis/useStrategySpecs";
+import RunName from "../../../components/common/RunName";
 import styles from "./HistoryPanel.module.css";
 
 export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
@@ -19,6 +21,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
     splitRef,
     reportMeta,
   } = ctl;
+  const specs = useStrategySpecs(list.map((run) => run.strategy_id));
   const listPanel = (
     <section
       className={`panel ${styles.history}`}
@@ -76,7 +79,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
                       </button>
                     </td>
                     <td>
-                      <strong>{run.strategy_name}</strong>
+                      <RunName run={run} specs={specs} />
                     </td>
                     <td>{instrumentLabel(run.instrument.name)}</td>
                     <td>

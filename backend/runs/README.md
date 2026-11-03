@@ -103,7 +103,7 @@ runs/<전략 id>/<backtest|paper>/<실행 일시>/
 
 | 요청 | 내용 |
 | --- | --- |
-| `GET /api/runs?mode=&strategy_id=` | 실행 목록. 최근에 시작한 순서 |
+| `GET /api/runs?mode=&strategy_id=` | 실행 목록. 최근에 시작한 순서. 항목에는 실행 때 쓴 전략 파라미터(`params`)가 담긴다 |
 | `GET /api/runs/<전략 id>/<모드>/<실행 일시>` | 실행 정보(`meta`)와 결과(`result`) |
 | `GET /api/runs/<전략 id>/<모드>/<실행 일시>/journal?kind=&start=&end=&offset=&limit=` | 기록. `end`는 포함하지 않는다 |
 
