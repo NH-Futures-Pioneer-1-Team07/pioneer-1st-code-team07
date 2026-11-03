@@ -17,6 +17,8 @@ from app.nh.domestic.account import (
 )
 from app.nh.domestic.orders import cancel_order, place_order
 from app.nh.errors import NHError
+from app.nh.overseas import account as overseas_account
+from app.nh.overseas import orders as overseas_orders
 from strategy_base.models import Side
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,30 @@ class NHAccountGateway:
 
     def close(self, code: str, side: Side, quantity: int) -> str:
         return place_order(self._client, code, side, quantity)
+
+
+class OverseasAccountGateway:
+    """해외 모의계좌 전체에 대한 NH 호출. 결과 형식은 `NHAccountGateway`와 같다."""
+
+    def __init__(self, client: NHClient, currency: str = "USD"):
+        self._client = client
+        self.currency = currency
+        self.environment = client.environment
+
+    def deposit(self) -> Deposit:
+        return overseas_account.fetch_deposit(self._client, self.currency)
+
+    def positions(self) -> list[Position]:
+        return overseas_account.fetch_positions(self._client)
+
+    def open_orders(self) -> list[OrderRecord]:
+        return overseas_account.fetch_orders(self._client, open_only=True)
+
+    def cancel(self, code: str, side: Side, quantity: int, order_no: str) -> str:
+        return overseas_orders.cancel_order(self._client, code, side, quantity, order_no)
+
+    def close(self, code: str, side: Side, quantity: int) -> str:
+        return overseas_orders.place_order(self._client, code, side, quantity)
 
 
 @dataclass(frozen=True)

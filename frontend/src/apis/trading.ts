@@ -22,8 +22,8 @@ export const fetchStrategy = (id: string) =>
 export const fetchStatus = () =>
   http.get<TradingStatus>("/api/trading/status").then((r) => r.data);
 
-export const fetchAccount = () =>
-  http.get<AccountView>("/api/trading/account").then((r) => r.data);
+export const fetchAccount = (market: "domestic" | "overseas" = "domestic") =>
+  http.get<AccountView>("/api/trading/account", { params: { market } }).then((r) => r.data);
 
 export const startTrading = (strategyId: string, params?: Record<string, number>) =>
   http
@@ -33,8 +33,8 @@ export const startTrading = (strategyId: string, params?: Record<string, number>
 export const stopTrading = () =>
   http.post<{ phase: string }>("/api/trading/stop").then((r) => r.data);
 
-export const clearAccount = () =>
-  http.post<{ phase: string }>("/api/trading/clear").then((r) => r.data);
+export const clearAccount = (market: "domestic" | "overseas" = "domestic") =>
+  http.post<{ phase: string }>("/api/trading/clear", null, { params: { market } }).then((r) => r.data);
 
 /** 시세를 조회할 종목의 시장. 해외 종목은 거래소 코드도 보낸다. */
 export interface MarketTarget {

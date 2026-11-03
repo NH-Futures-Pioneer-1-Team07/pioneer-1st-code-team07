@@ -13,7 +13,7 @@ import styles from "./TradingPage.module.css";
 
 export default function TradingPage({ onMarketStatus }: { onMarketStatus: (status: MarketStatus) => void }) {
   const ctl = useTradingPage(onMarketStatus);
-  const { confirm, setConfirm, act, runStream } = ctl;
+  const { confirm, setConfirm, act, runStream, market } = ctl;
 
   return (
     <>
@@ -34,7 +34,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
           action={confirm === "all" ? "계좌 전체 정리" : "운용 종료"}
           onClose={() => setConfirm(null)}
           onConfirm={() => {
-            void act(confirm === "all" ? clearAccount : stopTrading);
+            void act(confirm === "all" ? () => clearAccount(market) : stopTrading);
             setConfirm(null);
           }}
         >
