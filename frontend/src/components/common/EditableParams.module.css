@@ -1,0 +1,32 @@
+.params {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.input {
+  position: relative;
+}
+.input input {
+  padding-right: 36px;
+  font-variant-numeric: tabular-nums;
+}
+.input > span {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9299a4;
+}
+.help {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.problem {
+  margin: 0;
+  color: var(--fall);
+  font-size: 11px;
+}

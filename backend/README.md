@@ -65,6 +65,7 @@ uv run pytest
    - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
    - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
+     - 화면에서 시작 전에 바꿀 수 있는 값이면 `editable`을 켜고, 입력칸 이름 `label`, `unit`(`percent`는 0.2를 20%로 표시), 허용 범위 `min`·`max`를 적는다. 모의매매·백테스트 시작 요청의 `params`가 범위를 벗어나거나 숫자가 아니면 `422`로 거부한다.
 3. `strategy.py`의 `Strategy` 클래스에 전략 문서의 판단 규칙을 구현한다.
 4. `README.md`에 전략 문서 링크와 구현 메모를 쓴다.
 5. `tests/`에 전략 테스트를 추가하고 `uv run pytest`로 확인한다.

@@ -485,3 +485,27 @@ def test_추가_봉_계열과_전날_봉_VIX_증거금을_전략에_전달한다
     assert rows[0]["bars"] == 3 and rows[0]["margin"] == 2500
     assert rows[0]["daily"] == 20  # 10/21 이전 일봉
     assert rows[0]["vix"] is not None
+
+
+RANGED = {
+    **MANIFEST,
+    "parameters": {
+        "quantity": {"default": 1, "description": "수량", "editable": True, "unit": "percent", "min": 0.01, "max": 1},
+    },
+}
+
+
+def test_파라미터가_허용_범위를_벗어나면_백테스트를_거부하고_범위_안이면_기록에_남긴다(make_client):
+    client, service = make_client(manifest=RANGED)
+
+    low = client.post("/api/backtests", json=body(params={"quantity": 0}))
+    high = client.post("/api/backtests", json=body(params={"quantity": 1.5}))
+    ok = client.post("/api/backtests", json=body(params={"quantity": 0.5}))
+    service.join(10)
+
+    assert low.status_code == 422 and "1% 이상" in low.json()["detail"]
+    assert high.status_code == 422 and "100% 이하" in high.json()["detail"]
+    assert ok.status_code == 202, ok.text
+    assert run_detail(client, ok.json())["meta"]["params"] == {"quantity": 0.5}
+    detail = client.get("/api/strategies/week02_stub").json()["parameters"]["quantity"]
+    assert (detail["editable"], detail["unit"], detail["min"], detail["max"]) == (True, "percent", 0.01, 1)

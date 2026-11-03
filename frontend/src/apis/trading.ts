@@ -25,8 +25,10 @@ export const fetchStatus = () =>
 export const fetchAccount = () =>
   http.get<AccountView>("/api/trading/account").then((r) => r.data);
 
-export const startTrading = (strategyId: string) =>
-  http.post<RunRef>("/api/trading/start", { strategy_id: strategyId }).then((r) => r.data);
+export const startTrading = (strategyId: string, params?: Record<string, number>) =>
+  http
+    .post<RunRef>("/api/trading/start", { strategy_id: strategyId, ...(params && Object.keys(params).length ? { params } : {}) })
+    .then((r) => r.data);
 
 export const stopTrading = () =>
   http.post<{ phase: string }>("/api/trading/stop").then((r) => r.data);

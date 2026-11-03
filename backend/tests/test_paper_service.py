@@ -449,3 +449,14 @@ def paper_quote(code):
     from app.nh.domestic.quotes import Quote
 
     return Quote(code, 106.5, _date(2026, 12, 21))
+
+
+def test_파라미터가_허용_범위를_벗어나면_모의매매를_거부한다(tmp_path, monkeypatch):
+    ranged = {**MANIFEST, "parameters": {"quantity": {"default": 1, "description": "수량", "editable": True, "min": 1, "max": 5}}}
+    env = Env(tmp_path, monkeypatch, manifest=ranged)
+
+    response = env.start(params={"quantity": 9})
+
+    assert response.status_code == 422 and "5 이하" in response.json()["detail"]
+    assert env.start(params={"quantity": 3}).status_code == 202
+    env.client.post("/api/trading/stop")

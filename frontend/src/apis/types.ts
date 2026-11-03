@@ -13,9 +13,21 @@ export interface StrategyInstrument {
   margin: number | null;
 }
 
+/** 전략 파라미터 명세. `editable`이면 시작 전에 화면에서 바꿀 수 있고 `percent`는 0.2를 20%로 보여 준다. */
+export interface ParameterSpec {
+  default: unknown;
+  description: string;
+  editable: boolean;
+  label: string | null;
+  unit: "percent" | null;
+  min: number | null;
+  max: number | null;
+}
+
 export interface StrategyDetail extends StrategySummary {
   instruments: StrategyInstrument[];
   bar: { unit: string; size: number };
+  parameters: Record<string, ParameterSpec>;
 }
 
 export type MarketSession = "before_open" | "auction" | "regular" | "closed" | "holiday" | "unknown";

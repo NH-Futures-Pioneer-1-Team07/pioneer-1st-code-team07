@@ -61,7 +61,12 @@
     },
     "profit_loss_rate": {
       "default": 0.2,
-      "description": "전체 보유분의 증거금 대비 합산 손익이 이 비율에 이르면 전량 청산(익절·손절 공통)"
+      "description": "전체 보유분의 증거금 대비 합산 손익이 이 비율에 이르면 전량 청산(익절·손절 공통)",
+      "editable": true,
+      "label": "익절·손절 기준",
+      "unit": "percent",
+      "min": 0.01,
+      "max": 1
     }
   }
 }

@@ -279,9 +279,9 @@ class BacktestService:
             raise BacktestRejected(422, f"기간은 {MAX_DAYS}일 이하여야 합니다")
 
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
-        unknown = sorted(set(overrides or {}) - set(manifest.parameters))
-        if unknown:
-            raise BacktestRejected(422, f"전략에 없는 파라미터입니다: {', '.join(unknown)}")
+        problem = manifest.override_problem(overrides)
+        if problem:
+            raise BacktestRejected(422, problem)
         return {**manifest.default_params(), **(overrides or {})}
 
     # ---- 백그라운드 실행 ----

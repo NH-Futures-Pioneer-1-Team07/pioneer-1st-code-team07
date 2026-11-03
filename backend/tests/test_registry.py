@@ -128,3 +128,28 @@ def test_추가_봉_계열은_일봉만_선언할_수_있다():
     for bad in ({"hourly": {"unit": "minute", "size": 60}}, {"Daily": {"unit": "day", "size": 1}}):
         with pytest.raises(ValidationError):
             Manifest.model_validate({**base, "series": bad})
+
+
+def test_파라미터_범위와_단위를_선언하고_요청값을_검증한다():
+    from strategy_base.manifest import Manifest
+
+    manifest = Manifest.model_validate(
+        {
+            "name": "n",
+            "description": "d",
+            "instruments": [{"name": "i", "market": "domestic"}],
+            "bar": {"unit": "minute", "size": 3},
+            "parameters": {
+                "rate": {"default": 0.2, "description": "비율", "editable": True, "unit": "percent", "min": 0.01, "max": 1},
+                "plain": {"default": 1, "description": "범위 없음"},
+            },
+        }
+    )
+
+    assert manifest.override_problem({"rate": 0.5, "plain": "아무 값"}) is None
+    assert manifest.override_problem(None) is None
+    assert "1% 이상" in manifest.override_problem({"rate": 0})
+    assert "100% 이하" in manifest.override_problem({"rate": 1.01})
+    assert "숫자" in manifest.override_problem({"rate": "많이"})
+    assert "숫자" in manifest.override_problem({"rate": True})
+    assert "없는 파라미터" in manifest.override_problem({"unknown": 1})
