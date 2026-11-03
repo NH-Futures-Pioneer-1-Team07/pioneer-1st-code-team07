@@ -150,6 +150,7 @@ class PaperSession:
 
         self.ledger = Ledger(multiplier=config.multiplier, fee_rate=config.fee_rate)
         self.state: dict[str, Any] = {}
+        self.judgment: dict[str, Any] | None = None
         self.bars: list[Bar] = []
         self.seen_bars: set[datetime] = set()
         self.tracked: dict[str, Tracked] = {}
@@ -290,6 +291,7 @@ class PaperSession:
                     found[bar.time] = bar
         self.bars = [found[time] for time in sorted(found)][-self.config.history_bars :]
         self._history_loaded = True
+        await self._refresh_judgment(now)
 
     async def _poll_bars(self, now: datetime) -> None:
         try:
@@ -317,12 +319,10 @@ class PaperSession:
 
     # ---- 전략 호출 ----
 
-    async def _call(
-        self, hook: Callable[[Context], StrategyOutput], decision_now: datetime, now: datetime, price: float | None
-    ) -> None:
+    async def _context(self, decision_now: datetime, price: float | None) -> Context:
         await asyncio.to_thread(self.extras.prepare, decision_now.date())
         reference = price if price is not None else (self.bars[-1].close if self.bars else self.last_price)
-        ctx = Context(
+        return Context(
             now=decision_now,
             bars=list(self.bars),
             params=self.strategy.params,
@@ -334,9 +334,23 @@ class PaperSession:
             unrealized_pnl=self.ledger.unrealized(reference) if reference is not None else None,
             **self.extras.fields(decision_now),
         )
+
+    async def _refresh_judgment(self, now: datetime) -> None:
+        """전략이 설명하는 현재 판단을 갱신한다. 설명하지 못해도 매매에는 영향이 없다."""
+        try:
+            ctx = await self._context(now, None)
+            self.judgment = dict(self.strategy.describe(ctx)) or None
+        except Exception as error:  # noqa: BLE001 - 화면용 설명이 실패해도 운용은 계속한다
+            self._error_event("판단 설명에 실패했습니다", error, now)
+
+    async def _call(
+        self, hook: Callable[[Context], StrategyOutput], decision_now: datetime, now: datetime, price: float | None
+    ) -> None:
+        ctx = await self._context(decision_now, price)
         output = hook(ctx)
         if output.state is not None:
             self.state = dict(output.state)
+        await self._refresh_judgment(now)
         score = next((d.score for d in output.decisions if d.score is not None), None)
         for decision in output.decisions:
             self.recorder.record(
@@ -817,6 +831,7 @@ class PaperSession:
             "lots": [{"entry_id": l.entry_id, "side": l.side.value, "quantity": l.quantity, "entry_price": l.entry_price}
                      for l in self.ledger.lots()],
             "open_orders": [o.order_id for o in self._open_orders()],
+            "judgment": self.judgment,
         }
 
     def _note(self, text: str, level: str = "info", **fields: Any) -> None:

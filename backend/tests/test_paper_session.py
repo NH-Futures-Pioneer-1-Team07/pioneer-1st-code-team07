@@ -1006,3 +1006,69 @@ def test_일반_종료는_계좌에_다른_보유가_남아_있으면_완료로_
         assert h.session.final_status == "error"
 
     run(scenario)
+
+
+def test_전략이_설명한_현재_판단을_상태에_싣는다(tmp_path):
+    async def scenario():
+        class Described(Script):
+            def describe(self, ctx):
+                return {"sections": [{"title": "판단", "headline": f"봉 {len(ctx.bars)}개", "tone": "neutral", "rows": []}]}
+
+        h = Harness(tmp_path, Described())
+        h.broker.bars = [bar(0)]
+
+        await h.at(minutes=3, seconds=10)
+        h.session.publish()
+
+        assert h.session.snapshot["judgment"]["sections"][0]["headline"] == "봉 1개"
+
+    run(scenario)
+
+
+def test_판단을_설명하지_않는_전략의_judgment는_None이다(tmp_path):
+    async def scenario():
+        h = Harness(tmp_path)
+        h.broker.bars = [bar(0)]
+
+        await h.at(minutes=3, seconds=10)
+        h.session.publish()
+
+        assert h.session.snapshot["judgment"] is None
+
+    run(scenario)
+
+
+def test_판단_설명이_실패해도_운용은_계속된다(tmp_path):
+    async def scenario():
+        class Broken(Script):
+            def describe(self, ctx):
+                raise RuntimeError("설명 실패")
+
+        h = Harness(tmp_path, Broken())
+        h.broker.bars = [bar(0)]
+
+        await h.at(minutes=3, seconds=10)
+
+        assert len(h.strategy.bar_calls) == 1
+        assert h.session.judgment is None
+
+    run(scenario)
+
+
+def test_history_bars가_있으면_첫_봉_전에도_판단을_설명한다(tmp_path):
+    async def scenario():
+        class Described(Script):
+            def describe(self, ctx):
+                return {"sections": [{"title": "판단", "headline": f"전날 봉 {len(ctx.bars)}개", "tone": "neutral", "rows": []}]}
+
+        config = dataclasses.replace(CONFIG, history_bars=2)
+        h = Harness(tmp_path, Described(), config=config)
+        h.broker.bars = [Bar(datetime(2026, 10, 27, 15, 0), 1, 1, 1, 1, 1), Bar(datetime(2026, 10, 27, 15, 3), 2, 2, 2, 2, 2)]
+
+        await h.at(seconds=10)  # 첫 봉이 마감되기 전
+        h.session.publish()
+
+        assert h.session.snapshot["judgment"]["sections"][0]["headline"] == "전날 봉 2개"
+        assert h.strategy.bar_calls == []
+
+    run(scenario)

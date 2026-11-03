@@ -74,6 +74,8 @@ uv run pytest
 
 - 전략은 `Context`를 읽고 `StrategyOutput`을 돌려준다. 형식은 `strategy_base/models.py`에 있다.
 - 봉이 마감될 때 `on_bar(ctx)`가 호출된다. 장중 가격 갱신에 반응해야 하면 `on_price(ctx)`도 구현한다.
+- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다.
+- 판단의 근거 수치는 `Decision.detail`에 담는다. 판단 기록(`decision`)의 `detail`로 모의매매·백테스트 기록에 남는다. 주문 사유(`OrderIntent.reason`)는 체결 기록(`fill`)에 그대로 남으므로 판단 요약을 사유에 포함하면 체결 기록에서도 볼 수 있다.
 - 입력 `ctx`: 완성된 봉(`bars`, 마지막이 판단 대상), 현재 시각, 종목 최종거래일, 진입분별 포지션(`lots`), 미체결 주문(`open_orders`), 파라미터, 직전 호출의 상태(`state`)
 - 추가 입력 `ctx`: 추가 봉 계열(`series`, 일봉은 오늘 이전 날짜만), 직전 거래일 종가 VIX(`vix`), 계약당 기준 증거금(`margin`), 보유분 전체의 평가손익(`unrealized_pnl`, 수수료 제외). 값을 알 수 없으면 `None`이다.
 - 출력 `StrategyOutput`: 주문 의도(`orders`), 미체결 취소 요청(`cancels`), 매매 판단 기록(`decisions`), 다음 호출에 넘길 상태(`state`)
@@ -265,7 +267,7 @@ await connection.stop()
 | --- | --- |
 | `POST /api/trading/start` | 운용을 시작하고 `202`와 실행 식별자를 돌려준다. 본문은 `strategy_id`(와 선택으로 `params`) |
 | `POST /api/trading/stop` | 정상 종료를 시작한다 |
-| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전체 정리 진행과 결과(`clear`) |
+| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전략이 설명한 현재 판단(`judgment`, 설명하지 않는 전략은 `null`), 전체 정리 진행과 결과(`clear`) |
 | `GET /api/trading/account` | NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 운용 중이 아니어도 조회된다 |
 | `POST /api/trading/clear` | 미체결 취소·전체 포지션 청산을 시작한다 |
 
