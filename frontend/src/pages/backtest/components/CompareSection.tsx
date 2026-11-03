@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStrategySpecs } from "../../../apis/useStrategySpecs";
+import RunName from "../../../components/common/RunName";
 import {
   Bar,
   BarChart,
@@ -166,6 +167,16 @@ function CurveCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
   );
 }
 
+/** 불러온 비교 이력의 전략 이름. 사용한 파라미터가 있으면 괄호로 붙인다. */
+function EntryName({ entry, specs }: { entry: CompareEntry; specs: ReturnType<typeof useStrategySpecs> }) {
+  return (
+    <RunName
+      run={{ strategy_id: entry.strategyId, strategy_name: entry.strategyName, params: entry.meta.params }}
+      specs={specs}
+    />
+  );
+}
+
 function ParamCard({ slots }: { slots: Slot[] }) {
   const specs = useStrategySpecs(slots.map((slot) => slot.entry.strategyId));
   const rows = paramRows(slots.map((slot) => slot.entry), specs);
@@ -186,7 +197,9 @@ function ParamCard({ slots }: { slots: Slot[] }) {
           <tr>
             <td>전략</td>
             {slots.map((slot) => (
-              <td key={slot.entry.key}>{slot.entry.strategyName}</td>
+              <td key={slot.entry.key}>
+                <EntryName entry={slot.entry} specs={specs} />
+              </td>
             ))}
           </tr>
           {rows.map((row) => (
@@ -211,6 +224,7 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
   const [loaded, setLoaded] = useState<Record<string, BacktestRun>>({});
   const [failed, setFailed] = useState<string[]>([]);
 
+  const specs = useStrategySpecs(list.map((run) => run.strategy_id));
   const candidates = list.filter((run) => run.status === "completed");
   const byKey = new Map(list.map((run) => [runKey(run), run]));
   const chosen = keys.flatMap((key) => byKey.get(key) ?? []);
@@ -318,7 +332,9 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
                     </td>
                     <td className={styles.reason}>{picked ? (index === 0 ? "기준" : "선택됨") : (reason ?? "가능")}</td>
                     <td>{formatDateTime(run.started_at)}</td>
-                    <td>{run.strategy_name}</td>
+                    <td>
+                      <RunName run={run} specs={specs} />
+                    </td>
                     <td>{instrumentLabel(run.instrument.name)}</td>
                     <td>{run.period ? `${dotted(run.period.start)} — ${dotted(run.period.end)}` : "—"}</td>
                     <td className={pnlClass(run.net_pnl)}>
@@ -380,7 +396,7 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
                   <li key={slot.entry.key}>
                     <RunTag slot={slot} />
                     <span>
-                      {slot.entry.strategyName} · {formatDateTime(slot.entry.meta.started_at)}
+                      <EntryName entry={slot.entry} specs={specs} /> · {formatDateTime(slot.entry.meta.started_at)}
                     </span>
                   </li>
                 ))}
