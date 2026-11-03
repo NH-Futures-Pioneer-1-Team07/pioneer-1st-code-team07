@@ -1,7 +1,7 @@
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 STRATEGY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 SERIES_NAME_PATTERN = STRATEGY_ID_PATTERN
@@ -52,6 +52,30 @@ class ParameterSpec(BaseModel):
         return None
 
 
+class ChartLine(BaseModel):
+    """모의매매 차트에 그릴 판단용 선. `series`가 `bar`이면 판단 기준 봉(`bar`)의 차트에, `daily`이면 일봉 차트에 그린다.
+
+    - `sma`: 종가의 단순이동평균. `period`개 봉을 쓴다.
+    - `previous_close`: 직전 거래일 종가를 지나는 가로선(일봉 계열만).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    series: Literal["bar", "daily"]
+    kind: Literal["sma", "previous_close"]
+    period: int | None = Field(default=None, gt=0)
+    label: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check(self) -> "ChartLine":
+        if self.kind == "sma" and self.period is None:
+            raise ValueError(f"{self.label}: 이동평균 선에는 period가 필요합니다")
+        if self.kind == "previous_close" and self.series != "daily":
+            raise ValueError(f"{self.label}: 직전 거래일 종가선은 일봉 계열에만 그릴 수 있습니다")
+        return self
+
+
 class BacktestSpec(BaseModel):
     """별도 가격 봉 재현을 사용하는 전략의 선택적 실행 설정."""
 
@@ -66,6 +90,7 @@ class Manifest(BaseModel):
 
     - `bar`: 판단 기준 봉. 이 봉이 마감될 때마다 `on_bar`가 호출된다.
     - `series`: 판단에 함께 쓰는 추가 봉 계열(현재 일봉만). `Context.series[이름]`으로 받는다.
+    - `chart_lines`: 모의매매 차트에 그릴 판단용 선과 마우스를 올렸을 때의 설명.
     - `history_bars`: 장이 열린 첫 봉에서도 판단할 수 있도록 전날까지의 `bar` 봉을 이만큼 앞에 이어 준다.
     """
 
@@ -77,6 +102,7 @@ class Manifest(BaseModel):
     bar: BarSpec
     series: dict[str, BarSpec] = Field(default_factory=dict)
     history_bars: int = Field(default=0, ge=0)
+    chart_lines: list[ChartLine] = Field(default_factory=list)
     parameters: dict[str, ParameterSpec] = Field(default_factory=dict)
     backtest: BacktestSpec | None = None
 

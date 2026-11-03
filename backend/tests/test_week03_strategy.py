@@ -361,3 +361,18 @@ def test_describe는_값을_모르면_계산_불가와_대시로_표시한다():
     assert sections[0]["headline"] == "계산 불가" and sections[0]["rows"][0] == ["직전 거래일 종가", "—"]
     assert sections[1]["headline"] == "계산 불가" and sections[1]["tone"] == "neutral"
     assert sections[2]["headline"] == "신규 진입 0/—계약" and ["VIX(직전 거래일 종가)", "—"] in sections[2]["rows"]
+
+
+def test_차트_선_선언이_현재_판단_항목_이름과_맞는다():
+    lines = {line.label: line for line in MANIFEST.chart_lines}
+    sections = STRATEGY.describe(context(minute_bars(CROSS_UP)))["sections"]
+    names = {name for section in sections for name, _ in section["rows"]}
+
+    assert set(lines) <= names  # 화면이 이름으로 설명을 찾는다
+    assert {(l.series, l.kind, l.period) for l in lines.values()} == {
+        ("daily", "previous_close", None),
+        ("daily", "sma", 15),
+        ("daily", "sma", 30),
+        ("bar", "sma", 5),
+        ("bar", "sma", 20),
+    }

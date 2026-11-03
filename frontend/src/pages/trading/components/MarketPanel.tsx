@@ -1,7 +1,7 @@
 import type { TradingController } from "../useTradingPage";
 import PriceChart from "./PriceChart";
 import { dash, pnlClass, won } from "../../../data/format";
-import { instrumentLabel } from "../../../data/tradingView";
+import { instrumentLabel, linesForInterval, resolveLines } from "../../../data/tradingView";
 import styles from "./MarketPanel.module.css";
 
 export default function MarketPanel({ ctl }: { ctl: TradingController }) {
@@ -18,7 +18,15 @@ export default function MarketPanel({ ctl }: { ctl: TradingController }) {
     totalBid,
     askShare,
     receivedAt,
+    detail,
   } = ctl;
+  const barMinutes = detail.data?.bar.unit === "minute" ? detail.data.bar.size : null;
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+  const lines = resolveLines(
+    linesForInterval(detail.data?.chart_lines ?? [], interval, barMinutes),
+    candles.data ?? [],
+    today,
+  );
   return (
     <section className={`panel ${styles.market}`} aria-labelledby="market-title">
       <div className={styles.marketHeader}>
@@ -58,6 +66,7 @@ export default function MarketPanel({ ctl }: { ctl: TradingController }) {
         interval={interval}
         onIntervalChange={setInterval}
         error={candles.error}
+        lines={lines}
       />
       <div className={styles.bookSummary}>
         <div className={styles.bookLegend}>

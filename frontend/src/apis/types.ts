@@ -24,10 +24,20 @@ export interface ParameterSpec {
   max: number | null;
 }
 
+/** 모의매매 차트에 그릴 전략의 판단용 선. `bar`는 판단 기준 봉 차트, `daily`는 일봉 차트에 그린다. */
+export interface ChartLineSpec {
+  series: "bar" | "daily";
+  kind: "sma" | "previous_close";
+  period: number | null;
+  label: string;
+  description: string;
+}
+
 export interface StrategyDetail extends StrategySummary {
   instruments: StrategyInstrument[];
   bar: { unit: string; size: number };
   parameters: Record<string, ParameterSpec>;
+  chart_lines: ChartLineSpec[];
 }
 
 export type MarketSession = "before_open" | "auction" | "regular" | "closed" | "holiday" | "unknown";
