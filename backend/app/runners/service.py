@@ -334,7 +334,11 @@ class BacktestService:
             price_data = loader(instrument.code or "", manifest.backtest.price_minutes, start, end, prepare)
             if set(price_data.days) != set(loaded.days):
                 raise ValueError("신호 봉과 1분 가격 자료의 거래일이 일치하지 않습니다")
-        tick = manifest.backtest.tick_size if manifest.backtest else infer_tick(loaded.days)
+        tick = (
+            manifest.backtest.tick_size
+            if manifest.backtest
+            else instrument.tick_size or infer_tick(loaded.days)
+        )
         described = describe_assumptions(self._settings, tick, slippage_ticks)
         if price_data is not None:
             described["fill"]["on_bar"] = "봉 마감 청산 주문은 다음 관측 1분 시가에 체결. 진입은 다음 가격에서 조건 검사. 당일 청산 미완료는 오류"

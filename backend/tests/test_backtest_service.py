@@ -509,3 +509,20 @@ def test_파라미터가_허용_범위를_벗어나면_백테스트를_거부하
     assert run_detail(client, ok.json())["meta"]["params"] == {"quantity": 0.5}
     detail = client.get("/api/strategies/week02_stub").json()["parameters"]["quantity"]
     assert (detail["editable"], detail["unit"], detail["min"], detail["max"]) == (True, "percent", 0.01, 1)
+
+
+def test_종목에_호가_단위가_있으면_추정하지_않고_그_값을_쓴다(make_client):
+    with_tick = {**MANIFEST, "instruments": [{**MANIFEST["instruments"][0], "tick_size": 0.015625}]}
+    client, service = make_client(manifest=with_tick)
+    started = client.post("/api/backtests", json=body()).json()
+    service.join(10)
+
+    assert run_detail(client, started)["meta"]["assumptions"]["slippage"]["tick_size"] == 0.015625
+
+
+def test_종목에_호가_단위가_없으면_봉_가격으로_추정한다(make_client):
+    client, service = make_client()
+    started = client.post("/api/backtests", json=body()).json()
+    service.join(10)
+
+    assert run_detail(client, started)["meta"]["assumptions"]["slippage"]["tick_size"] == 500.0

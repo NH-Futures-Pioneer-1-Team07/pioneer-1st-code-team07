@@ -62,6 +62,7 @@ uv run pytest
    - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다. 해외 종목은 `exchange`(예: `FCME`)도 쓴다.
    - `bar`: 판단 기준 봉 단위. 봉이 마감될 때마다 `on_bar`가 호출된다. 예: `{"unit": "minute", "size": 3}`
    - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
+   - `instruments[].tick_size`(선택): 호가 단위. 백테스트의 슬리피지와 가격 경로가 쓰며, 없으면 봉 가격 차이로 추정한다(소수 둘째 자리까지만 구별하므로 ZN처럼 1/64 단위인 종목은 적어야 한다).
    - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
    - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
