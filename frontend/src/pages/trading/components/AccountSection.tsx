@@ -1,6 +1,6 @@
 import type { TradingController } from "../useTradingPage";
 import Icon from "../../../components/common/Icon";
-import { dash, formatMoney, pnlClass, won } from "../../../data/format";
+import { dash, moneyIn, pnlClass, won } from "../../../data/format";
 import { formatClock, instrumentLabel, sideLabel, signed, statusMessage } from "../../../data/tradingView";
 import styles from "./AccountSection.module.css";
 
@@ -16,6 +16,7 @@ export default function AccountSection({ ctl }: { ctl: TradingController }) {
     clearing,
     positions,
     openOrders,
+    currency,
   } = ctl;
   return (
     <>
@@ -69,7 +70,7 @@ export default function AccountSection({ ctl }: { ctl: TradingController }) {
                   <td>{won(position.avg_price)}</td>
                   <td>{won(position.last_price)}</td>
                   <td className={pnlClass(position.pnl)}>
-                    {position.pnl === null ? dash : signed(position.pnl, formatMoney)}
+                    {position.pnl === null ? dash : signed(position.pnl, moneyIn(currency))}
                   </td>
                 </tr>
               ))}

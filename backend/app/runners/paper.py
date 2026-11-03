@@ -64,6 +64,7 @@ class PaperConfig:
     session_anchor: time = time(8, 45)
     history_bars: int = 0
     history_days: int = 10
+    market: str = "domestic"
 
 
 @dataclass(frozen=True)

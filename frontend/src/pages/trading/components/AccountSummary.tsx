@@ -1,13 +1,18 @@
 import type { TradingController } from "../useTradingPage";
 import Icon from "../../../components/common/Icon";
-import { won } from "../../../data/format";
+import { formatMoney, won } from "../../../data/format";
 import styles from "./AccountSummary.module.css";
 
 export default function AccountSummary({ ctl }: { ctl: TradingController }) {
   const {
     account,
     deposit,
+    currency,
   } = ctl;
+  // 원은 숫자 뒤에 작은 단위로, 달러는 `$` 형식으로 보여 준다.
+  const amount = (value: number | null | undefined) =>
+    currency === "USD" ? (value === null || value === undefined ? "—" : formatMoney(value, currency)) : won(value);
+  const unit = currency === "USD" ? null : <small>원</small>;
   return (
     <>
   <div className={styles.pageHeading}>
@@ -32,32 +37,32 @@ export default function AccountSummary({ ctl }: { ctl: TradingController }) {
     <div className={styles.metric}>
       <span>예탁자산</span>
       <strong>
-        {won(deposit?.total_assets)}
-        <small>원</small>
+        {amount(deposit?.total_assets)}
+        {unit}
       </strong>
       <p>계좌에 맡긴 현금에 평가손익을 더한 전체 자산</p>
     </div>
     <div className={styles.metric}>
       <span>예탁현금</span>
       <strong>
-        {won(deposit?.cash)}
-        <small>원</small>
+        {amount(deposit?.cash)}
+        {unit}
       </strong>
       <p>계좌에 맡겨 둔 현금</p>
     </div>
     <div className={styles.metric}>
       <span>주문 가능 금액</span>
       <strong>
-        {won(deposit?.order_available_total)}
-        <small>원</small>
+        {amount(deposit?.order_available_total)}
+        {unit}
       </strong>
       <p>새 주문에 쓸 수 있는 금액</p>
     </div>
     <div className={styles.metric}>
       <span>사용 증거금</span>
       <strong>
-        {won(deposit?.initial_margin)}
-        <small>원</small>
+        {amount(deposit?.initial_margin)}
+        {unit}
       </strong>
       <p>보유 포지션과 미체결 주문에 묶인 금액</p>
     </div>

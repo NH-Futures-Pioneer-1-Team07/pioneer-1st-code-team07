@@ -460,3 +460,65 @@ def test_파라미터가_허용_범위를_벗어나면_모의매매를_거부한
     assert response.status_code == 422 and "5 이하" in response.json()["detail"]
     assert env.start(params={"quantity": 3}).status_code == 202
     env.client.post("/api/trading/stop")
+
+
+# ---- 해외 모의계좌 ----
+
+
+def overseas_env(tmp_path, monkeypatch):
+    env = Env(tmp_path, monkeypatch, nh_overseas_app_key="ok", nh_overseas_app_secret="os")
+    env.overseas_gateway = FakeGateway()
+    env.service._overseas_gateway = env.overseas_gateway
+    return env
+
+
+def test_해외_계좌_조회는_해외_모의계좌를_돌려주고_국내_계좌와_섞이지_않는다(tmp_path, monkeypatch):
+    env = overseas_env(tmp_path, monkeypatch)
+    env.gateway.positions_list = [gateway_position(CODE, Side.BUY, 3)]
+    env.overseas_gateway.positions_list = [gateway_position("ZNZ26", Side.SELL, 4)]
+
+    overseas = env.client.get("/api/trading/account", params={"market": "overseas"}).json()
+    domestic = env.client.get("/api/trading/account").json()
+
+    assert [p["code"] for p in overseas["positions"]] == ["ZNZ26"]
+    assert [p["code"] for p in domestic["positions"]] == [CODE]
+
+
+def test_해외_전체_정리는_해외_계좌만_정리한다(tmp_path, monkeypatch):
+    env = overseas_env(tmp_path, monkeypatch)
+    env.gateway.positions_list = [gateway_position(CODE, Side.BUY, 3)]
+    env.overseas_gateway.orders_list = [gateway_order("1", "ZNZ26", Side.BUY, 2)]
+    env.overseas_gateway.positions_list = [gateway_position("ZNZ26", Side.SELL, 4)]
+
+    response = env.client.post("/api/trading/clear", params={"market": "overseas"})
+    env.service.join(10)
+
+    assert response.status_code == 202
+    assert env.status()["clear"]["result"]["status"] == "completed"
+    assert env.overseas_gateway.close_calls == [("ZNZ26", Side.BUY, 4)]
+    assert env.overseas_gateway.positions_list == []
+    assert env.gateway.close_calls == [] and len(env.gateway.positions_list) == 1
+
+
+def test_다른_시장의_전체_정리는_운용_중인_전략을_멈추지_않는다(tmp_path, monkeypatch):
+    env = overseas_env(tmp_path, monkeypatch)
+    env.start()
+    env.wait(lambda: env.hub and env.hub[0].started)
+    session = env.service._session
+
+    env.client.post("/api/trading/clear", params={"market": "overseas"})
+    env.service.join(10)
+
+    assert session.phase == paper.RUNNING
+    env.client.post("/api/trading/stop")
+    env.service.join(10)
+
+
+def test_해외_계좌는_해외_키가_없으면_해외_변수_이름과_함께_503이다(tmp_path, monkeypatch):
+    env = Env(tmp_path, monkeypatch, _env_file=None)
+
+    for response in (
+        env.client.get("/api/trading/account", params={"market": "overseas"}),
+        env.client.post("/api/trading/clear", params={"market": "overseas"}),
+    ):
+        assert response.status_code == 503 and "NH_OVERSEAS_APP_KEY" in response.json()["detail"]
