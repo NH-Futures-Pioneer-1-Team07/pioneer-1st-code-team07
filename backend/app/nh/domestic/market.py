@@ -189,6 +189,7 @@ class MarketService:
     QUOTE_TTL = 1.0
     BOOK_TTL = 1.0
     CANDLE_TTL = 2.0
+    HOURS_TTL = 3600.0
 
     def __init__(
         self,
@@ -244,8 +245,23 @@ class MarketService:
             "lower_limit": detail.lower_limit,
             "multiplier": detail.multiplier,
             "remaining_days": detail.remaining_days,
-            "market_session": market_session(detail.name, self._now()) if market == "domestic" else "unknown",
+            "market_session": self._session(detail, market, exchange),
         }
+
+    def _session(self, detail: QuoteDetail, market: str, exchange: str | None) -> str:
+        if market == "domestic":
+            return market_session(detail.name, self._now())
+        from app.nh.overseas.market_hours import fetch_window, session
+
+        try:
+            window = self._cache.get(
+                ("hours", exchange, detail.code),
+                self.HOURS_TTL,
+                lambda: fetch_window(self._nh(market), exchange or "", detail.code),
+            )
+        except NHError:
+            return "unknown"  # 장 종류를 못 구해도 시세는 돌려준다
+        return session(window, self._now()) if window else "unknown"
 
     def candles(
         self, code: str, interval: str, quantity: int, market: str = "domestic", exchange: str | None = None

@@ -27,6 +27,10 @@ export function instrumentLabel(name: string): string {
   return name;
 }
 
+/** 상단바 장 상태 앞에 붙는 시장 이름. */
+export const marketNameLabel = (market: "domestic" | "overseas" | null | undefined): string =>
+  market === "overseas" ? "해외장" : "국내장";
+
 const MARKET_SESSION_LABELS: Record<MarketSession, string> = {
   before_open: "장 시작 전",
   auction: "동시호가",
@@ -55,6 +59,8 @@ export const runStreamLabel = (state: string): string =>
 
 /** 상단바에 보일 국내장 장 상태와 시세 연결 상태. 모의매매 화면이 채운다. */
 export interface MarketStatus {
+  /** 장 상태를 보여 줄 시장. 종목을 아직 모르면 국내장으로 본다 */
+  market?: "domestic" | "overseas" | null;
   session: MarketSession | null;
   stream: string;
   failure: string | null;

@@ -54,10 +54,20 @@ DAILY = {
 }
 
 
+HOURS = {
+    "nrec": "2",
+    "Occurs1": [
+        {"occurs1_prd_cd": "ZB", "occurs1_trd_tm_inf": "09:00 ~ 08:00"},
+        {"occurs1_prd_cd": "ZN", "occurs1_trd_tm_inf": "08:00 ~ 07:00"},
+    ],
+}
+
+
 class Backend:
     def __init__(self):
         self.calls: list[tuple[str, dict]] = []
         self.minutes = [MINUTES, MINUTES_OLDER]
+        self.hours_error = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.url.path == "/auth-service/v1/token":
@@ -67,19 +77,23 @@ class Backend:
         name = request.url.path.rsplit("/", 1)[-1]
         if name == "chart-minute":
             return httpx.Response(200, json=self.minutes.pop(0) if self.minutes else {"Occurs1": []})
+        if name == "market-operations":
+            if self.hours_error:
+                return httpx.Response(200, json={"errorCode": "EGW053", "errorMessage": "호출 불가"})
+            return httpx.Response(200, json=HOURS)
         return httpx.Response(200, json={"price": PRICE, "bid-price": BOOK, "chart-daily": DAILY}[name])
 
 
 @pytest.fixture
 def make(tmp_path):
-    def build(**settings_kwargs):
+    def build(now=datetime(2026, 11, 4, 3, 50), **settings_kwargs):
         backend = Backend()
         values = {"_env_file": None, "trading_env": "mock", "nh_app_key": "k", "nh_app_secret": "s",
                   "nh_overseas_app_key": "ok", "nh_overseas_app_secret": "os",
                   "strategies_dir": tmp_path / "s", "runs_dir": tmp_path / "r"}
         settings = Settings(**{**values, **settings_kwargs})
         app = create_app(settings)
-        service = MarketService(settings, now=lambda: datetime(2026, 11, 4, 3, 50))
+        service = MarketService(settings, now=lambda: now)
         service._overseas_client = NHClient(
             settings, market="overseas", http_client=httpx.Client(transport=httpx.MockTransport(backend)), limiter=FakeLimiter()
         )
@@ -96,7 +110,7 @@ def test_해외_시세는_가격과_등락을_돌려주고_월물과_가격_제�
 
     assert (body["code"], body["name"], body["price"], body["change"], body["change_rate"]) == (CODE, "10Year U.S. T-Notes", 106.5, -0.359375, -0.33)
     assert (body["open"], body["high"], body["low"], body["prev_close"], body["volume"]) == (106.734375, 106.90625, 106.375, 106.859375, 1748340)
-    assert body["contract"] is None and body["upper_limit"] is None and body["market_session"] == "unknown"
+    assert body["contract"] is None and body["upper_limit"] is None
     assert backend.calls[0] == ("/trade/v1/overseas/price", {"Iccurs1": {"iccurs1_exch_cd": EXCHANGE, "iccurs1_sym": CODE}})
 
 
@@ -159,4 +173,39 @@ def test_시장이_다르면_같은_코드도_따로_보관한다(make):
     client.get(f"/api/market/{CODE}/quote", params=PARAMS)
     client.get(f"/api/market/{CODE}/quote", params=PARAMS)
 
-    assert len(backend.calls) == 1  # 보관 시간 안의 같은 요청은 NH를 다시 부르지 않는다
+    assert sum(path.endswith("/price") for path, _ in backend.calls) == 1  # 보관 시간 안의 같은 요청은 NH를 다시 부르지 않는다
+
+
+def test_해외_장_종류는_품목의_거래시간으로_판정한다(make):
+    client, backend = make(now=datetime(2026, 11, 4, 3, 50))  # 수요일 03:50, 08:00 ~ 07:00 구간 안
+
+    body = client.get(f"/api/market/{CODE}/quote", params=PARAMS).json()
+
+    assert body["market_session"] == "regular"
+    hours_call = next(payload for path, payload in backend.calls if path.endswith("market-operations"))
+    assert hours_call == {"fut_opt_div_cd": "F", "exch_cd": "CME", "prd_cd": "2", "prd_nm": "ZN"}
+
+
+def test_거래시간_밖이면_장_마감이다(make):
+    client, _ = make(now=datetime(2026, 11, 4, 7, 30))  # 07:00 ~ 08:00 휴장
+
+    assert client.get(f"/api/market/{CODE}/quote", params=PARAMS).json()["market_session"] == "closed"
+
+
+def test_거래시간을_못_구해도_시세는_돌려주고_장_종류만_모른다(make):
+    client, backend = make()
+    backend.hours_error = True
+
+    response = client.get(f"/api/market/{CODE}/quote", params=PARAMS)
+
+    assert response.status_code == 200 and response.json()["market_session"] == "unknown"
+
+
+def test_거래시간은_보관해_다시_조회하지_않는다(make):
+    client, backend = make()
+
+    client.get(f"/api/market/{CODE}/quote", params=PARAMS)
+    client.get(f"/api/market/{CODE}/candles", params={**PARAMS, "interval": "day"})
+    client.get(f"/api/market/{CODE}/quote", params=PARAMS)
+
+    assert sum(path.endswith("market-operations") for path, _ in backend.calls) == 1

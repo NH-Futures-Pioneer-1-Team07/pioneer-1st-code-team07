@@ -84,8 +84,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const pnl = status.data?.pnl;
   const session = quote.data?.market_session ?? null;
   useEffect(() => {
-    onMarketStatus({ session, stream: streamState, failure: stream.failure });
-  }, [onMarketStatus, session, streamState, stream.failure]);
+    onMarketStatus({ market: instrument?.market ?? null, session, stream: streamState, failure: stream.failure });
+  }, [onMarketStatus, instrument?.market, session, streamState, stream.failure]);
   const receivedAt = formatClock(stream.lastTrade?.time);
 
   const act = async (action: () => Promise<unknown>) => {

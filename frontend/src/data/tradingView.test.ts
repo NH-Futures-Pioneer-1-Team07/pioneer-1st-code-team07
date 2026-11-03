@@ -14,6 +14,7 @@ import {
   runKey,
   runStatusLabel,
   runStreamLabel,
+  marketNameLabel,
   streamLabel,
   timeTicks,
   upsertRun,
@@ -134,6 +135,12 @@ test("장 종류를 한글로 보여 주고 모르는 값은 장 정보 없음�
   assert.equal(marketSessionLabel("auction"), "동시호가");
   assert.equal(marketSessionLabel("holiday"), "휴장");
   assert.equal(marketSessionLabel(undefined), "장 정보 없음");
+});
+
+test("상단바는 종목의 시장에 따라 국내장·해외장을 구분한다", () => {
+  assert.equal(marketNameLabel("overseas"), "해외장");
+  assert.equal(marketNameLabel("domestic"), "국내장");
+  assert.equal(marketNameLabel(null), "국내장");
 });
 
 test("시세 연결 문구는 연결 여부만 말한다", () => {
