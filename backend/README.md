@@ -64,6 +64,7 @@ uv run pytest
    - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
    - `instruments[].tick_size`(선택): 호가 단위. 백테스트의 슬리피지와 가격 경로가 쓰며, 없으면 봉 가격 차이로 추정한다(소수 둘째 자리까지만 구별하므로 ZN처럼 1/64 단위인 종목은 적어야 한다).
    - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
+   - `chart_lines`(선택): 모의매매 차트에 그릴 판단용 선. 항목은 `series`(`bar`는 판단 기준 봉 차트, `daily`는 일봉 차트), `kind`(`sma` 단순이동평균은 `period` 필요, `previous_close` 직전 거래일 종가선은 일봉만), `label`, 마우스를 올렸을 때 보이는 `description`이다. `label`을 `describe`의 항목 이름과 같게 쓰면 "현재 판단" 패널의 같은 항목에도 설명이 붙는다.
    - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
      - 화면에서 시작 전에 바꿀 수 있는 값이면 `editable`을 켜고, 입력칸 이름 `label`, `unit`(`percent`는 0.2를 20%로 표시), 허용 범위 `min`·`max`를 적는다. 모의매매·백테스트 시작 요청의 `params`가 범위를 벗어나거나 숫자가 아니면 `422`로 거부한다.

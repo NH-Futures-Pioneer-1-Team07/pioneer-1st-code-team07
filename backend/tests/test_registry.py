@@ -153,3 +153,28 @@ def test_파라미터_범위와_단위를_선언하고_요청값을_검증한다
     assert "숫자" in manifest.override_problem({"rate": "많이"})
     assert "숫자" in manifest.override_problem({"rate": True})
     assert "없는 파라미터" in manifest.override_problem({"unknown": 1})
+
+
+def test_차트_선_선언을_검증한다():
+    from pydantic import ValidationError
+
+    from strategy_base.manifest import Manifest
+
+    base = {
+        "name": "n",
+        "description": "d",
+        "instruments": [{"name": "i", "market": "domestic"}],
+        "bar": {"unit": "minute", "size": 5},
+    }
+    line = {"series": "bar", "kind": "sma", "period": 5, "label": "단기선", "description": "설명"}
+
+    assert Manifest.model_validate({**base, "chart_lines": [line]}).chart_lines[0].period == 5
+    assert Manifest.model_validate(base).chart_lines == []
+    for bad in (
+        {**line, "period": None},
+        {**line, "kind": "previous_close"},  # 직전 종가선은 일봉 계열만
+        {**line, "label": ""},
+        {**line, "kind": "ema"},
+    ):
+        with pytest.raises(ValidationError):
+            Manifest.model_validate({**base, "chart_lines": [bad]})

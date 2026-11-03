@@ -4,6 +4,10 @@ import {
   chartLayout,
   formatClock,
   flattenDetail,
+  linesForInterval,
+  lineValues,
+  movingAverage,
+  resolveLines,
   formatDateTime,
   instrumentLabel,
   mapDecisions,
@@ -200,4 +204,41 @@ test("실행 목록에 넣으면 같은 실행은 바꾸고 최근에 시작한 
   const merged = upsertRun([second, first], finished);
   assert.deepEqual(merged.map((run) => run.run_id), ["b", "a"]);
   assert.equal(merged[1].net_pnl, 5);
+});
+
+
+const closes = (values: number[], day = "2026-11-0") =>
+  values.map((close, index): Candle => ({ time: `${day}${index + 1}`, open: close, high: close, low: close, close, volume: 1 }));
+
+test("이동평균은 기간이 모이기 전 자리를 비워 둔다", () => {
+  assert.deepEqual(movingAverage(closes([1, 2, 3, 4]), 3), [null, null, 2, 3]);
+  assert.deepEqual(movingAverage(closes([5]), 1), [5]);
+  assert.deepEqual(movingAverage([], 3), []);
+});
+
+test("직전 거래일 종가선은 오늘보다 앞선 마지막 일봉의 종가다", () => {
+  const candles = closes([10, 11, 12]); // 2026-11-01, 02, 03
+  const line = { series: "daily", kind: "previous_close", period: null, label: "직전 거래일 종가", description: "" } as const;
+  assert.deepEqual(lineValues(line, candles, "2026-11-04"), [12, 12, 12]); // 오늘(4일) 일봉이 아직 없으면 마지막 일봉
+  assert.deepEqual(lineValues(line, candles, "2026-11-03"), [11, 11, 11]); // 오늘 일봉은 제외
+  assert.deepEqual(lineValues(line, candles, "2026-11-01"), [null, null, null]);
+});
+
+test("차트 주기에 맞는 선만 고르고 이동평균 선에는 색을 돌려가며 준다", () => {
+  const specs = [
+    { series: "daily", kind: "previous_close", period: null, label: "직전", description: "d" },
+    { series: "daily", kind: "sma", period: 2, label: "2일선", description: "d" },
+    { series: "bar", kind: "sma", period: 2, label: "단기선", description: "d" },
+    { series: "bar", kind: "sma", period: 3, label: "장기선", description: "d" },
+  ] as const;
+
+  assert.deepEqual(linesForInterval([...specs], "day", 5).map((l) => l.label), ["직전", "2일선"]);
+  assert.deepEqual(linesForInterval([...specs], "5", 5).map((l) => l.label), ["단기선", "장기선"]);
+  assert.deepEqual(linesForInterval([...specs], "1", 5), []);
+  assert.deepEqual(linesForInterval([...specs], "5", null), []);
+
+  const resolved = resolveLines(linesForInterval([...specs], "5", 5), closes([1, 2, 3, 4]), "2026-11-04");
+  assert.equal(resolved[0].latest, 3.5);
+  assert.equal(resolved[1].latest, 3);
+  assert.notEqual(resolved[0].color, resolved[1].color);
 });

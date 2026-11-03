@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from strategy_base.manifest import BarSpec, Instrument, ParameterSpec
+from strategy_base.manifest import BarSpec, ChartLine, Instrument, ParameterSpec
 
 router = APIRouter(prefix="/api/strategies")
 
@@ -18,6 +18,7 @@ class StrategyDetail(StrategySummary):
     instruments: list[Instrument]
     bar: BarSpec
     parameters: dict[str, ParameterSpec]
+    chart_lines: list[ChartLine]
 
 
 @router.get("")
@@ -42,4 +43,5 @@ def get_strategy(strategy_id: str, request: Request) -> StrategyDetail:
         instruments=manifest.instruments,
         bar=manifest.bar,
         parameters=manifest.parameters,
+        chart_lines=manifest.chart_lines,
     )

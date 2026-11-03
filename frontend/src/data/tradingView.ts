@@ -1,4 +1,4 @@
-import type { Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
+import type { ChartLineSpec, Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -184,17 +184,26 @@ export interface ChartLayout {
   lastY: number | null;
   min: number;
   max: number;
+  /** 가격을 차트의 세로 위치로 바꾼다 */
+  y: (price: number) => number;
 }
 
 /** 캔들과 거래량을 `width × height` 안에 놓는다. 오른쪽 `axisWidth`는 가격 눈금 자리다. */
-export function chartLayout(candles: Candle[], width: number, height: number, axisWidth: number): ChartLayout {
-  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0 };
+export function chartLayout(
+  candles: Candle[],
+  width: number,
+  height: number,
+  axisWidth: number,
+  /** 캔들 밖에서 차트 안에 들어와야 하는 가격(선의 값). 세로 범위에 포함한다 */
+  extraPrices: number[] = [],
+): ChartLayout {
+  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0 };
   if (!candles.length || width <= axisWidth) return empty;
   const top = 12;
   const priceBottom = height * 0.76;
   const volumeBottom = height - 22;
-  const lows = candles.map((c) => c.low);
-  const highs = candles.map((c) => c.high);
+  const lows = [...candles.map((c) => c.low), ...extraPrices];
+  const highs = [...candles.map((c) => c.high), ...extraPrices];
   const min = Math.min(...lows);
   const max = Math.max(...highs);
   const span = max - min || Math.max(max * 0.001, 1);
@@ -225,7 +234,50 @@ export function chartLayout(candles: Candle[], width: number, height: number, ax
     const value = max - (span * row) / 3;
     return { y: y(value), value };
   });
-  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max };
+  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y };
+}
+
+/** 종가의 단순이동평균. 봉이 `period`개 모이기 전 자리는 `null`이다. */
+export function movingAverage(candles: Candle[], period: number): (number | null)[] {
+  let sum = 0;
+  return candles.map((candle, index) => {
+    sum += candle.close;
+    if (index >= period) sum -= candles[index - period].close;
+    return index >= period - 1 ? sum / period : null;
+  });
+}
+
+/** 선 하나의 봉마다의 값. `previous_close`는 `today`보다 앞선 마지막 일봉의 종가를 모든 자리에 깐다. */
+export function lineValues(line: ChartLineSpec, candles: Candle[], today: string): (number | null)[] {
+  if (line.kind === "sma") return movingAverage(candles, line.period ?? 1);
+  const previous = [...candles].reverse().find((candle) => candle.time.slice(0, 10) < today);
+  return candles.map(() => previous?.close ?? null);
+}
+
+/** 선택한 차트 주기에 그릴 선. 판단 기준 봉과 같은 분봉이면 `bar` 계열, 일봉이면 `daily` 계열이다. */
+export function linesForInterval(lines: ChartLineSpec[], interval: string, barMinutes: number | null): ChartLineSpec[] {
+  const series = interval === "day" ? "daily" : barMinutes !== null && interval === String(barMinutes) ? "bar" : null;
+  return series ? lines.filter((line) => line.series === series) : [];
+}
+
+export interface ResolvedLine {
+  spec: ChartLineSpec;
+  color: string;
+  values: (number | null)[];
+  /** 마지막 봉에서의 값 */
+  latest: number | null;
+}
+
+const LINE_COLORS = ["#2dd4bf", "#a78bfa", "#f472b6"];
+const PREVIOUS_CLOSE_COLOR = "#e5e7eb";
+
+export function resolveLines(specs: ChartLineSpec[], candles: Candle[], today: string): ResolvedLine[] {
+  let palette = 0;
+  return specs.map((spec) => {
+    const values = lineValues(spec, candles, today);
+    const color = spec.kind === "previous_close" ? PREVIOUS_CLOSE_COLOR : LINE_COLORS[palette++ % LINE_COLORS.length];
+    return { spec, color, values, latest: values.length ? values[values.length - 1] : null };
+  });
 }
 
 /** 가로축에 보여 줄 시각 눈금 네 개. */
