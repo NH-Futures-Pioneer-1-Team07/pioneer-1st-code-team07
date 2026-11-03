@@ -276,12 +276,42 @@ def test_종목_정보가_모자라거나_일봉_전략은_거부한다(tmp_path
     assert Env(tmp_path / "b", monkeypatch, manifest=daily).start().status_code == 422
 
 
-def test_해외_종목은_아직_지원하지_않아_거부한다(tmp_path, monkeypatch):
-    overseas = {**MANIFEST, "instruments": [{"name": "미국 10년 국채", "market": "overseas", "code": "ZNZ26", "multiplier": 1000}]}
+OVERSEAS = {
+    **MANIFEST,
+    "instruments": [{"name": "미국 10년 국채", "market": "overseas", "exchange": "FCME", "code": "ZNZ26", "multiplier": 1000}],
+}
 
-    response = Env(tmp_path, monkeypatch, manifest=overseas).start()
 
-    assert response.status_code == 422 and "해외" in response.json()["detail"]
+def test_해외_종목은_거래소_코드가_없으면_거부한다(tmp_path, monkeypatch):
+    manifest = {**OVERSEAS, "instruments": [{**OVERSEAS["instruments"][0], "exchange": None}]}
+
+    response = Env(tmp_path, monkeypatch, manifest=manifest, nh_overseas_app_key="k", nh_overseas_app_secret="s").start()
+
+    assert response.status_code == 422 and "거래소 코드" in response.json()["detail"]
+
+
+def test_해외_키가_없으면_해외_변수_이름을_알려_주며_거부한다(tmp_path, monkeypatch):
+    response = Env(tmp_path, monkeypatch, manifest=OVERSEAS, _env_file=None).start()
+
+    assert response.status_code == 503 and "NH_OVERSEAS_APP_KEY" in response.json()["detail"]
+
+
+def test_해외_종목은_해외_브로커와_실시간_없는_연결로_시작한다(tmp_path, monkeypatch):
+    env = Env(tmp_path, monkeypatch, manifest=OVERSEAS, nh_overseas_app_key="k", nh_overseas_app_secret="s")
+    env.broker.quote = paper_quote("ZNZ26")
+    seen = {}
+
+    def build(instrument, minutes):
+        seen["instrument"], seen["minutes"] = instrument, minutes
+        return env.broker, lambda on_event, on_state: FakeRealtime(on_event, on_state, env.hub)
+
+    env.service._overseas_components = build
+
+    response = env.start()
+
+    assert response.status_code == 202, response.text
+    assert seen["instrument"].exchange == "FCME" and seen["minutes"] == 3
+    env.client.post("/api/trading/stop")
 
 
 def test_전략_파라미터를_덮어쓸_수_있고_기록에_남는다(env):
@@ -411,3 +441,11 @@ def test_정리가_시작되면_운용은_더_이상_전략을_호출하지_않�
     env.service.join(15)
 
     assert len(env.broker.place_calls) == placed
+
+
+def paper_quote(code):
+    from datetime import date as _date
+
+    from app.nh.domestic.quotes import Quote
+
+    return Quote(code, 106.5, _date(2026, 12, 21))

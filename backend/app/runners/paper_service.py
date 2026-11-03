@@ -5,18 +5,17 @@ import dataclasses
 import logging
 import threading
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, Protocol
 
 from app.config import Settings
 from app.data.vix import load as load_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
-from app.nh.overseas import OVERSEAS_UNSUPPORTED
 from app.nh.realtime import RealtimeConnection
 from app.nh.realtime_data import Feed
 from app.records.store import RunRecorder, RunStore
-from app.runners.broker import Broker, NHBroker
+from app.runners.broker import Broker, NHBroker, OverseasNHBroker
 from app.runners.clearing import (
     AccountGateway,
     ClearConfig,
@@ -25,9 +24,10 @@ from app.runners.clearing import (
     run_clear,
 )
 from app.runners.inputs import ExtraInputs
+from app.runners.overseas import NullRealtime, has_keys, key_names, overseas_instrument_ready
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
 from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
-from strategy_base.manifest import Manifest
+from strategy_base.manifest import Instrument, Manifest
 from strategy_base.registry import StrategyRegistry
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,21 @@ def nh_components(settings: Settings) -> ComponentsFactory:
     return build
 
 
+# (종목, 봉 분 단위) -> (NH 호출 묶음, 실시간 연결 만드는 함수)
+OverseasComponentsFactory = Callable[[Instrument, int], tuple[Broker, RealtimeFactory]]
+
+
+def overseas_components(settings: Settings) -> OverseasComponentsFactory:
+    """해외 종목은 실시간 체결 연결 없이 세션이 현재가를 주기적으로 조회한다."""
+
+    def build(instrument: Instrument, minutes: int) -> tuple[Broker, RealtimeFactory]:
+        client = NHClient(settings, market="overseas")
+        broker = OverseasNHBroker(client, instrument.exchange or "", instrument.code or "", minutes)
+        return broker, lambda on_event, on_state: NullRealtime()
+
+    return build
+
+
 class PaperService:
     def __init__(
         self,
@@ -74,6 +89,7 @@ class PaperService:
         store: RunStore,
         *,
         components: ComponentsFactory | None = None,
+        overseas_factory: OverseasComponentsFactory | None = None,
         clock: Callable[[], datetime] = kst_now,
         config_overrides: dict[str, Any] | None = None,
         gateway_factory: Callable[[], AccountGateway] | None = None,
@@ -84,6 +100,7 @@ class PaperService:
         self._registry = registry
         self._store = store
         self._components = components or nh_components(settings)
+        self._overseas_components = overseas_factory or overseas_components(settings)
         self._clock = clock
         self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
         self._overrides = config_overrides or {}
@@ -108,8 +125,6 @@ class PaperService:
             raise TradingRejected(404, "전략을 찾을 수 없습니다")
         manifest = registered.manifest
         instrument = manifest.instruments[0]
-        if instrument.market != "domestic":
-            raise TradingRejected(422, OVERSEAS_UNSUPPORTED)
         if manifest.bar.unit != "minute":
             raise TradingRejected(422, "분봉 전략만 운용할 수 있습니다")
         if not instrument.code or not instrument.multiplier:
@@ -117,13 +132,20 @@ class PaperService:
         if self._settings.trading_env != "mock":
             raise TradingRejected(422, "모의매매는 모의 환경(TRADING_ENV=mock)에서만 운용할 수 있습니다")
         merged = self._merge_params(manifest, params)
-        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
-            raise TradingRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        if instrument.market == "overseas":
+            problem = overseas_instrument_ready(instrument)
+            if problem:
+                raise TradingRejected(422, problem)
+        if not has_keys(self._settings, instrument.market):
+            raise TradingRejected(503, f"{key_names(instrument.market)} 환경변수를 설정하세요")
 
         with self._lock:
             if self._session is not None:
                 raise TradingRejected(409, "이미 운용 중인 전략이 있습니다")
-            broker, make_realtime = self._components(instrument.code, manifest.bar.size)
+            if instrument.market == "overseas":
+                broker, make_realtime = self._overseas_components(instrument, manifest.bar.size)
+            else:
+                broker, make_realtime = self._components(instrument.code, manifest.bar.size)
             deposit, last_trading_day = self._check_account(broker, instrument.code)
             started_at = self._clock()
             config = dataclasses.replace(
@@ -134,6 +156,7 @@ class PaperService:
                     minutes=manifest.bar.size,
                     fee_rate=self._settings.backtest_fee_rate,
                     history_bars=manifest.history_bars,
+                    **({"session_anchor": time(0, 0)} if instrument.market == "overseas" else {}),
                 ),
                 **self._overrides,
             )

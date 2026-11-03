@@ -239,14 +239,60 @@ def test_종목_정보가_모자란_전략은_거부한다(make_client):
     assert "거래승수" in response.json()["detail"]
 
 
-def test_해외_종목은_아직_지원하지_않아_거부한다(make_client):
-    overseas = {**MANIFEST, "instruments": [{"name": "미국 10년 국채", "market": "overseas", "code": "ZNZ26", "multiplier": 1000}]}
-    client, _ = make_client(manifest=overseas)
+OVERSEAS = {
+    **MANIFEST,
+    "instruments": [{"name": "미국 10년 국채", "market": "overseas", "exchange": "FCME", "code": "ZNZ26", "multiplier": 1000}],
+}
+
+
+def test_해외_종목은_거래소_코드가_없으면_거부한다(make_client):
+    manifest = {**OVERSEAS, "instruments": [{**OVERSEAS["instruments"][0], "exchange": None}]}
+    client, _ = make_client(manifest=manifest, nh_overseas_app_key="k", nh_overseas_app_secret="s")
 
     response = client.post("/api/backtests", json=body())
 
     assert response.status_code == 422
-    assert "해외" in response.json()["detail"]
+    assert "거래소 코드" in response.json()["detail"]
+
+
+def test_해외_키가_없으면_해외_변수_이름을_알려_주며_거부한다(make_client):
+    client, _ = make_client(manifest=OVERSEAS, _env_file=None)
+
+    start = client.post("/api/backtests", json=body())
+    available = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+
+    for response in (start, available):
+        assert response.status_code == 503
+        assert "NH_OVERSEAS_APP_KEY" in response.json()["detail"]
+
+
+def test_해외_종목도_가능_기간을_조회하고_백테스트를_실행한다(make_client):
+    client, service = make_client(manifest=OVERSEAS, nh_overseas_app_key="k", nh_overseas_app_secret="s")
+
+    available = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+    started = client.post("/api/backtests", json=body())
+    service.join(10)
+
+    assert available.status_code == 200 and available.json()["instrument"]["market"] == "overseas"
+    assert started.status_code == 202, started.text
+    assert run_detail(client, started.json())["meta"]["status"] == "completed"
+
+
+def test_해외_분봉을_한국_시간_날짜별로_나눈다(monkeypatch):
+    import app.runners.service as module
+
+    rows = [
+        Bar(datetime(2026, 11, 2, 23, 55), 2, 1, 1.5, 10, 1.2),
+        Bar(datetime(2026, 11, 3, 0, 0), 3, 2, 2.5, 10, 2.1),
+        Bar(datetime(2026, 11, 3, 0, 5), 3, 2, 2.6, 10, 2.5),
+    ]
+    monkeypatch.setattr(module, "fetch_overseas_minutes", lambda client, exchange, code, **kwargs: rows)
+
+    loaded = module.overseas_loader(object(), "FCME")("ZNZ26", 5, date(2026, 11, 2), date(2026, 11, 3), lambda done, total: None)
+
+    assert sorted(loaded.days) == [date(2026, 11, 2), date(2026, 11, 3)]
+    assert [len(bars) for bars in loaded.days.values()] == [1, 2]
+    assert loaded.last_trading_day is None
 
 
 def test_일봉_전략은_거부한다(make_client):

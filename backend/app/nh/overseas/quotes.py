@@ -1,7 +1,7 @@
 """해외 시세 조회: 분봉·일봉과 현재가.
 
-봉 시각(`occurs1_ref_dt`, `occurs1_exch_tm`)은 응답의 거래소 시간 그대로 쓴다. 한국 시간으로의 변환과
-봉 시각이 시작인지 마감인지는 모의환경 호출로 확인해야 한다.
+봉 시각(`occurs1_ref_dt`, `occurs1_exch_tm`)은 한국 시간이고 봉이 시작한 시각이다. 모의환경에서 진행 중인 봉의
+거래량이 계속 늘어나는 것과 현재 시각으로 확인했다(2026-11-04). 그대로 `Bar.time`으로 쓴다.
 """
 
 from datetime import date, datetime, timedelta
