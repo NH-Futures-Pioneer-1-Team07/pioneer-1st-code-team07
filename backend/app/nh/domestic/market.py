@@ -201,20 +201,32 @@ class MarketService:
         self._settings = settings
         self._now = now
         self._client = client
+        self._overseas_client: NHClient | None = None
         self._cache = TtlCache(clock)
 
-    def _nh(self) -> NHClient:
+    def _nh(self, market: str = "domestic") -> NHClient:
+        if market == "overseas":
+            if self._overseas_client is None:
+                self._overseas_client = NHClient(self._settings, market="overseas")
+            return self._overseas_client
         if self._client is None:
             self._client = NHClient(self._settings)
         return self._client
 
-    def has_credentials(self) -> bool:
+    def has_credentials(self, market: str = "domestic") -> bool:
+        if market == "overseas":
+            return bool(self._settings.nh_overseas_app_key and self._settings.nh_overseas_app_secret)
         return bool(self._settings.nh_app_key and self._settings.nh_app_secret)
 
-    def quote(self, code: str) -> dict[str, Any]:
-        detail: QuoteDetail = self._cache.get(
-            ("quote", code), self.QUOTE_TTL, lambda: fetch_quote_detail(self._nh(), code)
-        )
+    def quote(self, code: str, market: str = "domestic", exchange: str | None = None) -> dict[str, Any]:
+        def make() -> QuoteDetail:
+            if market == "overseas":
+                from app.nh.overseas.quotes import fetch_quote_detail as fetch_overseas
+
+                return fetch_overseas(self._nh(market), exchange or "", code)
+            return fetch_quote_detail(self._nh(), code)
+
+        detail: QuoteDetail = self._cache.get(("quote", market, exchange, code), self.QUOTE_TTL, make)
         return {
             "code": detail.code,
             "name": detail.name,
@@ -232,16 +244,31 @@ class MarketService:
             "lower_limit": detail.lower_limit,
             "multiplier": detail.multiplier,
             "remaining_days": detail.remaining_days,
-            "market_session": market_session(detail.name, self._now()),
+            "market_session": market_session(detail.name, self._now()) if market == "domestic" else "unknown",
         }
 
-    def candles(self, code: str, interval: str, quantity: int) -> list[dict[str, Any]]:
+    def candles(
+        self, code: str, interval: str, quantity: int, market: str = "domestic", exchange: str | None = None
+    ) -> list[dict[str, Any]]:
         def make() -> list[Candle]:
+            if market == "overseas":
+                from app.nh.overseas import quotes as overseas
+
+                client = self._nh(market)
+                if interval == "day":
+                    bars = overseas.fetch_daily_bars(client, exchange or "", code, quantity=quantity)
+                else:
+                    bars = overseas.fetch_minute_bars(
+                        client, exchange or "", code, minutes=int(interval), max_bars=quantity
+                    )[-quantity:]
+                return [Candle(b.time, b.open, b.high, b.low, b.close, b.volume) for b in bars]
             if interval == "day":
                 return fetch_daily_bars(self._nh(), code, quantity=quantity)
             return fetch_recent_bars(self._nh(), code, minutes=int(interval), quantity=quantity)
 
-        candles: list[Candle] = self._cache.get(("candles", code, interval, quantity), self.CANDLE_TTL, make)
+        candles: list[Candle] = self._cache.get(
+            ("candles", market, exchange, code, interval, quantity), self.CANDLE_TTL, make
+        )
         return [
             {
                 "time": c.time.date().isoformat() if interval == "day" else c.time.isoformat(),
@@ -254,8 +281,15 @@ class MarketService:
             for c in candles
         ]
 
-    def orderbook(self, code: str) -> dict[str, Any]:
-        book, price, rate = self._cache.get(("book", code), self.BOOK_TTL, lambda: fetch_book(self._nh(), code))
+    def orderbook(self, code: str, market: str = "domestic", exchange: str | None = None) -> dict[str, Any]:
+        def make() -> tuple[OrderBook, float | None, float | None]:
+            if market == "overseas":
+                from app.nh.overseas.quotes import fetch_book as fetch_overseas
+
+                return fetch_overseas(self._nh(market), exchange or "", code)
+            return fetch_book(self._nh(), code)
+
+        book, price, rate = self._cache.get(("book", market, exchange, code), self.BOOK_TTL, make)
         return {
             "code": book.code,
             "time": book.time,

@@ -139,6 +139,7 @@ test("장 종류를 한글로 보여 주고 모르는 값은 장 정보 없음�
 test("시세 연결 문구는 연결 여부만 말한다", () => {
   assert.equal(streamLabel("live", null), "시세 연결됨");
   assert.equal(streamLabel("connecting", null), "시세 연결 중");
+  assert.equal(streamLabel("polling", null), "시세 주기 조회");
   assert.equal(streamLabel("disconnected", "연결이 거부되었습니다 (1006)"), "시세 연결 끊김: 연결이 거부되었습니다 (1006)");
 });
 

@@ -414,13 +414,13 @@ await connection.stop()
 
 ## 시세 조회
 
-`app/nh/domestic/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 종목코드는 영문·숫자 6~16자여야 하고(`422`), NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
+`app/nh/domestic/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 국내 종목코드는 영문·숫자 6~16자여야 하고(`422`), 해외 종목은 `market=overseas`와 `exchange`(예: `FCME`)를 함께 보내야 한다(`exchange`가 없으면 `422`, 해외 키가 없으면 해외 변수 이름과 함께 `503`). 해외 종목은 `app/nh/overseas/quotes.py`의 시세를 쓰고 월물·만기·가격 제한·거래승수·장 종류는 `null`·`unknown`이며 호가는 5단계, 실시간 체결(`/ws/market`)은 지원하지 않는다. NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
 
 | 요청 | 내용 |
 | --- | --- |
-| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
-| `GET /api/market/<종목코드>/candles?interval=&count=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
-| `GET /api/market/<종목코드>/orderbook` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
+| `GET /api/market/<종목코드>/quote?market=&exchange=` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
+| `GET /api/market/<종목코드>/candles?interval=&count=&market=&exchange=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
+| `GET /api/market/<종목코드>/orderbook?market=&exchange=` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
 
 - 전일대비와 등락률은 NH의 부호 구분(`chg_sign`)이 `-`이면 음수로 돌려준다.
 - 종목명은 NH 응답의 연속 공백을 하나로 줄인다(`삼성전자 F 202611 ( 10)`).
