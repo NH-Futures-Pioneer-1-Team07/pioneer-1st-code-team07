@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ParameterSpec } from "../../apis/types";
 import { defaultInputs, editableParams, firstProblem, paramProblem, paramsBody, unitLabel } from "../../data/paramView";
+import Icon from "./Icon";
 import styles from "./EditableParams.module.css";
 
 /** 전략이 화면에서 바꿀 수 있다고 선언한 파라미터의 입력값. 전략이 바뀌거나 기본값이 바뀌면 기본값으로 되돌린다. */
@@ -39,7 +40,15 @@ export default function EditableParams({
         const id = `${idPrefix}-${name}`;
         return (
           <div key={name} className="field">
-            <label htmlFor={id}>{spec.label ?? name}</label>
+            <span className={styles.labelRow}>
+              <label htmlFor={id}>{spec.label ?? name}</label>
+              <span className={styles.info} tabIndex={0} role="img" aria-label={`${spec.label ?? name} 설명`} aria-describedby={`${id}-help`}>
+                <Icon name="info" size={13} />
+                <span role="tooltip" id={`${id}-help`} className={styles.tip}>
+                  {spec.description}
+                </span>
+              </span>
+            </span>
             <div className={styles.input}>
               <input
                 id={id}
@@ -48,14 +57,16 @@ export default function EditableParams({
                 autoComplete="off"
                 value={values[name] ?? ""}
                 aria-invalid={problem ? true : undefined}
-                aria-describedby={`${id}-help`}
+                aria-describedby={problem ? `${id}-problem` : undefined}
                 onChange={(event) => setValue(name, event.target.value.replace(/[^\d.]/g, "").slice(0, 7))}
               />
               <span>{unitLabel(spec)}</span>
             </div>
-            <p className={problem ? styles.problem : styles.help} id={`${id}-help`}>
-              {problem ?? spec.description}
-            </p>
+            {problem && (
+              <p className={styles.problem} id={`${id}-problem`} role="alert">
+                {problem}
+              </p>
+            )}
           </div>
         );
       })}
