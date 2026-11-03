@@ -12,7 +12,8 @@ import { usePolling } from "../../apis/polling";
 import { fetchRuns, fetchStrategies, fetchStrategy } from "../../apis/trading";
 import { useParamInputs } from "../../components/common/EditableParams";
 import type { RunRef, RunSummary } from "../../apis/types";
-import { defaultPeriod, progressPercent, validateInput } from "../../data/backtestView";
+import { CAPITAL, defaultPeriod, progressPercent, validateInput } from "../../data/backtestView";
+import { currencyOf } from "../../data/format";
 import { runKey } from "../../data/tradingView";
 
 /** 백테스트 화면의 입력값, 서버 조회, 실행 상태를 모은 훅. 화면 영역 컴포넌트가 이 값을 나눠 쓴다. */
@@ -38,6 +39,9 @@ export function useBacktestPage() {
 
   const detail = usePolling(() => fetchStrategy(strategyId as string), 600000, [strategyId], !!strategyId);
   const paramInputs = useParamInputs(strategyId, detail.data?.parameters);
+  const currency = currencyOf(detail.data?.instruments[0]?.market);
+  // 통화가 바뀌면(국내↔해외 전략) 초기자금을 그 통화의 기본값으로 되돌린다.
+  useEffect(() => setCapital(String(CAPITAL[currency].default)), [currency]);
 
   const range = usePolling(() => fetchRange(strategyId as string), 600000, [strategyId], !!strategyId);
   const assumptions = usePolling(fetchAssumptions, 600000);
@@ -100,7 +104,7 @@ export function useBacktestPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problem = validateInput(startDate, endDate, capital, available, slippage) || paramInputs.problem;
+    const problem = validateInput(startDate, endDate, capital, available, slippage, currency) || paramInputs.problem;
     if (problem || !strategyId) {
       setError(problem || "전략을 선택해 주세요.");
       return;
@@ -129,7 +133,7 @@ export function useBacktestPage() {
   const percent = progressPercent(liveMeta?.progress, liveMeta?.status ?? "running");
 
   return {
-    selectedStrategy, setSelectedStrategy, startDate, setStartDate, endDate, setEndDate, capital, setCapital, slippage, setSlippage, error, setError, starting, active, selectedKey, setSelectedKey, detailOpen, setDetailOpen, splitRef, announcement, formId, strategies, items, strategy, strategyId, paramInputs, range, assumptions, runs, list, live, liveMeta, selected, report, reportMeta, result, busy, available, submit, percent,
+    selectedStrategy, setSelectedStrategy, startDate, setStartDate, endDate, setEndDate, capital, setCapital, slippage, setSlippage, error, setError, starting, active, selectedKey, setSelectedKey, detailOpen, setDetailOpen, splitRef, announcement, formId, strategies, items, strategy, strategyId, paramInputs, currency, range, assumptions, runs, list, live, liveMeta, selected, report, reportMeta, result, busy, available, submit, percent,
   };
 }
 

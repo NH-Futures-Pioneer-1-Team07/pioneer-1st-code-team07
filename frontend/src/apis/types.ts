@@ -176,7 +176,7 @@ export interface AccountView {
 
 export interface RunSummary extends RunRef {
   strategy_name: string;
-  instrument: { name: string; code: string };
+  instrument: { name: string; code: string; market?: "domestic" | "overseas" };
   started_at: string;
   ended_at: string | null;
   status: string;
@@ -240,7 +240,7 @@ export interface BacktestProgress {
 
 export interface BacktestMeta extends RunRef {
   strategy_name: string;
-  instrument: { name: string; code: string };
+  instrument: { name: string; code: string; market?: "domestic" | "overseas" };
   started_at: string;
   ended_at: string | null;
   status: string;

@@ -103,3 +103,13 @@ test("초기자금을 한글 금액으로 읽어 준다", () => {
   assert.equal(koreanAmount(12_345_678), "1천234만 5천678 원");
   assert.equal(koreanAmount(0), "0 원");
 });
+
+test("달러 초기자금은 달러 기준으로 읽고 검증한다", () => {
+  assert.equal(koreanAmount(100000, "USD"), "10만 달러");
+  assert.equal(koreanAmount(0, "USD"), "0 달러");
+  const range = { strategy_id: "s", instrument: { name: "n", code: "c" }, start: "2026-08-14", end: "2026-10-27", last_trading_day: null, sparse_days: {} };
+  assert.equal(validateInput("2026-10-01", "2026-10-27", "100000", range, "1", "USD"), "");
+  assert.match(validateInput("2026-10-01", "2026-10-27", "500", range, "1", "USD"), /1,000달러부터/);
+  assert.match(validateInput("2026-10-01", "2026-10-27", "50000000", range, "1", "USD"), /10,000,000달러/);
+  assert.equal(validateInput("2026-10-01", "2026-10-27", "50000000", range, "1", "KRW"), "");
+});

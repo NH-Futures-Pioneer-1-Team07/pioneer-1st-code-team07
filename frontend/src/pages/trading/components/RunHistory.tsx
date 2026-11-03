@@ -3,7 +3,7 @@ import { errorMessage } from "../../../apis/client";
 import type { RunStream } from "../../../apis/runStream";
 import { fetchRuns } from "../../../apis/trading";
 import type { RunSummary } from "../../../apis/types";
-import { formatMoney } from "../../../data/format";
+import { currencyOf, moneyIn } from "../../../data/format";
 import {
   formatDateTime,
   instrumentLabel,
@@ -18,7 +18,6 @@ import { scrollToPanel } from "../../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
 import styles from "./RunHistory.module.css";
 
-const signedMoney = (value: number) => signed(value, formatMoney);
 
 export default function RunHistory({ stream }: { stream: RunStream }) {
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
@@ -131,7 +130,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
                       <td>{formatDateTime(run.started_at)}</td>
                       <td>{run.ended_at ? formatDateTime(run.ended_at) : "—"}</td>
                       <td className={pnl === null ? "" : pnl >= 0 ? "positive" : "negative"}>
-                        {pnl === null ? "—" : signedMoney(pnl)}
+                        {pnl === null ? "—" : signed(pnl, moneyIn(currencyOf(run.instrument.market)))}
                       </td>
                       <td>
                         <span className={`badge state ${run.ended_at ? "" : "running"}`}>

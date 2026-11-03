@@ -29,7 +29,7 @@ import {
   paramRows,
 } from "../../../data/compareView";
 import type { CompareEntry, MetricDef } from "../../../data/compareView";
-import { dotted, formatMoney, pnlClass } from "../../../data/format";
+import { currencyOf, dotted, formatMoney, pnlClass } from "../../../data/format";
 import { formatDateTime, instrumentLabel, runKey } from "../../../data/tradingView";
 import styles from "./CompareSection.module.css";
 
@@ -59,6 +59,7 @@ function RunTag({ slot }: { slot: Slot }) {
 }
 
 function ScalarCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
+  const currency = currencyOf(slots[0]?.entry.meta.instrument.market);
   const values = slots.map((slot) => def.value?.(slot.entry.result) ?? null);
   const best = bestIndex(values, def.better);
   const scale = Math.max(...values.map((value) => Math.abs(value ?? 0)), 1e-9);
@@ -76,10 +77,10 @@ function ScalarCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
               )}
             </div>
             <strong className={def.unit === "money" ? pnlClass(value) : undefined}>
-              {value === null ? "—" : formatValue(def.unit, value)}
+              {value === null ? "—" : formatValue(def.unit, value, currency)}
             </strong>
             <small className={styles.delta}>
-              {index > 0 && value !== null && base !== null ? formatDelta(def.unit, value - base) : ""}
+              {index > 0 && value !== null && base !== null ? formatDelta(def.unit, value - base, currency) : ""}
             </small>
             <span className={styles.best}>{best === index ? "최고" : ""}</span>
           </li>
@@ -113,13 +114,18 @@ function WinLossCard({ slots }: { slots: Slot[] }) {
 }
 
 function CurveCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
+  const currency = currencyOf(slots[0]?.entry.meta.instrument.market);
   const shape = def.shape as "equity" | "drawdown" | "daily";
   const data = useMemo(() => curveRows(slots.map((slot) => slot.entry), shape), [slots, shape]);
   const tick = (value: number) =>
-    shape === "daily" ? `${Math.round(value / 10000).toLocaleString("ko-KR")}만` : `${(value * 100).toFixed(1)}%`;
+    shape === "daily"
+      ? currency === "USD"
+        ? `$${Math.round(value / 1000).toLocaleString("en-US")}k`
+        : `${Math.round(value / 10000).toLocaleString("ko-KR")}만`
+      : `${(value * 100).toFixed(1)}%`;
   const tip = (value: unknown) => {
     const number = Number(value);
-    return shape === "daily" ? formatMoney(number) : `${(number * 100).toFixed(2)}%`;
+    return shape === "daily" ? formatMoney(number, currency) : `${(number * 100).toFixed(2)}%`;
   };
   const common = (
     <>
@@ -314,7 +320,7 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
                     <td>{instrumentLabel(run.instrument.name)}</td>
                     <td>{run.period ? `${dotted(run.period.start)} — ${dotted(run.period.end)}` : "—"}</td>
                     <td className={pnlClass(run.net_pnl)}>
-                      {run.net_pnl === null ? "—" : `${run.net_pnl > 0 ? "+" : ""}${formatMoney(run.net_pnl)}`}
+                      {run.net_pnl === null ? "—" : `${run.net_pnl > 0 ? "+" : ""}${formatMoney(run.net_pnl, currencyOf(run.instrument.market))}`}
                     </td>
                   </tr>
                 );

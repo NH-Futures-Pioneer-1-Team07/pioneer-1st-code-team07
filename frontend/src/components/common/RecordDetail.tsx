@@ -3,7 +3,7 @@ import { errorMessage } from "../../apis/client";
 import { fetchJournal } from "../../apis/trading";
 import type { RunStream } from "../../apis/runStream";
 import type { JournalLine, RunRef } from "../../apis/types";
-import { formatMoney, formatNumber } from "../../data/format";
+import { currencyOf, formatMoney, formatNumber } from "../../data/format";
 import { mapDecisions, mapFills } from "../../data/tradingView";
 import type { DecisionRowView, FillRowView } from "../../data/tradingView";
 import DecisionTimeline, {
@@ -24,7 +24,11 @@ interface Detail {
   error: string | null;
 }
 
-export type RecordMeta = RunRef & { status: string; ended_at: string | null };
+export type RecordMeta = RunRef & {
+  status: string;
+  ended_at: string | null;
+  instrument?: { market?: "domestic" | "overseas" };
+};
 
 /** 이미 있는 기록(`key`가 같은 것)은 건너뛰고 새 기록만 뒤에 붙인다. */
 function addLines(detail: Detail, lines: JournalLine[]): Detail {
@@ -163,7 +167,7 @@ export default function RecordDetail({ meta, stream }: { meta: RecordMeta; strea
                     <td className={sideClass(row.side)}>{row.side}</td>
                     <td>{row.quantity}계약</td>
                     <td>{formatNumber(row.price)}</td>
-                    <td>{row.fee === null ? "—" : formatMoney(row.fee)}</td>
+                    <td>{row.fee === null ? "—" : formatMoney(row.fee, currencyOf(meta.instrument?.market))}</td>
                     <td className={styles.fillReason} title={row.reason}>{row.reason || "—"}</td>
                   </tr>
                 ))}

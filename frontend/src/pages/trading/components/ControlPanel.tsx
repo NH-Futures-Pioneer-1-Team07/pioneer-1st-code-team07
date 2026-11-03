@@ -2,7 +2,7 @@ import type { TradingController } from "../useTradingPage";
 import Icon from "../../../components/common/Icon";
 import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
-import { dash, formatMoney, formatNumber, pnlClass } from "../../../data/format";
+import { currencyOf, currencyUnit, dash, formatMoney, formatNumber, moneyIn, pnlClass } from "../../../data/format";
 import { instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
 import { startTrading } from "../../../apis/trading";
 import styles from "./ControlPanel.module.css";
@@ -27,6 +27,7 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
     paramInputs,
     act,
   } = ctl;
+  const currency = currencyOf(instrument?.market);
   return (
     <section className={`panel ${styles.control}`} aria-labelledby="run-title">
       <div className="section-head">
@@ -85,17 +86,17 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
         <div>
           <span>현재 운용 평가손익</span>
           <strong className={pnlClass(pnl?.unrealized_pnl)}>
-            {signed(pnl?.unrealized_pnl ?? 0, formatNumber)}
-            <small>원</small>
+            {signed(pnl?.unrealized_pnl ?? 0, currency === "USD" ? moneyIn(currency) : formatNumber)}
+            {currency !== "USD" && <small>{currencyUnit(currency)}</small>}
           </strong>
         </div>
         <p>
           <span>실현손익</span>
-          <span>{formatMoney(pnl?.realized_pnl ?? 0)}</span>
+          <span>{formatMoney(pnl?.realized_pnl ?? 0, currency)}</span>
         </p>
         <p>
           <span>비용{pnl?.fee_estimated ? " (추정)" : ""}</span>
-          <span>{formatMoney(pnl?.fee ?? 0)}</span>
+          <span>{formatMoney(pnl?.fee ?? 0, currency)}</span>
         </p>
       </div>
       {!running && <EditableParams inputs={paramInputs} idPrefix="trading-param" />}
