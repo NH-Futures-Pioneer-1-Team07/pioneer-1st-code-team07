@@ -149,3 +149,22 @@ test("설정 표에는 슬리피지와 수수료율이 들어간다", () => {
   assert.deepEqual(rows[0].values, ["0", "1"]);
   assert.equal(rows.find((row) => row.name === "수수료율")?.differs, false);
 });
+
+test("설정 표는 바꿀 수 있는 파라미터를 입력칸과 같은 이름·단위로 보여 준다", () => {
+  const specs = {
+    s1: {
+      profit_loss_rate: { default: 0.2, description: "d", editable: true, label: "익절·손절 기준", unit: "percent", min: 0.01, max: 1 },
+      tick: { default: 500, description: "d", editable: false, label: null, unit: null, min: null, max: null },
+    },
+  } as const;
+  const rows = paramRows(
+    [entry("a", { profit_loss_rate: 0.2, tick: 500 }), entry("b", { profit_loss_rate: 0.075, tick: 500 })],
+    specs as unknown as Parameters<typeof paramRows>[1],
+  );
+
+  assert.deepEqual(rows.map((row) => row.label), ["익절·손절 기준", "tick"]); // 다른 값이 앞에 온다
+  assert.deepEqual(rows[0].values, ["20%", "7.5%"]);
+  assert.equal(rows[0].name, "profit_loss_rate");
+  assert.deepEqual(rows[1].values, ["500", "500"]); // 바꿀 수 없는 파라미터는 그대로
+  assert.equal(paramRows([entry("a", { profit_loss_rate: 0.2 })])[0].label, "profit_loss_rate"); // 명세를 모르면 이름 그대로
+});

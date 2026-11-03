@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useStrategySpecs } from "../../../apis/useStrategySpecs";
 import {
   Bar,
   BarChart,
@@ -166,7 +167,8 @@ function CurveCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
 }
 
 function ParamCard({ slots }: { slots: Slot[] }) {
-  const rows = paramRows(slots.map((slot) => slot.entry));
+  const specs = useStrategySpecs(slots.map((slot) => slot.entry.strategyId));
+  const rows = paramRows(slots.map((slot) => slot.entry), specs);
   return (
     <div className="table-wrap" style={{ height: "auto", maxHeight: 360 }}>
       <table className={`data-table ${styles.paramTable}`}>
@@ -189,7 +191,7 @@ function ParamCard({ slots }: { slots: Slot[] }) {
           </tr>
           {rows.map((row) => (
             <tr key={row.name} className={row.differs ? styles.differs : undefined}>
-              <td>{row.name}</td>
+              <td>{row.label}</td>
               {row.values.map((value, index) => (
                 <td key={slots[index].entry.key}>{value ?? "—"}</td>
               ))}
