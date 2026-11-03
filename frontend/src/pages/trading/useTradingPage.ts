@@ -13,6 +13,7 @@ import {
   fetchStrategy,
   type MarketTarget,
 } from "../../apis/trading";
+import { useParamInputs } from "../../components/common/EditableParams";
 import { formatClock } from "../../data/tradingView";
 import type { MarketStatus } from "../../data/tradingView";
 
@@ -43,6 +44,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     [strategyId],
     !!strategyId,
   );
+  const paramInputs = useParamInputs(strategyId, detail.data?.parameters);
   const instrument = detail.data?.instruments[0] ?? null;
   const code = instrument?.code ?? null;
 
@@ -103,7 +105,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   };
 
   return {
-    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, instrument, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
+    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
   };
 }
 

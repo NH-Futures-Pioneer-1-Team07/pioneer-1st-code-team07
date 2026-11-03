@@ -9,7 +9,8 @@ import {
 } from "../../apis/backtest";
 import { errorMessage } from "../../apis/client";
 import { usePolling } from "../../apis/polling";
-import { fetchRuns, fetchStrategies } from "../../apis/trading";
+import { fetchRuns, fetchStrategies, fetchStrategy } from "../../apis/trading";
+import { useParamInputs } from "../../components/common/EditableParams";
 import type { RunRef, RunSummary } from "../../apis/types";
 import { defaultPeriod, progressPercent, validateInput } from "../../data/backtestView";
 import { runKey } from "../../data/tradingView";
@@ -34,6 +35,9 @@ export function useBacktestPage() {
   const items = strategies.data ?? [];
   const strategy = items.find((item) => item.id === selectedStrategy) ?? items[0];
   const strategyId = strategy?.id ?? null;
+
+  const detail = usePolling(() => fetchStrategy(strategyId as string), 600000, [strategyId], !!strategyId);
+  const paramInputs = useParamInputs(strategyId, detail.data?.parameters);
 
   const range = usePolling(() => fetchRange(strategyId as string), 600000, [strategyId], !!strategyId);
   const assumptions = usePolling(fetchAssumptions, 600000);
@@ -96,7 +100,7 @@ export function useBacktestPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problem = validateInput(startDate, endDate, capital, available, slippage);
+    const problem = validateInput(startDate, endDate, capital, available, slippage) || paramInputs.problem;
     if (problem || !strategyId) {
       setError(problem || "전략을 선택해 주세요.");
       return;
@@ -110,6 +114,7 @@ export function useBacktestPage() {
         end_date: endDate,
         initial_capital: Number(capital),
         slippage_ticks: Number(slippage),
+        ...(paramInputs.entries.length ? { params: paramInputs.body() } : {}),
       });
       setActive(run);
       setAnnouncement("백테스트를 시작했습니다. 과거 데이터를 준비합니다.");
@@ -124,7 +129,7 @@ export function useBacktestPage() {
   const percent = progressPercent(liveMeta?.progress, liveMeta?.status ?? "running");
 
   return {
-    selectedStrategy, setSelectedStrategy, startDate, setStartDate, endDate, setEndDate, capital, setCapital, slippage, setSlippage, error, setError, starting, active, selectedKey, setSelectedKey, detailOpen, setDetailOpen, splitRef, announcement, formId, strategies, items, strategy, strategyId, range, assumptions, runs, list, live, liveMeta, selected, report, reportMeta, result, busy, available, submit, percent,
+    selectedStrategy, setSelectedStrategy, startDate, setStartDate, endDate, setEndDate, capital, setCapital, slippage, setSlippage, error, setError, starting, active, selectedKey, setSelectedKey, detailOpen, setDetailOpen, splitRef, announcement, formId, strategies, items, strategy, strategyId, paramInputs, range, assumptions, runs, list, live, liveMeta, selected, report, reportMeta, result, busy, available, submit, percent,
   };
 }
 

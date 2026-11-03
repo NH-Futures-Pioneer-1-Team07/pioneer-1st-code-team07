@@ -271,9 +271,9 @@ class PaperService:
         return ExtraInputs(vix=load_vix(), margin=instrument.margin, loader=loader)
 
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
-        unknown = sorted(set(overrides or {}) - set(manifest.parameters))
-        if unknown:
-            raise TradingRejected(422, f"전략에 없는 파라미터입니다: {', '.join(unknown)}")
+        problem = manifest.override_problem(overrides)
+        if problem:
+            raise TradingRejected(422, problem)
         return {**manifest.default_params(), **(overrides or {})}
 
     def _check_account(self, broker: Broker, code: str) -> tuple[dict[str, Any], Any]:

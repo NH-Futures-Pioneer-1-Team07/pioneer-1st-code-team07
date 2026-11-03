@@ -1,5 +1,6 @@
 import type { TradingController } from "../useTradingPage";
 import Icon from "../../../components/common/Icon";
+import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
 import { dash, formatMoney, formatNumber, pnlClass } from "../../../data/format";
 import { instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
@@ -23,6 +24,7 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
     instrument,
     quote,
     pnl,
+    paramInputs,
     act,
   } = ctl;
   return (
@@ -96,11 +98,12 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
           <span>{formatMoney(pnl?.fee ?? 0)}</span>
         </p>
       </div>
+      {!running && <EditableParams inputs={paramInputs} idPrefix="trading-param" />}
       {!running ? (
         <button
           className={`button primary ${styles.fullButton}`}
-          disabled={busy || !strategyId || clearing}
-          onClick={() => void act(() => startTrading(strategyId as string))}
+          disabled={busy || !strategyId || clearing || !!paramInputs.problem}
+          onClick={() => void act(() => startTrading(strategyId as string, paramInputs.body()))}
         >
           <Icon name="play" size={15} />
           운용 시작

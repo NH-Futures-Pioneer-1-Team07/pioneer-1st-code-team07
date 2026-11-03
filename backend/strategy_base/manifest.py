@@ -30,6 +30,25 @@ class ParameterSpec(BaseModel):
 
     default: Any
     description: str = Field(min_length=1)
+    # 화면에서 시작 전에 바꿀 수 있는 값이면 `editable`을 켠다. `percent`는 0.2를 20%로 보여 준다.
+    editable: bool = False
+    label: str | None = None
+    unit: Literal["percent"] | None = None
+    min: float | None = None
+    max: float | None = None
+
+    def problem(self, name: str, value: Any) -> str | None:
+        """값이 허용 범위를 벗어나면 사유를 돌려준다. `min`·`max`가 있으면 숫자여야 한다."""
+        if self.min is None and self.max is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return f"파라미터 {name}은(는) 숫자여야 합니다"
+        shown = (lambda number: f"{number * 100:g}%") if self.unit == "percent" else (lambda number: f"{number:g}")
+        if self.min is not None and value < self.min:
+            return f"파라미터 {name}은(는) {shown(self.min)} 이상이어야 합니다"
+        if self.max is not None and value > self.max:
+            return f"파라미터 {name}은(는) {shown(self.max)} 이하여야 합니다"
+        return None
 
 
 class BacktestSpec(BaseModel):
@@ -69,6 +88,17 @@ class Manifest(BaseModel):
             if spec.unit != "day" or spec.size != 1:
                 raise ValueError(f"추가 봉 계열은 일봉(unit=day, size=1)만 지원합니다: {name}")
         return series
+
+    def override_problem(self, overrides: dict[str, Any] | None) -> str | None:
+        """실행 요청의 파라미터에 문제가 있으면 사유를 돌려준다."""
+        unknown = sorted(set(overrides or {}) - set(self.parameters))
+        if unknown:
+            return f"전략에 없는 파라미터입니다: {', '.join(unknown)}"
+        for name, value in (overrides or {}).items():
+            problem = self.parameters[name].problem(name, value)
+            if problem:
+                return problem
+        return None
 
     def default_params(self) -> dict[str, Any]:
         return {key: spec.default for key, spec in self.parameters.items()}

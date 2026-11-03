@@ -1,4 +1,5 @@
 import type { BacktestController } from "../useBacktestPage";
+import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
 import Icon from "../../../components/common/Icon";
 import DateRangeCalendar from "../../../components/common/DateRangeCalendar";
@@ -25,6 +26,7 @@ export default function ConfigPanel({ ctl }: { ctl: BacktestController }) {
     items,
     strategy,
     strategyId,
+    paramInputs,
     range,
     assumptions,
     busy,
@@ -144,6 +146,7 @@ export default function ConfigPanel({ ctl }: { ctl: BacktestController }) {
             {capital ? koreanAmount(Number(capital)) : ""}
           </span>
         </fieldset>
+        <EditableParams inputs={paramInputs} disabled={busy} idPrefix={`${formId}-param`} />
         <div className={styles.assumptions}>
           <h3>비용 및 체결 가정</h3>
           {assumptions.data ? (
