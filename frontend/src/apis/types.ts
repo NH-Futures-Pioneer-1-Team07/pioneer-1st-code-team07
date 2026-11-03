@@ -186,6 +186,8 @@ export interface AccountView {
 
 export interface RunSummary extends RunRef {
   strategy_name: string;
+  /** 실행 때 쓴 전략 파라미터 */
+  params?: Record<string, unknown> | null;
   instrument: { name: string; code: string; market?: "domestic" | "overseas" };
   started_at: string;
   ended_at: string | null;

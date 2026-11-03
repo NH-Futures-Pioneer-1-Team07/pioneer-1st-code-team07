@@ -304,6 +304,7 @@ def _summary(meta: dict[str, Any]) -> dict[str, Any]:
         "period",
         "initial_capital",
         "assumptions",
+        "params",
     )
     return {key: meta.get(key) for key in keys}
 

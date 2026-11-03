@@ -36,3 +36,15 @@ test("시작 요청에는 퍼센트를 비율로 바꿔 보낸다", () => {
   assert.deepEqual(paramsBody(entries, { profit_loss_rate: "7.5" }), { profit_loss_rate: 0.075 });
   assert.deepEqual(paramsBody([["n", plain]], { n: "3" }), { n: 3 });
 });
+
+test("이력에는 바꿀 수 있는 파라미터의 이름과 값을 붙인다", async () => {
+  const { paramSummary } = await import("./paramView.ts");
+  const specs = { profit_loss_rate: rate, quantity: plain };
+
+  assert.equal(paramSummary(specs, { profit_loss_rate: 0.2, quantity: 5 }), "익절·손절 기준 20%");
+  assert.equal(paramSummary(specs, { profit_loss_rate: 0.075 }), "익절·손절 기준 7.5%");
+  assert.equal(paramSummary(specs, { quantity: 5 }), ""); // 기록에 값이 없으면 붙이지 않는다
+  assert.equal(paramSummary(specs, null), "");
+  assert.equal(paramSummary({ quantity: plain }, { quantity: 5 }), ""); // 바꿀 수 있는 파라미터가 없으면 붙이지 않는다
+  assert.equal(paramSummary(undefined, { profit_loss_rate: 0.2 }), "");
+});

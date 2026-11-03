@@ -11,6 +11,19 @@ const shown = (spec: ParameterSpec, value: number): string =>
 
 export const unitLabel = (spec: ParameterSpec): string => (spec.unit === "percent" ? "%" : "");
 
+/** 이력에 붙일 사용 파라미터 요약. 화면에서 바꿀 수 있는 숫자 파라미터만 "이름 값" 순서로 쉼표로 잇는다. 없으면 빈 문자열이다. */
+export function paramSummary(
+  parameters: Record<string, ParameterSpec> | undefined,
+  params: Record<string, unknown> | null | undefined,
+): string {
+  return editableParams(parameters)
+    .flatMap(([name, spec]) => {
+      const value = params?.[name];
+      return typeof value === "number" ? [`${spec.label ?? name} ${shown(spec, value)}${unitLabel(spec)}`] : [];
+    })
+    .join(", ");
+}
+
 /** 입력칸의 처음 값. 전략이 정한 기본값이다. */
 export const defaultInputs = (entries: ParamEntry[]): Record<string, string> =>
   Object.fromEntries(entries.map(([name, spec]) => [name, shown(spec, spec.default as number)]));

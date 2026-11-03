@@ -52,6 +52,14 @@ def test_이력_목록을_모드와_전략으로_거른다(setup):
     assert client.get("/api/runs", params={"mode": "live"}).status_code == 422
 
 
+def test_이력_목록_요약에_실행_때_쓴_파라미터가_담긴다(setup):
+    client, _ = setup
+
+    [run] = client.get("/api/runs", params={"mode": "backtest"}).json()
+
+    assert run["params"] == {"quantity": 5}
+
+
 def test_이력_상세를_돌려준다(setup):
     client, recorder = setup
 
