@@ -317,3 +317,47 @@ def _fills(recorder):
     for path in sorted((recorder.folder / "journal").glob("*.jsonl")):
         lines += [json.loads(text) for text in path.read_text(encoding="utf-8").splitlines()]
     return [line for line in lines if line["kind"] == "fill"]
+
+
+# ---- 판단 설명과 기록 ----
+
+
+def test_판단_기록의_detail에_중기와_장중_판단_수치가_담긴다():
+    output = decide()
+
+    detail = output.decisions[0].detail
+    assert detail["mid"]["signal"] == "buy" and detail["mid"]["close"] == 129
+    assert detail["mid"]["short_ma"] > detail["mid"]["long_ma"]
+    assert detail["intraday"]["cross"] == "buy" and detail["intraday"]["position"] == "above"
+    assert detail["today"]["vix"] == 12.0 and detail["today"]["limit"] == 1 and detail["today"]["entered"] == 1
+
+
+def test_판단_문구와_주문_사유에_중기와_장중_요약이_붙는다():
+    entry = decide()
+    hold = decide(bars=minute_bars(FLAT20 + [100.0]))
+    exit_ = decide(bars=minute_bars(FLAT20 + [100.0]), daily_bars=FALLING, lots=[Lot("a", Side.BUY, 1, 100.0)])
+
+    assert "중기 매수 허용 · 장중 단기선 상향 교차" in entry.orders[0].reason
+    assert hold.decisions[0].reason == "장중 이동평균 교차 없음 (중기 매수 허용 · 장중 단기선과 장기선이 같음)"
+    assert "반대 방향" in exit_.orders[0].reason and "중기 매도 허용" in exit_.orders[0].reason
+
+
+def test_describe는_세_구역으로_현재_판단을_설명한다():
+    sections = STRATEGY.describe(context(minute_bars(CROSS_UP), pnl=0.0, lots=[Lot("a", Side.BUY, 2, 100.0)]))["sections"]
+
+    assert [s["title"] for s in sections] == ["중기 판단 (일봉)", "장중 판단 (5분봉)", "오늘 진입·보유"]
+    mid, intraday, today = sections
+    assert (mid["headline"], mid["tone"]) == ("매수 허용", "buy")
+    assert (intraday["headline"], intraday["tone"]) == ("단기선 상향 교차", "buy")
+    assert ["진입 신호", "매수 교차"] in intraday["rows"]
+    assert ["보유", "매수 2계약"] in today["rows"]
+    assert today["headline"] == "신규 진입 0/1계약"
+    assert ["증거금 대비 손익", "+0.0% (기준 ±20%)"] in today["rows"]
+
+
+def test_describe는_값을_모르면_계산_불가와_대시로_표시한다():
+    sections = STRATEGY.describe(context([], daily_bars=[], vix=None, margin=None))["sections"]
+
+    assert sections[0]["headline"] == "계산 불가" and sections[0]["rows"][0] == ["직전 거래일 종가", "—"]
+    assert sections[1]["headline"] == "계산 불가" and sections[1]["tone"] == "neutral"
+    assert sections[2]["headline"] == "신규 진입 0/—계약" and ["VIX(직전 거래일 종가)", "—"] in sections[2]["rows"]
