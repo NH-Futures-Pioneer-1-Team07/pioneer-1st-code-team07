@@ -16,6 +16,7 @@ class Instrument(BaseModel):
     exchange: str | None = None
     multiplier: int | None = Field(default=None, gt=0)
     margin: float | None = Field(default=None, gt=0)
+    tick_size: float | None = Field(default=None, gt=0)
 
 
 class BarSpec(BaseModel):

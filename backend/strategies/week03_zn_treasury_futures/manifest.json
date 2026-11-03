@@ -8,7 +8,8 @@
       "exchange": "FCME",
       "code": "ZNZ26",
       "multiplier": 1000,
-      "margin": 2083
+      "margin": 2083,
+      "tick_size": 0.015625
     }
   ],
   "bar": {
