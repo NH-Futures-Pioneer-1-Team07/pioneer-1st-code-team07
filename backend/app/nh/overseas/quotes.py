@@ -8,15 +8,19 @@ from datetime import date, datetime
 from typing import Any
 
 from app.nh.client import NHClient
+from app.nh.domestic.market import QuoteDetail
 from app.nh.domestic.quotes import Quote
 from app.nh.errors import NHError
 from app.nh.rate_limit import Limit
-from app.nh.values import number
+from app.nh.realtime_data import BookLevel, OrderBook
+from app.nh.values import count, number, text
 from strategy_base.models import Bar
 
 MINUTE_PATH = "/trade/v1/overseas/chart-minute"
 DAILY_PATH = "/trade/v1/overseas/chart-daily"
 PRICE_PATH = "/trade/v1/overseas/price"
+BOOK_PATH = "/trade/v1/overseas/bid-price"
+BOOK_LEVELS = 5
 
 MAX_ROWS = 9999
 FIRST_KEY = "99999999"
@@ -32,14 +36,69 @@ def fetch_quote(client: NHClient, exchange: str, code: str) -> Quote:
     return Quote(code, last_price, None)
 
 
+def fetch_quote_detail(client: NHClient, exchange: str, code: str) -> QuoteDetail:
+    """현재가 상세. 응답에 월물·만기·가격 제한·거래승수가 없어 그 항목은 `None`이다."""
+    body = client.call(PRICE_PATH, {"Iccurs1": {"iccurs1_exch_cd": exchange, "iccurs1_sym": code}}, Limit.QUOTE)
+    rows = _rows(body)
+    row = rows[0] if rows else {}
+    return QuoteDetail(
+        code=code,
+        name=" ".join(text(row.get("occurs1_sym_nm")).split()),
+        contract=None,
+        expiry=None,
+        last_price=number(row.get("occurs1_last_pric")),
+        change=number(row.get("occurs1_diff_rt")),
+        change_rate=number(row.get("occurs1_rt")),
+        volume=count(row.get("occurs1_cum_trd_qty")),
+        open=number(row.get("occurs1_open_pric")),
+        high=number(row.get("occurs1_high_pric")),
+        low=number(row.get("occurs1_low_pric")),
+        prev_close=number(row.get("occurs1_pre_close_pric")),
+        upper_limit=None,
+        lower_limit=None,
+        multiplier=None,
+        remaining_days=None,
+    )
+
+
+def fetch_book(client: NHClient, exchange: str, code: str) -> tuple[OrderBook, float | None, float | None]:
+    """5단계 호가. (호가, 현재가, 등락률)을 돌려준다."""
+    body = client.call(BOOK_PATH, {"exch_cd": exchange, "sym": code}, Limit.QUOTE)
+    levels = [
+        BookLevel(
+            ask_price=number(body.get(f"ask_pric_{step}")),
+            ask_quantity=count(body.get(f"ask_qty_{step}")),
+            bid_price=number(body.get(f"bid_pric_{step}")),
+            bid_quantity=count(body.get(f"bid_qty_{step}")),
+        )
+        for step in range(1, BOOK_LEVELS + 1)
+    ]
+    book = OrderBook(
+        code=text(body.get("sym")) or code,
+        time=text(body.get("qt_rcv_tm")),
+        total_ask_quantity=count(body.get("ask_qty")),
+        total_bid_quantity=count(body.get("bid_qty")),
+        levels=levels,
+    )
+    return book, number(body.get("last_pric")), number(body.get("rt"))
+
+
 def fetch_minute_bars(
-    client: NHClient, exchange: str, code: str, *, minutes: int, start: date | None = None, end: date | None = None
+    client: NHClient,
+    exchange: str,
+    code: str,
+    *,
+    minutes: int,
+    start: date | None = None,
+    end: date | None = None,
+    max_bars: int | None = None,
 ) -> list[Bar]:
     """분봉을 `start`부터 `end`까지(양 끝 포함) 오래된 순서로 돌려준다. `start`가 없으면 조회되는 가장 오래된 봉까지 이어받는다.
 
     모의환경은 조회 기간을 무시하고 최신 봉부터 한 쪽(약 495개)씩 돌려주며, 다음 데이터 키로 과거 쪽을 이어받는다.
-    그래서 기간 밖의 봉은 걸러 내고, `start`보다 오래된 봉이 나오면 멈춘다. 데이터 끝에 이르면 키가
-    최신 쪽으로 되돌아가므로 쪽의 가장 오래된 봉이 앞 쪽보다 새로우면 멈춘다.
+    `max_bars`가 있으면 그만큼 모이는 대로 멈춘다(최근 봉만 필요할 때). 기간 밖의 봉은 걸러 내고, `start`보다 오래된 봉이 나오면 멈춘다. 데이터 끝에 이르면 키가
+    최신 쪽으로 되돌아가므로 쪽의 가장 오래된 봉이 앞 쪽보다 새로우면 멈춘다. `max_bars`가 있으면 그만큼 모이는 대로
+    멈춘다(최근 봉만 필요할 때).
     """
     if start is not None and end is not None and end < start:
         raise ValueError("조회 끝 날짜가 시작 날짜보다 빠릅니다")
@@ -71,6 +130,8 @@ def fetch_minute_bars(
             bars[bar.time] = bar
         key = str(body.get("nxt_key") or "").strip()
         if not key or key == FIRST_KEY or key in seen_keys or (start is not None and page_oldest.date() < start):
+            break
+        if max_bars is not None and len(bars) >= max_bars:
             break
         seen_keys.add(key)
         payload = {**payload, "nxt_key": key}

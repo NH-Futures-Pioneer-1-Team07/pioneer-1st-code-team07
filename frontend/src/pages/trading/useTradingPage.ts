@@ -11,6 +11,7 @@ import {
   fetchStatus,
   fetchStrategies,
   fetchStrategy,
+  type MarketTarget,
 } from "../../apis/trading";
 import { formatClock } from "../../data/tradingView";
 import type { MarketStatus } from "../../data/tradingView";
@@ -45,15 +46,21 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const instrument = detail.data?.instruments[0] ?? null;
   const code = instrument?.code ?? null;
 
-  const quote = usePolling(() => fetchQuote(code as string), 3000, [code], !!code);
+  const target: MarketTarget | undefined = instrument
+    ? { market: instrument.market, exchange: instrument.exchange }
+    : undefined;
+  // 해외 종목은 실시간 체결 연결이 없어 REST 조회로만 갱신한다.
+  const realtime = instrument?.market !== "overseas";
+  const quote = usePolling(() => fetchQuote(code as string, target), 3000, [code], !!code);
   const candles = usePolling(
-    () => fetchCandles(code as string, interval),
+    () => fetchCandles(code as string, interval, undefined, target),
     5000,
     [code, interval],
     !!code,
   );
-  const book = usePolling(() => fetchOrderBook(code as string), 3000, [code], !!code);
-  const stream = useMarketStream(code);
+  const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
+  const stream = useMarketStream(realtime ? code : null);
+  const streamState = realtime ? stream.state : "polling";
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;
   const prevClose = quote.data?.prev_close ?? null;
@@ -77,8 +84,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const pnl = status.data?.pnl;
   const session = quote.data?.market_session ?? null;
   useEffect(() => {
-    onMarketStatus({ session, stream: stream.state, failure: stream.failure });
-  }, [onMarketStatus, session, stream.state, stream.failure]);
+    onMarketStatus({ session, stream: streamState, failure: stream.failure });
+  }, [onMarketStatus, session, streamState, stream.failure]);
   const receivedAt = formatClock(stream.lastTrade?.time);
 
   const act = async (action: () => Promise<unknown>) => {

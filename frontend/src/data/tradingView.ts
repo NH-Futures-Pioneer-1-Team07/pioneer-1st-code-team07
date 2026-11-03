@@ -41,7 +41,13 @@ export const marketSessionLabel = (session: MarketSession | null | undefined): s
 
 /** 상단바에 보이는 시세 스트림 연결 문구. 장이 열렸는지가 아니라 연결 여부만 뜻한다. */
 export const streamLabel = (state: string, failure: string | null): string =>
-  state === "live" ? "시세 연결됨" : failure ? `시세 연결 끊김: ${failure}` : "시세 연결 중";
+  state === "live"
+    ? "시세 연결됨"
+    : state === "polling"
+      ? "시세 주기 조회"
+      : failure
+        ? `시세 연결 끊김: ${failure}`
+        : "시세 연결 중";
 
 /** 이력 제목 옆에 보이는 이력 웹소켓 연결 문구. */
 export const runStreamLabel = (state: string): string =>

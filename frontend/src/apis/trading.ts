@@ -34,16 +34,27 @@ export const stopTrading = () =>
 export const clearAccount = () =>
   http.post<{ phase: string }>("/api/trading/clear").then((r) => r.data);
 
-export const fetchQuote = (code: string) =>
-  http.get<Quote>(`/api/market/${code}/quote`).then((r) => r.data);
+/** 시세를 조회할 종목의 시장. 해외 종목은 거래소 코드도 보낸다. */
+export interface MarketTarget {
+  market: "domestic" | "overseas";
+  exchange?: string | null;
+}
 
-export const fetchCandles = (code: string, interval: string, count = 120) =>
+const marketParams = (target?: MarketTarget) =>
+  target ? { market: target.market, ...(target.exchange ? { exchange: target.exchange } : {}) } : {};
+
+export const fetchQuote = (code: string, target?: MarketTarget) =>
+  http.get<Quote>(`/api/market/${code}/quote`, { params: marketParams(target) }).then((r) => r.data);
+
+export const fetchCandles = (code: string, interval: string, count = 120, target?: MarketTarget) =>
   http
-    .get<Candle[]>(`/api/market/${code}/candles`, { params: { interval, count } })
+    .get<Candle[]>(`/api/market/${code}/candles`, { params: { interval, count, ...marketParams(target) } })
     .then((r) => r.data);
 
-export const fetchOrderBook = (code: string) =>
-  http.get<OrderBook>(`/api/market/${code}/orderbook`).then((r) => r.data);
+export const fetchOrderBook = (code: string, target?: MarketTarget) =>
+  http
+    .get<OrderBook>(`/api/market/${code}/orderbook`, { params: marketParams(target) })
+    .then((r) => r.data);
 
 export const fetchRuns = (mode: "paper" | "backtest") =>
   http.get<RunSummary[]>("/api/runs", { params: { mode } }).then((r) => r.data);
