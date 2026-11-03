@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   chartLayout,
   formatClock,
+  flattenDetail,
   formatDateTime,
   instrumentLabel,
   mapDecisions,
@@ -49,7 +50,7 @@ test("매매 판단 기록을 화면 행으로 바꾼다", () => {
   ]);
   assert.deepEqual(rows[0], {
     key: "1", at: "2026.10.28 10:03:00", action: "매수", reason: "상승 추세에서 기준 고점 돌파",
-    price: null, quantity: 12,
+    detail: [], price: null, quantity: 12,
   });
   assert.equal(rows[1].action, "진입 보류");
   assert.equal(rows[1].quantity, null);
@@ -58,7 +59,29 @@ test("매매 판단 기록을 화면 행으로 바꾼다", () => {
 
 test("체결 기록을 화면 행으로 바꾼다", () => {
   const [row] = mapFills([line({ seq: 7, kind: "fill", side: "sell", quantity: 3, price: 243500, fee: 62 })]);
-  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62 });
+  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62, reason: "" });
+});
+
+test("판단 기록은 근거 수치를 줄로 펼치고 체결 기록은 사유를 담는다", () => {
+  const [row] = mapDecisions([
+    line({
+      seq: 1,
+      result: "hold",
+      reason: "교차 없음",
+      detail: { mid: { signal: "buy", close: 106.640625, short_ma: null }, intraday: { cross: null, position: "above" }, today: { entered: 0, rates: [1, 2] } },
+    }),
+  ]);
+  assert.deepEqual(row.detail, [
+    "mid.signal: buy",
+    "mid.close: 106.640625",
+    "intraday.position: above",
+    "today.entered: 0",
+    "today.rates: 1, 2",
+  ]);
+  const [fill] = mapFills([line({ seq: 2, kind: "fill", side: "buy", quantity: 1, price: 106.5, reason: "장중 이동평균 교차 (중기 매수 허용)" })]);
+  assert.equal(fill.reason, "장중 이동평균 교차 (중기 매수 허용)");
+  assert.deepEqual(flattenDetail(undefined), []);
+  assert.deepEqual(flattenDetail({ a: 1.23456789 }), ["a: 1.234568"]);
 });
 
 const status = (fields: Partial<TradingStatus>): TradingStatus => ({ phase: "idle", run: null, ...fields });

@@ -152,6 +152,7 @@ export default function RecordDetail({ meta, stream }: { meta: RecordMeta; strea
                   <th>체결 수량</th>
                   <th>체결 가격</th>
                   <th>수수료</th>
+                  <th>체결 사유</th>
                 </tr>
               </thead>
               <tbody>
@@ -163,6 +164,7 @@ export default function RecordDetail({ meta, stream }: { meta: RecordMeta; strea
                     <td>{row.quantity}계약</td>
                     <td>{formatNumber(row.price)}</td>
                     <td>{row.fee === null ? "—" : formatMoney(row.fee)}</td>
+                    <td className={styles.fillReason} title={row.reason}>{row.reason || "—"}</td>
                   </tr>
                 ))}
               </tbody>

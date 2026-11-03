@@ -18,3 +18,11 @@
   color: var(--text-tertiary);
   font-size: 11px;
 }
+.fillReason {
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
