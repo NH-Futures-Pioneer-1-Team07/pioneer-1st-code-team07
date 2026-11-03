@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import json
 from datetime import date, datetime, timedelta
 
@@ -15,7 +16,9 @@ from app.nh.domestic.orders import OrderBlocked
 from app.nh.domestic.quotes import Quote
 from app.nh.errors import BusinessError, TransportError
 from app.nh.realtime_data import OrderEvent, Reconnected, SubscriptionFailed, Trade
+from app.data.vix import VixHistory
 from app.records.store import KST, RunStore
+from app.runners.inputs import ExtraInputs
 from app.runners import paper
 from app.runners.paper import PaperConfig, PaperSession, StateChange
 from strategy_base.interface import BaseStrategy
@@ -144,7 +147,7 @@ class FakeBroker:
 
 
 class Harness:
-    def __init__(self, tmp_path, strategy=None, config=CONFIG):
+    def __init__(self, tmp_path, strategy=None, config=CONFIG, extras=None):
         self.broker = FakeBroker()
         self.strategy = strategy or Script()
         self.now = START
@@ -158,6 +161,7 @@ class Harness:
             started_at=START, last_trading_day=date(2026, 11, 12),
             deposit_before={"cash": 1e8, "total_assets": 1e8, "fee": 100.0, "futures_realized_pnl": 0, "total_pnl": 0},
             clock=lambda: self.now,
+            extras=extras,
         )
         self.session.feed_state = "live"
 
@@ -233,6 +237,41 @@ def test_전일_봉은_전달하지_않는다(tmp_path):
 
         assert [c.bars[-1].time for c in h.strategy.bar_calls] == [bar(0).time]
         assert yesterday not in h.strategy.bar_calls[0].bars
+
+    run(scenario)
+
+
+def test_history_bars가_있으면_전일_봉을_앞에_이어서_전달한다(tmp_path):
+    async def scenario():
+        config = dataclasses.replace(CONFIG, history_bars=2)
+        h = Harness(tmp_path, config=config)
+        y1 = Bar(datetime(2026, 10, 27, 15, 0), 1, 1, 1, 1, 1)
+        y2 = Bar(datetime(2026, 10, 27, 15, 3), 2, 2, 2, 2, 2)
+        y0 = Bar(datetime(2026, 10, 27, 14, 57), 3, 3, 3, 3, 3)
+        h.broker.bars = [y0, y1, y2, bar(0)]
+
+        await h.at(minutes=3, seconds=10)
+
+        assert [b.time for b in h.strategy.bar_calls[0].bars] == [y1.time, y2.time, bar(0).time]
+
+    run(scenario)
+
+
+def test_추가_입력은_전략_호출마다_채워진다(tmp_path):
+    async def scenario():
+        today = Bar(datetime(2026, 10, 28), 9, 9, 9, 9, 9)
+        yesterday = Bar(datetime(2026, 10, 27), 8, 8, 8, 8, 8)
+        extras = ExtraInputs(
+            series={"daily": [yesterday, today]}, vix=VixHistory({date(2026, 10, 27): 21.5}), margin=2500.0
+        )
+        h = Harness(tmp_path, extras=extras)
+        h.broker.bars = [bar(0)]
+
+        await h.at(minutes=3, seconds=10)
+
+        ctx = h.strategy.bar_calls[0]
+        assert ctx.series == {"daily": [yesterday]}
+        assert (ctx.vix, ctx.margin, ctx.unrealized_pnl) == (21.5, 2500.0, 0.0)
 
     run(scenario)
 

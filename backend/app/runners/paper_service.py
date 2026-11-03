@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from app.config import Settings
+from app.data.vix import load as load_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
 from app.nh.overseas import OVERSEAS_UNSUPPORTED
@@ -23,7 +24,9 @@ from app.runners.clearing import (
     account_view,
     run_clear,
 )
+from app.runners.inputs import ExtraInputs
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
+from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
 from strategy_base.manifest import Manifest
 from strategy_base.registry import StrategyRegistry
 
@@ -75,12 +78,14 @@ class PaperService:
         config_overrides: dict[str, Any] | None = None,
         gateway_factory: Callable[[], AccountGateway] | None = None,
         clear_config: ClearConfig | None = None,
+        daily_fetcher: DailyFetcher | None = None,
     ):
         self._settings = settings
         self._registry = registry
         self._store = store
         self._components = components or nh_components(settings)
         self._clock = clock
+        self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
         self._overrides = config_overrides or {}
         self._lock = threading.Lock()
         self._session: PaperSession | None = None
@@ -128,6 +133,7 @@ class PaperService:
                     multiplier=instrument.multiplier,
                     minutes=manifest.bar.size,
                     fee_rate=self._settings.backtest_fee_rate,
+                    history_bars=manifest.history_bars,
                 ),
                 **self._overrides,
             )
@@ -149,6 +155,7 @@ class PaperService:
                 last_trading_day=last_trading_day,
                 deposit_before=deposit,
                 clock=self._clock,
+                extras=self._extra_inputs(manifest, instrument),
             )
             self._session = session
             self._recorder = recorder
@@ -230,6 +237,15 @@ class PaperService:
             loop.call_soon_threadsafe(call, *args)
         else:
             call(*args)
+
+    def _extra_inputs(self, manifest: Manifest, instrument: Any) -> ExtraInputs:
+        loader = None
+        if manifest.series:
+            def loader(day):  # noqa: ANN001 - 날짜가 바뀔 때마다 일봉을 다시 받는다
+                bars = self._daily_fetcher(instrument, DAILY_MARGIN)
+                return {name: bars for name in manifest.series}
+
+        return ExtraInputs(vix=load_vix(), margin=instrument.margin, loader=loader)
 
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
         unknown = sorted(set(overrides or {}) - set(manifest.parameters))

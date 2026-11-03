@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from strategy_base.registry import StrategyRegistry
 
 VALID_MANIFEST = {
@@ -98,11 +100,31 @@ def test_전략_폴더가_없으면_빈_목록이다(tmp_path):
     assert registry.all() == []
 
 
-def test_저장소의_전략_폴더에서_장중_전략이_등록된다():
+def test_저장소의_전략_폴더는_오류_없이_스캔되고_템플릿은_등록하지_않는다():
     from app.config import BACKEND_DIR
 
     registry = StrategyRegistry(BACKEND_DIR / "strategies")
 
     assert registry.errors == {}
-    assert "week02_samsung_futures_intraday" in [item.id for item in registry.all()]
     assert "_template" not in [item.id for item in registry.all()]
+
+
+def test_추가_봉_계열은_일봉만_선언할_수_있다():
+    from pydantic import ValidationError
+
+    from strategy_base.manifest import Manifest
+
+    base = {
+        "name": "n",
+        "description": "d",
+        "instruments": [{"name": "i", "market": "overseas", "exchange": "FCME", "code": "ZNZ26", "margin": 2500}],
+        "bar": {"unit": "minute", "size": 5},
+        "history_bars": 20,
+    }
+
+    manifest = Manifest.model_validate({**base, "series": {"daily": {"unit": "day", "size": 1}}})
+    assert manifest.series["daily"].unit == "day" and manifest.history_bars == 20
+
+    for bad in ({"hourly": {"unit": "minute", "size": 60}}, {"Daily": {"unit": "day", "size": 1}}):
+        with pytest.raises(ValidationError):
+            Manifest.model_validate({**base, "series": bad})

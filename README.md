@@ -152,9 +152,7 @@ pioneer-1st-code-team07/
 │   │   ├── indicators.py             공통 지표
 │   │   └── testing.py                테스트 도우미
 │   ├── strategies/                   전략 폴더 (폴더 하나가 전략 하나)
-│   │   ├── _template/                새 전략용 템플릿
-│   │   ├── week02_samsung_futures_intraday/
-│   │   └── week02_samsung_futures_reversal/
+│   │   └── _template/                새 전략용 템플릿
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
 │   └── tests/                        백엔드 테스트
 ├── frontend/                         React 화면 (TypeScript)

@@ -75,6 +75,11 @@ class Context:
     - `bars`: 완성된 봉, 오래된 것부터. 판단 대상 봉이 마지막이다.
     - `price`: 장중 가격 갱신 때의 현재가. 봉 마감 호출에서는 `None`이다.
     - `state`: 전략이 직전 호출에서 돌려준 상태.
+    - `series`: `manifest.json`의 `series`에 선언한 추가 봉 계열(이름 → 완성된 봉, 오래된 것부터).
+      일봉은 `now` 이전 날짜의 봉만 담는다.
+    - `vix`: 직전 거래일 종가 VIX. 값을 알 수 없으면 `None`이다.
+    - `margin`: 계약당 기준 증거금. `manifest.json`의 종목에 적은 값이며 없으면 `None`이다.
+    - `unrealized_pnl`: 보유분 전체의 평가손익(통화 단위). 수수료는 포함하지 않는다.
     """
 
     now: datetime
@@ -85,6 +90,10 @@ class Context:
     lots: Sequence[Lot] = ()
     open_orders: Sequence[OpenOrder] = ()
     state: Mapping[str, Any] = field(default_factory=dict)
+    series: Mapping[str, Sequence[Bar]] = field(default_factory=dict)
+    vix: float | None = None
+    margin: float | None = None
+    unrealized_pnl: float | None = None
 
     @property
     def net_quantity(self) -> int:

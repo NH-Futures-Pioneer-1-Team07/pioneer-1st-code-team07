@@ -56,11 +56,14 @@ uv run pytest
 ## 전략 추가 방법
 
 1. `strategies/_template/`을 `strategies/<전략 id>/`로 복사한다.
-   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week02_samsung_futures_intraday`
+   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week03_zn_treasury_futures`
 2. `manifest.json`을 고친다.
    - `name`, `description`: UI에 표시한다.
    - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다. 해외 종목은 `exchange`(예: `FCME`)도 쓴다.
-   - `bar`: 봉 단위. 예: `{"unit": "minute", "size": 3}`
+   - `bar`: 판단 기준 봉 단위. 봉이 마감될 때마다 `on_bar`가 호출된다. 예: `{"unit": "minute", "size": 3}`
+   - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
+   - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
+   - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
 3. `strategy.py`의 `Strategy` 클래스에 전략 문서의 판단 규칙을 구현한다.
 4. `README.md`에 전략 문서 링크와 구현 메모를 쓴다.
@@ -72,10 +75,21 @@ uv run pytest
 - 전략은 `Context`를 읽고 `StrategyOutput`을 돌려준다. 형식은 `strategy_base/models.py`에 있다.
 - 봉이 마감될 때 `on_bar(ctx)`가 호출된다. 장중 가격 갱신에 반응해야 하면 `on_price(ctx)`도 구현한다.
 - 입력 `ctx`: 완성된 봉(`bars`, 마지막이 판단 대상), 현재 시각, 종목 최종거래일, 진입분별 포지션(`lots`), 미체결 주문(`open_orders`), 파라미터, 직전 호출의 상태(`state`)
+- 추가 입력 `ctx`: 추가 봉 계열(`series`, 일봉은 오늘 이전 날짜만), 직전 거래일 종가 VIX(`vix`), 계약당 기준 증거금(`margin`), 보유분 전체의 평가손익(`unrealized_pnl`, 수수료 제외). 값을 알 수 없으면 `None`이다.
 - 출력 `StrategyOutput`: 주문 의도(`orders`), 미체결 취소 요청(`cancels`), 매매 판단 기록(`decisions`), 다음 호출에 넘길 상태(`state`)
 - 주문 의도는 방향, 수량, 진입·청산 구분, 진입분 id, 이유, 주문 유형, 유효 시한(봉 개수)으로 이루어진다.
 - 전략은 시세 수신, 주문 전송, 계좌 조회, 파일 저장을 직접 호출하지 않는다.
 - 아무것도 하지 않으려면 빈 `StrategyOutput()`을 돌려준다.
+
+### VIX
+
+- 전략에는 직전 거래일 종가 VIX를 넘긴다. 장중 VIX는 다루지 않는다.
+- 출처는 FRED `VIXCLS` 일 종가이며 `data/vixcls.csv`에 저장한다. 백테스트와 모의매매가 같은 파일을 읽는다.
+- 파일은 다음 명령으로 갱신한다. 받기에 실패하면 기존 파일을 그대로 둔다.
+
+```bash
+uv run python -m app.data.vix
+```
 
 ### 공통 지표
 
@@ -95,7 +109,7 @@ uv run pytest
 `strategy_base/testing.py`로 서버 없이 고정 봉 데이터에 전략을 실행한다.
 
 - `make_bars(rows, start, minutes)`: (고가, 저가, 종가, 거래량) 목록으로 연속한 봉을 만든다.
-- `run_on_bars(strategy, bars, lots=..., open_orders=..., last_trading_day=...)`: 봉이 하나씩 마감되는 것처럼 `on_bar`를 호출하고 호출마다 출력을 돌려준다. 체결은 흉내 내지 않는다.
+- `run_on_bars(strategy, bars, lots=..., open_orders=..., last_trading_day=..., series=..., vix=..., margin=...)`: 봉이 하나씩 마감되는 것처럼 `on_bar`를 호출하고 호출마다 출력을 돌려준다. 체결은 흉내 내지 않는다.
 - 예시는 `tests/test_template_strategy.py`를 따른다.
 
 ## NH선물 API
@@ -263,7 +277,7 @@ await connection.stop()
 
 ### 동작
 
-- **분봉**: 5초마다 분봉을 조회해 마감된 봉(봉 끝 2초 뒤)을 시간순으로 한 번씩 `on_bar`에 전달한다. 운용을 시작한 뒤에 시작한 당일 봉만 쓰고 시작 전 봉과 전일 봉은 쓰지 않는다. `ctx.now`는 봉이 끝나는 시각이다.
+- **분봉**: 5초마다 분봉을 조회해 마감된 봉(봉 끝 2초 뒤)을 시간순으로 한 번씩 `on_bar`에 전달한다. 운용을 시작한 뒤에 시작한 봉만 판단하며, 시작 전 봉은 `history_bars`가 있는 전략에 한해 첫 판단의 앞쪽 봉으로만 쓴다(오늘 시작 전 봉과 전일 봉을 합쳐 최근 `history_bars`개). `ctx.now`는 봉이 끝나는 시각이다.
 - **가격**: 실시간 체결(`KA`)을 `on_price`에 전달한다(같은 가격이 1초 안에 반복되면 한 번만). 실시간이 연결 상태가 아니면 5초마다 현재가를 조회해 대신한다.
 - **주문**: 전략의 주문 의도를 시장가 주문으로 보낸다.
   - 신규 진입은 주문 전에 주문가능수량을 조회해 가능한 수량만 주문한다. 계획 수량(`planned_quantity`)과 실제 수량(`quantity`)을 기록하고, 가능 수량이 0이면 주문하지 않는다.

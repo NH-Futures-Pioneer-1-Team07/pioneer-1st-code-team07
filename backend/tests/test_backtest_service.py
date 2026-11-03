@@ -394,3 +394,48 @@ def test_같은_종목의_가능_기간은_하루_동안_다시_조회하지_않
     client.post("/api/backtests", json=body(start_date="2026-10-20", end_date="2026-10-21"))
 
     assert calls > 0 and probe.calls == calls
+
+
+PROBE_STRATEGY = """
+import json
+from pathlib import Path
+
+from strategy_base.interface import BaseStrategy
+from strategy_base.models import StrategyOutput
+
+LOG = Path(__file__).parent / "calls.jsonl"
+
+
+class Strategy(BaseStrategy):
+    def on_bar(self, ctx):
+        row = {"now": ctx.now.isoformat(), "bars": len(ctx.bars), "daily": len(ctx.series.get("daily", [])),
+               "vix": ctx.vix, "margin": ctx.margin}
+        with LOG.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row) + "\\n")
+        return StrategyOutput()
+"""
+
+
+def test_추가_봉_계열과_전날_봉_VIX_증거금을_전략에_전달한다(make_client, tmp_path):
+    manifest = {
+        **MANIFEST,
+        "instruments": [{**MANIFEST["instruments"][0], "margin": 2500}],
+        "series": {"daily": {"unit": "day", "size": 1}},
+        "history_bars": 2,
+    }
+    client, service = make_client(manifest=manifest)
+    strategies = tmp_path / "strategies" / "week02_stub"
+    (strategies / "strategy.py").write_text(PROBE_STRATEGY, encoding="utf-8")
+    daily = [Bar(datetime(2026, 10, d), 1, 1, 1, 1, 1) for d in range(1, 24)]
+    service._daily_fetcher = lambda instrument, quantity: daily
+    client.app.state.registry.scan()
+
+    response = client.post("/api/backtests", json=body(start_date="2026-10-21", end_date="2026-10-22"))
+    service.join(10)
+
+    assert response.status_code == 202, response.text
+    rows = [json.loads(line) for line in (strategies / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    # 시작일 앞 14일을 거슬러 조회한 전날 봉(day_bars 5개)이 첫 봉 앞에 2개 이어진다
+    assert rows[0]["bars"] == 3 and rows[0]["margin"] == 2500
+    assert rows[0]["daily"] == 20  # 10/21 이전 일봉
+    assert rows[0]["vix"] is not None
