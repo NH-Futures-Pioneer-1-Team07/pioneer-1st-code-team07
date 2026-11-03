@@ -59,7 +59,7 @@ uv run pytest
    - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week02_samsung_futures_intraday`
 2. `manifest.json`을 고친다.
    - `name`, `description`: UI에 표시한다.
-   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다.
+   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다. 해외 종목은 `exchange`(예: `FCME`)도 쓴다.
    - `bar`: 봉 단위. 예: `{"unit": "minute", "size": 3}`
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
 3. `strategy.py`의 `Strategy` 클래스에 전략 문서의 판단 규칙을 구현한다.
@@ -100,7 +100,7 @@ uv run pytest
 
 ## NH선물 API
 
-`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 구현할 자리만 있고, 구현 전까지 백테스트·모의매매 시작을 `422`로 거부한다.
+`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 시세(`quotes`)·주문(`orders`)·계좌와 상품 조회(`account`)가 구현되어 있다. 러너는 아직 해외 종목의 백테스트·모의매매 시작을 `422`로 거부한다.
 
 | 파일 | 내용 |
 | --- | --- |

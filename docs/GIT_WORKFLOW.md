@@ -141,6 +141,14 @@ gh issue develop 42 --repo NH-Futures-Pioneer-1-Team07/pioneer-1st-code-team07 -
 | `chore/*` | 기타 관리 작업 | 작업 완료 후 삭제 |
 | `ci/*` | CI 설정 변경 | 작업 완료 후 삭제 |
 | `release/*` | 출시 준비와 다음 개발의 분리가 필요할 때 도입 검토 | 도입 시 별도 결정 |
+| `week3` | `dev`를 유지한 채 week3 전략 구조로 바꾸는 장기 통합 브랜치 | week3 작업을 `dev`에 병합할 때까지 |
+
+`week3` 작업은 다음 예외를 적용한다.
+
+- `week3`에서 작업 브랜치를 생성하고(`gh issue develop <번호> --base week3`) PR 대상도 `week3`로 한다.
+- 기본 브랜치가 아닌 곳에 병합하면 `Closes #번호`가 이슈를 닫지 않으므로, 병합 후 이슈를 직접 닫는다.
+- `week3`는 필요할 때 `dev`를 병합해 최신으로 맞춘다.
+- 작업이 끝나면 `week3`를 `dev`에 병합하는 PR을 별도로 만든다.
 
 ## 5. 작업 브랜치 이름
 
