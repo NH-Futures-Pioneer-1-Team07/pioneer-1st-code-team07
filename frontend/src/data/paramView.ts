@@ -11,6 +11,13 @@ const shown = (spec: ParameterSpec, value: number): string =>
 
 export const unitLabel = (spec: ParameterSpec): string => (spec.unit === "percent" ? "%" : "");
 
+/** 화면에서 바꿀 수 있는 숫자 파라미터 값의 표시. 퍼센트 단위는 비율을 퍼센트로 바꾼다(0.2 → `20%`). 그 외 값은 `null`이다. */
+export function editableValueText(spec: ParameterSpec | undefined, value: unknown): string | null {
+  return spec?.editable && typeof spec.default === "number" && typeof value === "number"
+    ? `${shown(spec, value)}${unitLabel(spec)}`
+    : null;
+}
+
 /** 이력에 붙일 사용 파라미터 요약. 화면에서 바꿀 수 있는 숫자 파라미터만 "이름 값" 순서로 쉼표로 잇는다. 없으면 빈 문자열이다. */
 export function paramSummary(
   parameters: Record<string, ParameterSpec> | undefined,
