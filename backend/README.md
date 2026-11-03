@@ -56,7 +56,7 @@ uv run pytest
 ## 전략 추가 방법
 
 1. `strategies/_template/`을 `strategies/<전략 id>/`로 복사한다.
-   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week02_samsung_futures_intraday`
+   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week03_zn_treasury_futures`
 2. `manifest.json`을 고친다.
    - `name`, `description`: UI에 표시한다.
    - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다. 해외 종목은 `exchange`(예: `FCME`)도 쓴다.
