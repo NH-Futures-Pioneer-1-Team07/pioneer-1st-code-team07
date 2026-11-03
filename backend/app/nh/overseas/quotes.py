@@ -4,7 +4,7 @@
 거래량이 계속 늘어나는 것과 현재 시각으로 확인했다(2026-11-04). 그대로 `Bar.time`으로 쓴다.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from app.nh.client import NHClient
@@ -19,8 +19,9 @@ DAILY_PATH = "/trade/v1/overseas/chart-daily"
 PRICE_PATH = "/trade/v1/overseas/price"
 
 MAX_ROWS = 9999
-# 한 번에 조회하는 기간(일). 5분봉 기준 하루 약 288개라 요청 한도(9999건) 안에 들어온다.
-CHUNK_DAYS = 7
+FIRST_KEY = "99999999"
+# 분봉을 이어받는 쪽 수의 상한. 한 쪽은 약 495개라 5분봉 기준 쪽당 하루 반쯤이다.
+MAX_PAGES = 600
 
 
 def fetch_quote(client: NHClient, exchange: str, code: str) -> Quote:
@@ -32,33 +33,52 @@ def fetch_quote(client: NHClient, exchange: str, code: str) -> Quote:
 
 
 def fetch_minute_bars(
-    client: NHClient, exchange: str, code: str, *, minutes: int, start: date, end: date
+    client: NHClient, exchange: str, code: str, *, minutes: int, start: date | None = None, end: date | None = None
 ) -> list[Bar]:
-    """분봉을 `start`부터 `end`까지(양 끝 포함) 오래된 순서로 돌려준다. 해외 시장은 주말을 건너뛰지 않고 그대로 조회한다."""
-    if end < start:
+    """분봉을 `start`부터 `end`까지(양 끝 포함) 오래된 순서로 돌려준다. `start`가 없으면 조회되는 가장 오래된 봉까지 이어받는다.
+
+    모의환경은 조회 기간을 무시하고 최신 봉부터 한 쪽(약 495개)씩 돌려주며, 다음 데이터 키로 과거 쪽을 이어받는다.
+    그래서 기간 밖의 봉은 걸러 내고, `start`보다 오래된 봉이 나오면 멈춘다. 데이터 끝에 이르면 키가
+    최신 쪽으로 되돌아가므로 쪽의 가장 오래된 봉이 앞 쪽보다 새로우면 멈춘다.
+    """
+    if start is not None and end is not None and end < start:
         raise ValueError("조회 끝 날짜가 시작 날짜보다 빠릅니다")
+    payload = {
+        "exch_cd": exchange,
+        "sym": code,
+        "inq_strt_dt": start.strftime("%Y%m%d") if start else "00000000",
+        "strt_tm": "000000",
+        "inq_ed_dt": end.strftime("%Y%m%d") if end else "99999999",
+        "ed_tm": "235959",
+        "req_qty": str(MAX_ROWS),
+        "dcnt": str(minutes),
+        "cidx_yn": "0",
+        "nxt_key": FIRST_KEY,
+    }
     bars: dict[datetime, Bar] = {}
-    day = start
-    while day <= end:
-        chunk_end = min(day + timedelta(days=CHUNK_DAYS - 1), end)
-        payload = {
-            "exch_cd": exchange,
-            "sym": code,
-            "inq_strt_dt": day.strftime("%Y%m%d"),
-            "strt_tm": "000000",
-            "inq_ed_dt": chunk_end.strftime("%Y%m%d"),
-            "ed_tm": "235959",
-            "req_qty": str(MAX_ROWS),
-            "dcnt": str(minutes),
-            "cidx_yn": "0",
-            "nxt_key": "99999999",
-        }
-        for row in _rows(client.call(MINUTE_PATH, payload, Limit.QUOTE)):
-            bar = parse_minute_bar(row)
-            if bar is not None:
-                bars[bar.time] = bar
-        day = chunk_end + timedelta(days=1)
-    return [bars[time] for time in sorted(bars)]
+    seen_keys: set[str] = set()
+    oldest: datetime | None = None
+    for _ in range(MAX_PAGES):
+        body = client.call(MINUTE_PATH, payload, Limit.QUOTE)
+        page = [bar for row in _rows(body) if (bar := parse_minute_bar(row)) is not None]
+        if not page:
+            break
+        page_oldest = min(bar.time for bar in page)
+        if oldest is not None and page_oldest >= oldest:
+            break
+        oldest = page_oldest
+        for bar in page:
+            bars[bar.time] = bar
+        key = str(body.get("nxt_key") or "").strip()
+        if not key or key == FIRST_KEY or key in seen_keys or (start is not None and page_oldest.date() < start):
+            break
+        seen_keys.add(key)
+        payload = {**payload, "nxt_key": key}
+    return [
+        bars[time]
+        for time in sorted(bars)
+        if (start is None or time.date() >= start) and (end is None or time.date() <= end)
+    ]
 
 
 def fetch_daily_bars(client: NHClient, exchange: str, code: str, *, quantity: int) -> list[Bar]:
