@@ -61,3 +61,10 @@ def average_volume(bars: Sequence[Bar], count: int) -> float | None:
     if count <= 0 or len(bars) < count:
         return None
     return sum(bar.volume for bar in bars[-count:]) / count
+
+
+def simple_moving_average(bars: Sequence[Bar], count: int) -> float | None:
+    """마지막 `count`개 봉 종가의 단순이동평균. 봉이 모자라면 `None`이다."""
+    if count <= 0 or len(bars) < count:
+        return None
+    return sum(bar.close for bar in bars[-count:]) / count

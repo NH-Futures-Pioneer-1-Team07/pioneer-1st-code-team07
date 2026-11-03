@@ -65,18 +65,30 @@ def test_해외_분봉을_Bar로_바꾸고_오래된_순서로_정렬한다():
     assert body_of(request)["inq_strt_dt"] == "20261102"
 
 
-def test_분봉_기간이_길면_7일씩_나눠_조회하고_겹친_봉은_한_번만_담는다():
+def test_분봉은_다음_데이터_키로_과거_쪽을_이어받고_기간_밖의_봉은_거른다():
     client, server = make(
-        {"Occurs1": [minute_row("20261105", "000000", 2, 1, 1.5, 10)]},
-        {"Occurs1": [minute_row("20261105", "000000", 2, 1, 1.5, 10), minute_row("20261110", "000000", 3, 2, 2.5, 20)]},
+        {"nxt_key": "K1", "Occurs1": [minute_row("20261105", "000500", 3, 2, 2.6, 20), minute_row("20261105", "000000", 3, 2, 2.5, 20)]},
+        {"nxt_key": "K2", "Occurs1": [minute_row("20261103", "235500", 2, 1, 1.5, 10), minute_row("20261102", "235500", 2, 1, 1.4, 10)]},
+        {"nxt_key": "K3", "Occurs1": [minute_row("20261101", "235500", 2, 1, 1.3, 10)]},
     )
 
-    bars = quotes.fetch_minute_bars(client, "FCME", "ZNZ26", minutes=5, start=date(2026, 11, 1), end=date(2026, 11, 10))
+    bars = quotes.fetch_minute_bars(client, "FCME", "ZNZ26", minutes=5, start=date(2026, 11, 2), end=date(2026, 11, 4))
 
-    assert [r.content for r in server.api_requests()] and len(server.api_requests()) == 2
-    assert body_of(server.api_requests()[0])["inq_ed_dt"] == "20261107"
-    assert body_of(server.api_requests()[1])["inq_strt_dt"] == "20261108"
-    assert [b.time.day for b in bars] == [5, 10]
+    assert [b.time for b in bars] == [datetime(2026, 11, 2, 23, 55), datetime(2026, 11, 3, 23, 55)]  # 5일 봉과 1일 봉은 기간 밖
+    assert [body_of(r)["nxt_key"] for r in server.api_requests()] == ["99999999", "K1", "K2"]  # 시작일보다 오래된 봉이 나오면 멈춘다
+
+
+def test_데이터_끝에서_키가_최신_쪽으로_되돌아가면_멈춘다():
+    client, server = make(
+        {"nxt_key": "K1", "Occurs1": [minute_row("20261103", "000500", 2, 1, 1.5, 10), minute_row("20261103", "000000", 2, 1, 1.4, 10)]},
+        {"nxt_key": "K2", "Occurs1": [minute_row("20261102", "000000", 2, 1, 1.3, 10)]},
+        {"nxt_key": "K3", "Occurs1": [minute_row("20261103", "000500", 2, 1, 1.5, 10)]},  # 되돌아온 쪽
+    )
+
+    bars = quotes.fetch_minute_bars(client, "FCME", "ZNZ26", minutes=5)
+
+    assert [b.time.day for b in bars] == [2, 3, 3]
+    assert len(server.api_requests()) == 3
 
 
 def test_끝_날짜가_시작보다_빠르면_거부한다():

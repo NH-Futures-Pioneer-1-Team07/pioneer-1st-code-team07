@@ -1,0 +1,67 @@
+{
+  "name": "ZN 미국 10년 국채선물 이동평균 전략",
+  "description": "일봉 15일선·30일선으로 매매 방향을 허용하고, 5분봉 5개·20개 이동평균 교차로 진입합니다. VIX 구간별 하루 신규 진입 한도와 증거금 대비 손익 기준으로 관리합니다.",
+  "instruments": [
+    {
+      "name": "미국 10년 국채선물 2026년 12월물",
+      "market": "overseas",
+      "exchange": "FCME",
+      "code": "ZNZ26",
+      "multiplier": 1000,
+      "margin": 2083
+    }
+  ],
+  "bar": {
+    "unit": "minute",
+    "size": 5
+  },
+  "series": {
+    "daily": {
+      "unit": "day",
+      "size": 1
+    }
+  },
+  "history_bars": 20,
+  "parameters": {
+    "mid_short_days": {
+      "default": 15,
+      "description": "중기 단기 이동평균의 일봉 개수"
+    },
+    "mid_long_days": {
+      "default": 30,
+      "description": "중기 장기 이동평균의 일봉 개수"
+    },
+    "short_bars": {
+      "default": 5,
+      "description": "장중 단기 이동평균의 5분봉 개수"
+    },
+    "long_bars": {
+      "default": 20,
+      "description": "장중 장기 이동평균의 5분봉 개수"
+    },
+    "entry_quantity": {
+      "default": 1,
+      "description": "진입 신호당 수량(계약)"
+    },
+    "max_position": {
+      "default": 30,
+      "description": "전날 보유분을 합친 전체 보유 한도(계약)"
+    },
+    "vix_thresholds": {
+      "default": [15, 20, 25, 30],
+      "description": "하루 신규 진입 한도를 나누는 VIX 구간의 경계"
+    },
+    "daily_limit_buy": {
+      "default": [1, 2, 3, 4, 5],
+      "description": "매수 허용일 VIX 구간별 하루 신규 진입 한도(계약)"
+    },
+    "daily_limit_sell": {
+      "default": [5, 4, 3, 2, 1],
+      "description": "매도 허용일 VIX 구간별 하루 신규 진입 한도(계약)"
+    },
+    "profit_loss_rate": {
+      "default": 0.2,
+      "description": "전체 보유분의 증거금 대비 합산 손익이 이 비율에 이르면 전량 청산(익절·손절 공통)"
+    }
+  }
+}

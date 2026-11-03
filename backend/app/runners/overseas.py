@@ -27,18 +27,25 @@ def key_names(market: str) -> str:
 
 
 class OverseasProbe:
-    """백테스트 가능 기간을 찾는 데 쓰는 해외 분봉 조회. 최종거래일은 알 수 없다."""
+    """백테스트 가능 기간을 찾는 데 쓰는 해외 분봉 조회. 최종거래일은 알 수 없다.
+
+    해외 분봉은 날짜를 지정해 조회할 수 없어 처음 한 번 조회되는 전체 분봉을 이어받아 날짜별 봉 수를 센다.
+    """
 
     def __init__(self, client: NHClient, exchange: str, code: str, minutes: int):
         self._client = client
         self._exchange = exchange
         self._code = code
         self._minutes = minutes
+        self._counts: dict[date, int] | None = None
 
     def bars_on(self, day: date) -> int:
-        return len(
-            quotes.fetch_minute_bars(self._client, self._exchange, self._code, minutes=self._minutes, start=day, end=day)
-        )
+        if self._counts is None:
+            counts: dict[date, int] = {}
+            for bar in quotes.fetch_minute_bars(self._client, self._exchange, self._code, minutes=self._minutes):
+                counts[bar.time.date()] = counts.get(bar.time.date(), 0) + 1
+            self._counts = counts
+        return self._counts.get(day, 0)
 
     def last_trading_day(self) -> date | None:
         return None
