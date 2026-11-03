@@ -24,6 +24,7 @@ from app.nh.errors import BusinessError, NHConfigError, NHError
 from app.nh.realtime_data import OrderEvent, Reconnected, SubscriptionFailed, Trade
 from app.records.store import RunRecorder
 from app.runners.broker import Broker
+from app.runners.inputs import ExtraInputs
 from app.runners.ledger import ClosedTrade, Ledger
 from strategy_base.interface import BaseStrategy
 from strategy_base.models import (
@@ -61,6 +62,8 @@ class PaperConfig:
     unknown_checks: int = 3
     price_throttle: float = 1.0
     session_anchor: time = time(8, 45)
+    history_bars: int = 0
+    history_days: int = 10
 
 
 @dataclass(frozen=True)
@@ -132,6 +135,7 @@ class PaperSession:
         last_trading_day: date | None,
         deposit_before: dict[str, Any] | None = None,
         clock: Callable[[], datetime] = kst_now,
+        extras: ExtraInputs | None = None,
     ):
         self.strategy = strategy
         self.config = config
@@ -141,6 +145,8 @@ class PaperSession:
         self.last_trading_day = last_trading_day
         self.deposit_before = deposit_before
         self.clock = clock
+        self.extras = extras or ExtraInputs()
+        self._history_loaded = config.history_bars == 0
 
         self.ledger = Ledger(multiplier=config.multiplier, fee_rate=config.fee_rate)
         self.state: dict[str, Any] = {}
@@ -271,8 +277,24 @@ class PaperSession:
         if quote.last_price is not None:
             await self._on_price(quote.last_price, now)
 
+    async def _load_history(self, now: datetime) -> None:
+        """시작 전에 마감된 봉을 `history_bars`개까지 모아 첫 판단에서도 지표를 계산할 수 있게 한다."""
+        width = timedelta(minutes=self.config.minutes, seconds=self.config.bar_grace)
+        found: dict[datetime, Bar] = {}
+        for back in range(self.config.history_days + 1):
+            if len(found) >= self.config.history_bars:
+                break
+            day = now.date() - timedelta(days=back)
+            for bar in await asyncio.to_thread(self.broker.fetch_bars, day):
+                if bar.time + width <= self.started_at:
+                    found[bar.time] = bar
+        self.bars = [found[time] for time in sorted(found)][-self.config.history_bars :]
+        self._history_loaded = True
+
     async def _poll_bars(self, now: datetime) -> None:
         try:
+            if not self._history_loaded:
+                await self._load_history(now)
             bars = await asyncio.to_thread(self.broker.fetch_bars, now.date())
         except NHError as error:
             self._error_event("분봉 조회에 실패했습니다", error, now)
@@ -285,7 +307,9 @@ class PaperSession:
         )
         for bar in ready:
             self.seen_bars.add(bar.time)
-            self.bars = [b for b in self.bars if b.time.date() == bar.time.date()] + [bar]
+            today = [b for b in self.bars if b.time.date() == bar.time.date()]
+            prior = [b for b in self.bars if b.time.date() != bar.time.date()][-self.config.history_bars :] if self.config.history_bars else []
+            self.bars = prior + today + [bar]
             self.last_bar_time = bar.time
             if self.phase == RUNNING:
                 close = bar.time + timedelta(minutes=self.config.minutes)
@@ -296,6 +320,8 @@ class PaperSession:
     async def _call(
         self, hook: Callable[[Context], StrategyOutput], decision_now: datetime, now: datetime, price: float | None
     ) -> None:
+        await asyncio.to_thread(self.extras.prepare, decision_now.date())
+        reference = price if price is not None else (self.bars[-1].close if self.bars else self.last_price)
         ctx = Context(
             now=decision_now,
             bars=list(self.bars),
@@ -305,6 +331,8 @@ class PaperSession:
             lots=self.ledger.lots(),
             open_orders=self._open_orders(),
             state=self.state,
+            unrealized_pnl=self.ledger.unrealized(reference) if reference is not None else None,
+            **self.extras.fields(decision_now),
         )
         output = hook(ctx)
         if output.state is not None:

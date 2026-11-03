@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from strategy_base.registry import StrategyRegistry
 
 VALID_MANIFEST = {
@@ -105,3 +107,24 @@ def test_저장소의_전략_폴더는_오류_없이_스캔되고_템플릿은_�
 
     assert registry.errors == {}
     assert "_template" not in [item.id for item in registry.all()]
+
+
+def test_추가_봉_계열은_일봉만_선언할_수_있다():
+    from pydantic import ValidationError
+
+    from strategy_base.manifest import Manifest
+
+    base = {
+        "name": "n",
+        "description": "d",
+        "instruments": [{"name": "i", "market": "overseas", "exchange": "FCME", "code": "ZNZ26", "margin": 2500}],
+        "bar": {"unit": "minute", "size": 5},
+        "history_bars": 20,
+    }
+
+    manifest = Manifest.model_validate({**base, "series": {"daily": {"unit": "day", "size": 1}}})
+    assert manifest.series["daily"].unit == "day" and manifest.history_bars == 20
+
+    for bad in ({"hourly": {"unit": "minute", "size": 60}}, {"Daily": {"unit": "day", "size": 1}}):
+        with pytest.raises(ValidationError):
+            Manifest.model_validate({**base, "series": bad})

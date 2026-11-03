@@ -35,6 +35,9 @@ def run_on_bars(
     open_orders: Sequence[OpenOrder] = (),
     last_trading_day: date | None = None,
     state: Mapping[str, Any] | None = None,
+    series: Mapping[str, Sequence[Bar]] | None = None,
+    vix: float | None = None,
+    margin: float | None = None,
 ) -> list[Step]:
     """봉이 하나씩 마감되는 것처럼 `on_bar`를 차례로 호출하고 각 호출의 출력을 돌려준다.
 
@@ -52,6 +55,9 @@ def run_on_bars(
             lots=lots,
             open_orders=open_orders,
             state=current_state,
+            series=series or {},
+            vix=vix,
+            margin=margin,
         )
         output = strategy.on_bar(ctx)
         if output.state is not None:

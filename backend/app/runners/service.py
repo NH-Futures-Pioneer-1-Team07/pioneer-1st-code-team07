@@ -11,6 +11,7 @@ from app.nh.auth import KST
 from app.nh.client import NHClient
 from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 from app.nh.errors import NHError
+from app.data.vix import load as load_vix
 from app.nh.overseas import OVERSEAS_UNSUPPORTED
 from app.records.store import RunRecorder, RunStore
 from app.runners.availability import (
@@ -21,7 +22,9 @@ from app.runners.availability import (
     sparse_below,
 )
 from app.runners.backtest import Assumptions, BacktestEngine, daily_bars, infer_tick
+from app.runners.inputs import ExtraInputs
 from app.runners.minute_backtest import MinuteBacktestEngine
+from app.runners.series import DailyFetcher, days_needed, nh_daily_fetcher, warmup_start
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
 from strategy_base.registry import RegisteredStrategy, StrategyRegistry
@@ -30,6 +33,8 @@ DEFAULT_FEE_RATE = 0.000085
 FEE_SOURCE = "NH선물 수수료 부과 기준(2026-09-07 개정) 개별주식선물 온라인 매매 표준수수료 0.0085%"
 MAX_DAYS = 366
 MAX_SLIPPAGE_TICKS = 20
+# `history_bars`를 채우려고 시작일 앞으로 거슬러 조회하는 달력일 수
+HISTORY_DAYS = 14
 
 
 class BacktestRejected(Exception):
@@ -101,12 +106,14 @@ class BacktestService:
         *,
         loader_factory: Callable[[], DataLoader] | None = None,
         probe_factory: Callable[[str, int], ProbeSource] | None = None,
+        daily_fetcher: DailyFetcher | None = None,
     ):
         self._settings = settings
         self._registry = registry
         self._store = store
         self._loader_factory = loader_factory or (lambda: nh_loader(NHClient(settings)))
         self._probe_factory = probe_factory or (lambda code, minutes: NHProbe(NHClient(settings), code, minutes))
+        self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
         self._ranges = RangeCache(lambda: datetime.now(KST).date())
         self._lock = threading.Lock()
         self._current: dict[str, str] | None = None
@@ -211,6 +218,13 @@ class BacktestService:
             self._thread.start()
             return dict(self._current)
 
+    def _extra_inputs(self, manifest: Manifest, instrument: Any, start: date) -> ExtraInputs:
+        series = {}
+        if manifest.series:
+            bars = self._daily_fetcher(instrument, days_needed(start, datetime.now(KST).date()))
+            series = {name: bars for name in manifest.series}
+        return ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
+
     def _validate_period(self, start: date, end: date, initial_capital: float) -> None:
         if initial_capital <= 0:
             raise BacktestRejected(422, "초기자금은 0보다 커야 합니다")
@@ -295,6 +309,11 @@ class BacktestService:
         )
         engine_type = MinuteBacktestEngine if price_data is not None else BacktestEngine
         extra = {"minute_days": price_data.days} if price_data is not None else {}
+        if manifest.history_bars:
+            warmup = loader(instrument.code or "", minutes, warmup_start(start, HISTORY_DAYS), start - timedelta(days=1), lambda done, total: None)
+            extra["history"] = [bar for day in sorted(warmup.days) for bar in warmup.days[day]]
+            extra["history_bars"] = manifest.history_bars
+        extra["extras"] = self._extra_inputs(manifest, instrument, start)
         engine = engine_type(
             registered.strategy_class(params),
             recorder,

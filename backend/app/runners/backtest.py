@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.records.store import RunRecorder
+from app.runners.inputs import ExtraInputs
 from app.runners.ledger import Ledger
 from strategy_base.interface import BaseStrategy
 from strategy_base.models import Bar, Context, IntentKind, Lot, OrderIntent, Side, StrategyOutput
@@ -110,6 +111,9 @@ class BacktestEngine:
         initial_capital: float,
         minutes: int,
         last_trading_day: date | None,
+        history_bars: int = 0,
+        history: Sequence[Bar] = (),
+        extras: ExtraInputs | None = None,
     ):
         self.strategy = strategy
         self.recorder = recorder
@@ -122,6 +126,10 @@ class BacktestEngine:
         )
         self.totals = _Totals(peak=initial_capital)
         self.state: dict[str, Any] = {}
+        self.history_bars = history_bars
+        self.extras = extras or ExtraInputs()
+        # 전날까지의 봉. 첫 봉에서도 이동평균 같은 지표를 계산할 수 있게 오늘 봉 앞에 이어 준다.
+        self._prefix: list[Bar] = list(history)[-history_bars:] if history_bars else []
 
     # ---- 실행 ----
 
@@ -133,6 +141,8 @@ class BacktestEngine:
         last_bar: Bar | None = None
         for index, (day, bars) in enumerate(days.items(), 1):
             self._run_day(day, bars)
+            if self.history_bars:
+                self._prefix = (self._prefix + list(bars))[-self.history_bars :]
             last_bar = bars[-1]
             self.totals.days += 1
             self._day_summary(day, bars[-1])
@@ -153,7 +163,7 @@ class BacktestEngine:
                 self._fill(order, bar.open, bar.time, "next_open")
             pending = []
 
-            completed = list(bars[:index])
+            completed = self._prefix + list(bars[:index])
             before_close = bar.time + step - timedelta(seconds=1)
             for number, price in enumerate(price_path(bar, self._net(), self.assumptions.tick_size)):
                 moment = bar.time if number == 0 else before_close
@@ -178,6 +188,7 @@ class BacktestEngine:
         bars: list[Bar],
         price: float | None,
     ) -> StrategyOutput:
+        reference = price if price is not None else (bars[-1].close if bars else None)
         ctx = Context(
             now=now,
             bars=bars,
@@ -187,6 +198,8 @@ class BacktestEngine:
             lots=self._lots(),
             open_orders=(),
             state=self.state,
+            unrealized_pnl=self.ledger.unrealized(reference) if reference is not None else None,
+            **self.extras.fields(now),
         )
         output = hook(ctx)
         if output.state is not None:

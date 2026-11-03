@@ -1,9 +1,10 @@
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 STRATEGY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+SERIES_NAME_PATTERN = STRATEGY_ID_PATTERN
 
 
 class Instrument(BaseModel):
@@ -14,6 +15,7 @@ class Instrument(BaseModel):
     code: str | None = None
     exchange: str | None = None
     multiplier: int | None = Field(default=None, gt=0)
+    margin: float | None = Field(default=None, gt=0)
 
 
 class BarSpec(BaseModel):
@@ -40,7 +42,12 @@ class BacktestSpec(BaseModel):
 
 
 class Manifest(BaseModel):
-    """전략 폴더의 `manifest.json` 형식."""
+    """전략 폴더의 `manifest.json` 형식.
+
+    - `bar`: 판단 기준 봉. 이 봉이 마감될 때마다 `on_bar`가 호출된다.
+    - `series`: 판단에 함께 쓰는 추가 봉 계열(현재 일봉만). `Context.series[이름]`으로 받는다.
+    - `history_bars`: 장이 열린 첫 봉에서도 판단할 수 있도록 전날까지의 `bar` 봉을 이만큼 앞에 이어 준다.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,8 +55,20 @@ class Manifest(BaseModel):
     description: str = Field(min_length=1)
     instruments: list[Instrument] = Field(min_length=1)
     bar: BarSpec
+    series: dict[str, BarSpec] = Field(default_factory=dict)
+    history_bars: int = Field(default=0, ge=0)
     parameters: dict[str, ParameterSpec] = Field(default_factory=dict)
     backtest: BacktestSpec | None = None
+
+    @field_validator("series")
+    @classmethod
+    def _series_are_daily(cls, series: dict[str, BarSpec]) -> dict[str, BarSpec]:
+        for name, spec in series.items():
+            if not SERIES_NAME_PATTERN.match(name):
+                raise ValueError(f"계열 이름은 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓸 수 있습니다: {name}")
+            if spec.unit != "day" or spec.size != 1:
+                raise ValueError(f"추가 봉 계열은 일봉(unit=day, size=1)만 지원합니다: {name}")
+        return series
 
     def default_params(self) -> dict[str, Any]:
         return {key: spec.default for key, spec in self.parameters.items()}
