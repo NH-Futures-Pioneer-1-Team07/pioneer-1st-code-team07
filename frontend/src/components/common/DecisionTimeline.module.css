@@ -5,10 +5,11 @@
 .decision {
   --row: 44px;
   display: grid;
-  grid-template-columns: 44px 132px 5px minmax(0, 1fr) 110px 80px;
+  grid-template-columns: 44px 132px 5px minmax(220px, 1fr) 90px 70px;
   align-items: center;
   gap: 16px;
-  height: var(--row);
+  min-height: var(--row);
+  padding: 6px 0;
   font-size: 12px;
 }
 .decision time {
@@ -21,20 +22,23 @@
 }
 .action {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
 }
 .action strong {
   flex: none;
 }
 .action small {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
   color: var(--text-tertiary);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .index {
   color: var(--text-tertiary);

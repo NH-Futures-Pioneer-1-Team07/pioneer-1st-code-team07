@@ -1,0 +1,64 @@
+.judgment {
+  margin-top: 20px;
+}
+.hint {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.sections {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.section {
+  padding: 18px 20px;
+  background: var(--bg-surface);
+  border-radius: 12px;
+}
+.section header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.section header strong {
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+.buy {
+  color: var(--rise);
+}
+.sell {
+  color: var(--fall);
+}
+.neutral {
+  color: inherit;
+}
+.section dl {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.section dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.section dt {
+  color: var(--text-tertiary);
+}
+.section dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (max-width: 900px) {
+  .sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

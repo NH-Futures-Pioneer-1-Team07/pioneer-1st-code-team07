@@ -3,6 +3,7 @@ import { clearAccount, stopTrading } from "../../apis/trading";
 import type { MarketStatus } from "../../data/tradingView";
 import AccountSection from "./components/AccountSection";
 import AccountSummary from "./components/AccountSummary";
+import JudgmentPanel from "./components/JudgmentPanel";
 import ControlPanel from "./components/ControlPanel";
 import MarketPanel from "./components/MarketPanel";
 import OrderBookPanel from "./components/OrderBookPanel";
@@ -22,6 +23,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
         <MarketPanel ctl={ctl} />
         <OrderBookPanel ctl={ctl} />
       </div>
+      <JudgmentPanel ctl={ctl} />
       <AccountSection ctl={ctl} />
       <RunHistory stream={runStream} />
       {confirm && (

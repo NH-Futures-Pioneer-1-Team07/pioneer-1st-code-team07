@@ -81,6 +81,8 @@ export interface DecisionRowView {
   at: string;
   action: string;
   reason: string;
+  /** 판단의 근거 수치. "이름: 값" 줄로 펼친 것 */
+  detail: string[];
   price: number | null;
   quantity: number | null;
 }
@@ -92,9 +94,23 @@ export interface FillRowView {
   quantity: number;
   price: number;
   fee: number | null;
+  reason: string;
 }
 
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
+
+/** 중첩된 근거 수치를 `경로: 값` 줄로 펼친다. 값이 없는 항목은 건너뛴다. */
+export function flattenDetail(value: unknown, path = ""): string[] {
+  if (value === null || value === undefined || value === "") return [];
+  if (Array.isArray(value)) return [`${path}: ${value.join(", ")}`];
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, inner]) =>
+      flattenDetail(inner, path ? `${path}.${key}` : key),
+    );
+  }
+  const shown = typeof value === "number" && !Number.isInteger(value) ? String(Number(value.toFixed(6))) : String(value);
+  return [`${path}: ${shown}`];
+}
 
 export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
   return lines.map((line) => {
@@ -105,6 +121,7 @@ export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
       at: formatDateTime(line.time),
       action: resultLabels[String(line.result)] ?? String(line.result ?? ""),
       reason: typeof line.reason === "string" ? line.reason : "",
+      detail: flattenDetail(line.detail),
       price: null,
       quantity: quantity > 0 ? quantity : null,
     };
@@ -119,6 +136,7 @@ export function mapFills(lines: JournalLine[]): FillRowView[] {
     quantity: num(line.quantity) ?? 0,
     price: num(line.price) ?? 0,
     fee: num(line.fee),
+    reason: typeof line.reason === "string" ? line.reason : "",
   }));
 }
 

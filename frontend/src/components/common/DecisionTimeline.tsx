@@ -5,6 +5,8 @@ import styles from "./DecisionTimeline.module.css";
 export interface DecisionRow {
   key?: string;
   reason?: string;
+  /** 판단의 근거 수치 줄. 마우스를 올리면 사유와 함께 보인다 */
+  detail?: string[];
   at: string;
   action: string;
   price: number | null;
@@ -41,7 +43,9 @@ export default function DecisionTimeline({
           <span className={styles.timelineDot} />
           <span className={styles.action}>
             <strong className={sideClass(row.action)}>{row.action}</strong>
-            {row.reason && <small title={row.reason}>{row.reason}</small>}
+            {row.reason && (
+              <small title={[row.reason, ...(row.detail ?? [])].join("\n")}>{row.reason}</small>
+            )}
           </span>
           <span>{row.price === null ? "—" : formatNumber(row.price)}</span>
           <span>{row.quantity === null ? "—" : `${row.quantity}계약`}</span>

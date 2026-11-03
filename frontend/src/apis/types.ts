@@ -96,6 +96,18 @@ export interface RunRef {
   run_id: string;
 }
 
+/** 전략이 설명하는 현재 판단. 구역마다 제목·한 줄 결론·색·표로 이루어진다. */
+export interface JudgmentSection {
+  title: string;
+  headline: string;
+  tone: "buy" | "sell" | "neutral";
+  rows: [string, string][];
+}
+
+export interface Judgment {
+  sections: JudgmentSection[];
+}
+
 export interface TradingStatus {
   phase: Phase;
   run: RunRef | null;
@@ -107,6 +119,7 @@ export interface TradingStatus {
   last_bar_time?: string | null;
   entry_blocks?: string[];
   pnl?: RunPnl;
+  judgment?: Judgment | null;
   clear?: ClearState;
   last_run?: (RunRef & { status: string }) | null;
 }
