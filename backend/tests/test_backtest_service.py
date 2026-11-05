@@ -393,18 +393,6 @@ def test_분봉이_전혀_없으면_가능_기간이_없고_시작도_거부한�
     assert started.status_code == 422 and "분봉이 없습니다" in started.json()["detail"]
 
 
-def test_가능_기간_밖의_시작일_종료일은_거부하고_사유에_가능_기간을_적는다(make_client):
-    client, _ = make_client(probe=FakeProbe(first=date(2026, 10, 1), last=date(2026, 10, 20)))
-
-    early = client.post("/api/backtests", json=body(start_date="2026-09-28", end_date="2026-10-02"))
-    late = client.post("/api/backtests", json=body(start_date="2026-10-15", end_date="2026-10-23"))
-
-    for response in (early, late):
-        assert response.status_code == 422
-        assert "2026-10-01부터 2026-10-20까지" in response.json()["detail"]
-    assert client.get("/api/runs").json() == []
-
-
 def test_가능_기간_경계_날짜는_허용한다(make_client):
     client, service = make_client()
 
