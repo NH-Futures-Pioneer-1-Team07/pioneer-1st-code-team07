@@ -47,11 +47,9 @@ export const marketSessionLabel = (session: MarketSession | null | undefined): s
 export const streamLabel = (state: string, failure: string | null): string =>
   state === "live"
     ? "시세 연결됨"
-    : state === "polling"
-      ? "시세 주기 조회"
-      : failure
-        ? `시세 연결 끊김: ${failure}`
-        : "시세 연결 중";
+    : failure
+      ? `시세 연결 끊김: ${failure}`
+      : "시세 연결 중";
 
 /** 이력 제목 옆에 보이는 이력 웹소켓 연결 문구. */
 export const runStreamLabel = (state: string): string =>

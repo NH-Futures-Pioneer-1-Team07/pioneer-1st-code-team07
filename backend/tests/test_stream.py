@@ -49,8 +49,19 @@ class Env:
 
         values = {"trading_env": "mock", "nh_app_key": "k", "nh_app_secret": "s",
                   "strategies_dir": tmp_path / "s", "runs_dir": tmp_path / "r"}
-        self.app = create_app(Settings(**{**values, **settings_kwargs}))
-        self.app.state.hub = MarketHub(Settings(**{**values, **settings_kwargs}), realtime_factory=factory)
+        self.app = create_app(Settings(**{**values, **settings_kwargs}, _env_file=None))
+        self.overseas_connections: list[FakeRealtime] = []
+
+        def overseas_factory(on_event, on_state):
+            connection = FakeRealtime(on_event, on_state)
+            self.overseas_connections.append(connection)
+            return connection
+
+        self.app.state.hub = MarketHub(
+            Settings(**{**values, **settings_kwargs}, _env_file=None),
+            realtime_factory=factory,
+            overseas_realtime_factory=overseas_factory,
+        )
         self.client = TestClient(self.app)
 
     @property
@@ -218,3 +229,33 @@ def test_느린_화면은_오래된_메시지부터_버리고_다른_화면을_�
 
 def test_알_수_없는_이벤트는_보내지_않는다():
     assert serialize(object()) is None
+
+
+def test_해외_종목은_해외_연결로_FA_FB를_구독하고_국내_연결과_섞이지_않는다(tmp_path):
+    env = Env(tmp_path, nh_overseas_app_key="k", nh_overseas_app_secret="s")
+    with env.client as client:
+        with client.websocket_connect("/ws/market?code=ZNZ26&market=overseas") as ws:
+            assert ws.receive_json()["type"] == "state"
+            overseas = env.overseas_connections[0]
+            assert overseas.started and env.connections == []
+            assert overseas.subscribed == [Feed("FA", "ZNZ26"), Feed("FB", "ZNZ26")]
+
+            client.portal.call(lambda: overseas.on_event(trade("ZNZ26", 106.96875)))
+            assert ws.receive_json()["price"] == 106.96875
+        assert overseas.subscribed == []
+
+
+def test_해외_키가_없으면_해외_변수_이름과_함께_닫는다(env):
+    with env.client as client, pytest.raises(WebSocketDisconnect) as closed:
+        with client.websocket_connect("/ws/market?code=ZNZ26&market=overseas") as ws:
+            ws.receive_json()
+
+    assert closed.value.code == 4503 and "NH_OVERSEAS_APP_KEY" in closed.value.reason
+
+
+def test_알_수_없는_시장은_닫는다(env):
+    with env.client as client, pytest.raises(WebSocketDisconnect) as closed:
+        with client.websocket_connect(f"/ws/market?code={CODE}&market=other") as ws:
+            ws.receive_json()
+
+    assert closed.value.code == 4422

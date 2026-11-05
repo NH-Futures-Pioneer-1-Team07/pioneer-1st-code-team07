@@ -173,7 +173,6 @@ test("상단바는 종목의 시장에 따라 국내장·해외장을 구분한�
 test("시세 연결 문구는 연결 여부만 말한다", () => {
   assert.equal(streamLabel("live", null), "시세 연결됨");
   assert.equal(streamLabel("connecting", null), "시세 연결 중");
-  assert.equal(streamLabel("polling", null), "시세 주기 조회");
   assert.equal(streamLabel("disconnected", "연결이 거부되었습니다 (1006)"), "시세 연결 끊김: 연결이 거부되었습니다 (1006)");
 });
 

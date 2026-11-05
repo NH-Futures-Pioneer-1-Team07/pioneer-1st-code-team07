@@ -22,6 +22,8 @@ from websockets.exceptions import ConnectionClosed
 
 from app.nh.errors import NHError
 from app.nh.realtime_data import (
+    BOOK_FEEDS,
+    TRADE_FEEDS,
     Feed,
     OrderBook,
     OrderEvent,
@@ -266,9 +268,9 @@ class RealtimeConnection:
     def _data(self, header: dict[str, Any], body: dict[str, Any]) -> None:
         action_code = str(header.get("action_code") or "").strip()
         symbol = str(header.get("action_sym") or "").strip()
-        if action_code == "KA":
+        if action_code in TRADE_FEEDS:
             event: Event = parse_trade(body, symbol)
-        elif action_code == "KB":
+        elif action_code in BOOK_FEEDS:
             event = parse_order_book(body, symbol)
         elif action_code == "O1":
             event = parse_order_event(body)

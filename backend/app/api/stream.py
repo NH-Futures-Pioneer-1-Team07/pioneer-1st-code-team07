@@ -11,6 +11,8 @@ from app.records.store import MODES, RunStore
 router = APIRouter()
 
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9]{6,16}$")
+# 해외 종목코드는 ZNZ26처럼 5자일 수 있다.
+OVERSEAS_CODE_PATTERN = re.compile(r"^[A-Za-z0-9]{3,16}$")
 
 # 닫힘 코드. 4000번대는 애플리케이션이 정한다.
 CLOSE_BAD_CODE = 4422
@@ -20,17 +22,21 @@ CLOSE_BAD_MODE = 4422
 
 
 @router.websocket("/ws/market")
-async def market_stream(websocket: WebSocket, code: str = "") -> None:
-    """종목의 실시간 체결·호가를 JSON 메시지로 보낸다. 메시지 형식은 `backend/README.md`를 본다."""
+async def market_stream(websocket: WebSocket, code: str = "", market: str = "domestic") -> None:
+    """종목의 실시간 체결·호가를 JSON 메시지로 보낸다. `market`은 `domestic`(기본) 또는 `overseas`다. 메시지 형식은 `backend/README.md`를 본다."""
     hub: MarketHub = websocket.app.state.hub
     await websocket.accept()
-    if not CODE_PATTERN.match(code):
+    if market not in ("domestic", "overseas"):
+        await websocket.close(code=CLOSE_BAD_CODE, reason="market은 domestic 또는 overseas여야 합니다")
+        return
+    if not (OVERSEAS_CODE_PATTERN if market == "overseas" else CODE_PATTERN).match(code):
         await websocket.close(code=CLOSE_BAD_CODE, reason="종목코드 형식이 올바르지 않습니다")
         return
     try:
-        subscriber = await hub.join(code)
-    except NHConfigError:
-        await websocket.close(code=CLOSE_NO_CREDENTIALS, reason="NH 인증 정보가 설정되지 않았습니다")
+        subscriber = await hub.join(code, market)
+    except NHConfigError as error:
+        reason = str(error) if market == "overseas" else "NH 인증 정보가 설정되지 않았습니다"
+        await websocket.close(code=CLOSE_NO_CREDENTIALS, reason=reason)
         return
     except HubFull as error:
         await websocket.close(code=CLOSE_FULL, reason=str(error))

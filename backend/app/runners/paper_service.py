@@ -25,7 +25,7 @@ from app.runners.clearing import (
     run_clear,
 )
 from app.runners.inputs import ExtraInputs
-from app.runners.overseas import NullRealtime, has_keys, key_names, overseas_instrument_ready
+from app.runners.overseas import has_keys, key_names, overseas_instrument_ready
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
 from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
 from strategy_base.manifest import Instrument, Manifest
@@ -72,12 +72,12 @@ OverseasComponentsFactory = Callable[[Instrument, int], tuple[Broker, RealtimeFa
 
 
 def overseas_components(settings: Settings) -> OverseasComponentsFactory:
-    """해외 종목은 실시간 체결 연결 없이 세션이 현재가를 주기적으로 조회한다."""
+    """해외 종목은 해외 키로 실시간 체결(FA)을 받고, 연결이 끊긴 동안은 세션이 현재가를 조회한다."""
 
     def build(instrument: Instrument, minutes: int) -> tuple[Broker, RealtimeFactory]:
         client = NHClient(settings, market="overseas")
         broker = OverseasNHBroker(client, instrument.exchange or "", instrument.code or "", minutes)
-        return broker, lambda on_event, on_state: NullRealtime()
+        return broker, lambda on_event, on_state: RealtimeConnection(client, on_event=on_event, on_state=on_state)
 
     return build
 
@@ -190,8 +190,14 @@ class PaperService:
             self._session = session
             self._recorder = recorder
             self._run = {"strategy_id": strategy_id, "mode": "paper", "run_id": recorder.run_id}
+            # 국내는 체결과 주문/체결 알림을, 해외는 체결만 받는다(해외 주문 상태는 계좌 조회로 맞춘다).
+            feeds = (
+                [Feed("FA", config.code)]
+                if instrument.market == "overseas"
+                else [Feed("KA", config.code), Feed("O1")]
+            )
             self._thread = threading.Thread(
-                target=self._thread_main, args=(session, make_realtime, config.code, recorder), daemon=True
+                target=self._thread_main, args=(session, make_realtime, feeds, recorder), daemon=True
             )
             self._thread.start()
             return dict(self._run)
@@ -314,14 +320,14 @@ class PaperService:
     # ---- 전용 스레드 ----
 
     def _thread_main(
-        self, session: PaperSession, make_realtime: RealtimeFactory, code: str, recorder: RunRecorder
+        self, session: PaperSession, make_realtime: RealtimeFactory, feeds: list[Feed], recorder: RunRecorder
     ) -> None:
         async def main() -> None:
             self._loop = asyncio.get_running_loop()
             realtime = make_realtime(session.post, lambda state, detail: session.post(StateChange(str(state), detail)))
             try:
-                await realtime.subscribe(Feed("KA", code))
-                await realtime.subscribe(Feed("O1"))
+                for feed in feeds:
+                    await realtime.subscribe(feed)
                 realtime.start()
                 await session.run()
             finally:
