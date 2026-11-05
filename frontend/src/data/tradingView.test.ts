@@ -192,6 +192,7 @@ test("운용 상태 문구는 끝났는지와 종료 사유로 정한다", () =>
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "completed" }), "종료");
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "error" }), "오류");
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "interrupted" }), "중단");
+  assert.equal(runStatusLabel({ ended_at: null, status: "interrupted" }), "중단");
 });
 
 test("실행 목록에 넣으면 같은 실행은 바꾸고 최근에 시작한 것이 앞에 온다", () => {
