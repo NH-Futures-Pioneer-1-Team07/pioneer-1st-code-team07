@@ -49,7 +49,9 @@ uv run pytest
 | `strategies/` | 전략 폴더. 폴더 하나가 전략 하나다 |
 | `strategies/_template/` | 새 전략을 만들 때 복사하는 템플릿. `_`로 시작하는 폴더는 등록하지 않는다 |
 | `app/nh/` | NH선물 API 호출. 공통(인증, 호출 제한)은 바로 아래, 국내 종목은 `domestic/`, 해외 종목은 `overseas/` |
-| `app/records/` | 실행 기록의 저장·조회와 비밀정보 제거 |
+| `app/runners/` | 백테스트·모의매매 실행, 전략 입력 준비, 포지션·손익 계산, 계좌 정리 |
+| `app/data/` | VIX 일 종가 읽기·갱신. 데이터 파일은 `data/vixcls.csv` |
+| `app/records/` | 실행 기록의 저장·조회·변경 알림과 비밀정보 제거 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `tests/` | 테스트 |
 
