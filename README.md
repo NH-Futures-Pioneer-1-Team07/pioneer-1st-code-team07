@@ -11,14 +11,14 @@
 
 ## NH선물 Open API 신청
 
-- 이 프로젝트는 **국내 선물 모의투자 API** 기준. 해외 API는 사용하지 않음.
-- 필요한 키: 국내 모의투자 APP Key·APP Secret Key.
+- 이 프로젝트는 **국내·해외 선물 모의투자 API**를 사용. 해외 종목(예: ZN 국채선물)을 쓸 때만 해외 키 필요.
+- 필요한 키: 국내 모의투자 APP Key·APP Secret Key, 해외 전략을 쓰면 해외 모의투자 APP Key·APP Secret Key 추가.
 
 1. NH선물 모의투자 계좌 개설
 2. Real HTS의 **[6128] REST API 신청** 화면에서 계좌 선택 후 신청
 3. 카카오톡 알림으로 **APP Key**, **APP Secret Key** 확인
 
-- 국내·해외, 모의·실전은 키가 따로 발급됨.
+- 국내·해외, 모의·실전은 키가 따로 발급됨. 국내 키로는 해외 API를 호출할 수 없음.
 - 키는 설정 파일에만 입력. Git·로그·화면에 노출 금지.
 
 ## 실행하는 법
@@ -57,6 +57,7 @@ NH_APP_SECRET=발급받은 APP Secret Key
 ```
 
 - `NH_APP_KEY`, `NH_APP_SECRET` 앞의 `#`를 지워야 적용.
+- 해외 전략을 쓰면 `NH_OVERSEAS_APP_KEY`, `NH_OVERSEAS_APP_SECRET`도 같은 방식으로 입력.
 
 ### 4. 백엔드 실행 (터미널 1, 프로젝트 루트에서)
 
@@ -86,6 +87,7 @@ npm run dev
 |---|---|
 | `TRADING_ENV` 없음 오류 | `backend/.env` 생성 여부와 `TRADING_ENV` 값 확인 |
 | 화면은 뜨는데 시세·주문이 안 됨 | 백엔드 실행 여부와 `NH_APP_KEY`·`NH_APP_SECRET` 확인 |
+| 해외 종목 조회·실행이 `503` | `NH_OVERSEAS_APP_KEY`·`NH_OVERSEAS_APP_SECRET` 입력 여부 확인 |
 | NH 호출 오류 | 키가 `TRADING_ENV`와 같은 환경(모의/실전)의 키인지 확인 |
 | `8000` 포트 사용 중 | 기존 프로세스 종료 후 재실행 |
 
@@ -111,6 +113,7 @@ pioneer-1st-code-team07/
 │   ├── app/
 │   │   ├── main.py                   앱 생성, 라우터·서비스 연결
 │   │   ├── config.py                 환경변수 설정
+│   │   ├── data/vix.py               VIX 일 종가 읽기·갱신
 │   │   ├── api/                      REST·WebSocket 엔드포인트
 │   │   │   ├── health.py             상태 확인
 │   │   │   ├── strategies.py         전략 목록·파라미터
@@ -131,10 +134,18 @@ pioneer-1st-code-team07/
 │   │   │   │   ├── orders.py         주문
 │   │   │   │   ├── market.py         종목 시세·차트·호가 조회 (화면용)
 │   │   │   │   └── market_hours.py   장 종류·운영 시간
-│   │   │   └── overseas/             해외 종목 (구현 전, 해외 키 필요)
+│   │   │   └── overseas/             해외 종목 (해외 키 필요)
+│   │   │       ├── quotes.py         분봉·일봉·현재가 조회
+│   │   │       ├── account.py        계좌·잔고·상품 조회
+│   │   │       ├── orders.py         주문
+│   │   │       └── market_hours.py   장 종류·운영 시간
 │   │   ├── runners/                  전략 실행
 │   │   │   ├── backtest.py           백테스트 시뮬레이션
+│   │   │   ├── minute_backtest.py    1분봉 가격 경로를 쓰는 백테스트
 │   │   │   ├── service.py            백테스트 실행 서비스
+│   │   │   ├── inputs.py             전략 입력(추가 봉·VIX·증거금) 준비
+│   │   │   ├── series.py             전략이 선언한 일봉 불러오기
+│   │   │   ├── overseas.py           해외 종목 실행용 NH 호출 묶음
 │   │   │   ├── availability.py       백테스트 가능 기간 계산
 │   │   │   ├── paper.py              모의매매 세션 (NH 모의계좌 운용)
 │   │   │   ├── paper_service.py      모의매매 실행 서비스
@@ -143,6 +154,7 @@ pioneer-1st-code-team07/
 │   │   │   └── clearing.py           계좌 전체 정리
 │   │   └── records/                  실행 기록
 │   │       ├── store.py              저장·조회
+│   │       ├── events.py             기록 변경을 WebSocket 구독자에 알림
 │   │       └── sanitize.py           비밀정보 제거
 │   ├── strategy_base/                전략 공통 기반
 │   │   ├── interface.py              전략 인터페이스
@@ -152,7 +164,9 @@ pioneer-1st-code-team07/
 │   │   ├── indicators.py             공통 지표
 │   │   └── testing.py                테스트 도우미
 │   ├── strategies/                   전략 폴더 (폴더 하나가 전략 하나)
-│   │   └── _template/                새 전략용 템플릿
+│   │   ├── _template/                새 전략용 템플릿
+│   │   └── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
+│   ├── data/vixcls.csv               VIX 일 종가 데이터
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
 │   └── tests/                        백엔드 테스트
 ├── frontend/                         React 화면 (TypeScript)
@@ -162,16 +176,16 @@ pioneer-1st-code-team07/
 │   └── src/
 │       ├── main.tsx, App.tsx         진입점·페이지 전환
 │       ├── pages/
-│       │   ├── trading/              모의매매 페이지 (PriceChart, RunHistory)
+│       │   ├── trading/              모의매매 페이지 (PriceChart, JudgmentPanel, RunHistory)
 │       │   └── backtest/             백테스트 페이지 (EquityChart, RecordDetail, CompareSection)
-│       ├── components/common/        공통 컴포넌트 (달력, 탭, 전략 선택 등)
+│       ├── components/common/        공통 컴포넌트 (달력, 탭, 전략 선택, 파라미터 입력, 판단 타임라인 등)
 │       ├── apis/                     백엔드 호출 (Axios, 폴링, 시세 WebSocket)
 │       ├── data/                     화면용 데이터 변환·서식과 테스트
 │       └── styles/                   전역 스타일·색상
 └── docs/
     ├── REQUIREMENTS.md               프로그램 요구사항
     ├── GIT_WORKFLOW.md               Git·GitHub 규칙
-    ├── strategies/                   전략 문서 (작성 가이드, 주차별 전략)
+    ├── strategies/                   전략 문서 (주차별 전략, archive/week02 보관)
     └── nh-api/                       NH선물 API 명세 (API별 문서, 오류코드, 종목 마스터)
 ```
 
@@ -184,6 +198,8 @@ pioneer-1st-code-team07/
 | `TRADING_ENV` | 필수 | `mock`(모의) 또는 `real`(실전). 모의투자는 `mock` |
 | `NH_APP_KEY` | NH 호출 시 | 선택한 환경의 APP Key |
 | `NH_APP_SECRET` | NH 호출 시 | 선택한 환경의 APP Secret Key |
+| `NH_OVERSEAS_APP_KEY` | 해외 종목 시 | 해외 API용 APP Key |
+| `NH_OVERSEAS_APP_SECRET` | 해외 종목 시 | 해외 API용 APP Secret Key |
 | `STRATEGIES_DIR` | 선택 | 전략 폴더 위치. 기본 `backend/strategies` |
 | `RUNS_DIR` | 선택 | 실행 기록 위치. 기본 `backend/runs` |
 | `BACKTEST_FEE_RATE` | 선택 | 백테스트 수수료율. 기본 0.0085% |
@@ -195,16 +211,17 @@ pioneer-1st-code-team07/
 
 ### 모의매매
 
-- 전략 선택, 운용 시작·종료
-- 실시간 시세·호가 수신(WebSocket)
-- 예탁자산·보유 포지션·미체결 주문·손익 확인
+- 전략 선택, 운용 시작·종료, 익절·손절 기준 입력
+- 국내·해외 종목 시세·차트·호가 조회. 국내는 실시간 수신(WebSocket), 해외는 주기적 조회
+- 전략 판단 선과 판단 내용(설명 툴팁, 판단 패널) 표시
+- 국내·해외 모의계좌의 예탁자산·보유 포지션·미체결 주문·손익 확인
 - 계좌 전체 정리(미체결 취소·전체 포지션 청산)
 
 ![모의매매 화면](docs/images/trading.png)
 
 ### 백테스트
 
-- 전략·종목·기간·초기자금·슬리피지 설정 후 실행
+- 전략·종목·기간·초기자금·슬리피지·익절·손절 기준 설정 후 실행
 - 자산 변화 차트, 매매 판단·체결 이력 확인
 
 ![백테스트 화면](docs/images/backtest.png)
@@ -240,7 +257,8 @@ pioneer-1st-code-team07/
 
 ### 공통
 
-- 모의매매·백테스트 실행 기록 저장과 조회
+- 모의매매·백테스트 실행 기록 저장과 조회, 이력 이름 옆에 사용한 파라미터 표시
+- 전략 입력으로 다중 봉(일봉 등)·VIX·증거금 제공
 - 두 기능이 같은 전략 판단 코드 공유
 
 ## 기술 스택
@@ -276,7 +294,8 @@ pioneer-1st-code-team07/
 
 | 기술 | 범위 | 역할 |
 |---|---|---|
-| NH선물 Open API | 국내 모의투자 | 시세 조회, 주문, 계좌 조회, 실시간 체결·호가 수신 |
+| NH선물 Open API | 국내·해외 모의투자 | 시세 조회, 주문, 계좌 조회, 실시간 체결·호가 수신(국내) |
+| FRED `VIXCLS` | VIX 일 종가 | 전략 입력용 VIX (`backend/data/vixcls.csv`에 저장해 사용) |
 
 ## 아키텍처
 
