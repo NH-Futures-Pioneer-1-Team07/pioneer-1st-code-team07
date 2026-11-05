@@ -199,7 +199,7 @@ def test_같은_구독은_한_번만_걸고_스물한_번째_구독은_요청_�
 
 
 def test_구독_종류와_종목_조합이_잘못되면_만들_수_없다():
-    for args in [("KA",), ("KB", ""), ("O1", "A116B000"), ("ZZ", "A")]:
+    for args in [("KA",), ("KB", ""), ("FA",), ("FB", ""), ("O1", "A116B000"), ("ZZ", "A")]:
         with pytest.raises(ValueError):
             Feed(*args)
 
@@ -484,3 +484,31 @@ def test_연결_예외에_접속키가_들어_있어도_로그에_남기지_않�
 
     assert "WSKEY" not in caplog.text and "SESSION-TOKEN" not in caplog.text
     assert "OSError" in caplog.text
+
+
+def test_해외_구독_메시지와_체결_호가_변환():
+    assert subscribe_message(Feed("FA", "ZNZ26"), "A") == {
+        "header": {"api_ver": "1", "action": "A"},
+        "body": {"action_code": "FA", "action_sym": "ZNZ26"},
+    }
+
+    async def scenario():
+        socket = FakeSocket(
+            INIT_OK,
+            {"header": {"action_code": "FA", "action_sym": "ZNZ26"},
+             "body": {"sym": "ZNZ26", "ko_exec_tm": "174459", "exch_tm": "024459", "last_pric": "106.96875", "exec_qty": "20", "tick_div": "1"}},
+            {"header": {"action_code": "FB", "action_sym": "ZNZ26"},
+             "body": {"sym": "ZNZ26", "exch_tm": "024500", "ask_pric_1": "106.96875", "ask_qty_1": "5",
+                      "bid_pric_1": "106.953125", "bid_qty_1": "7"}},
+        )
+        h = Harness(socket)
+        h.connection.start()
+        await until(lambda: len(h.events) == 2)
+        await h.connection.stop()
+
+        trade, book = h.events
+        assert isinstance(trade, Trade) and trade.code == "ZNZ26" and trade.price == 106.96875 and trade.is_trade
+        assert trade.time == "174459"  # 거래소 시간이 아니라 한국 시간
+        assert isinstance(book, OrderBook) and book.levels[0].bid_price == 106.953125
+
+    run(scenario)

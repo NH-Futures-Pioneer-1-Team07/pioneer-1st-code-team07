@@ -51,19 +51,6 @@ class OverseasProbe:
         return None
 
 
-class NullRealtime:
-    """실시간 연결 자리. 해외 종목은 실시간 체결 대신 세션이 현재가를 주기적으로 조회한다."""
-
-    async def subscribe(self, feed) -> None:
-        return None
-
-    def start(self) -> None:
-        return None
-
-    async def stop(self) -> None:
-        return None
-
-
 def overseas_instrument_ready(instrument: Instrument) -> str | None:
     """해외 종목에 필요한 값이 빠졌으면 사유를 돌려준다."""
     if not instrument.exchange:

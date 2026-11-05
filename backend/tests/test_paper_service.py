@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.nh.domestic.account import OrderStatus
-from app.nh.realtime_data import OrderEvent, Trade
+from app.nh.realtime_data import Feed, OrderEvent, Trade
 from app.runners import paper
 from app.runners.clearing import ClearConfig
 from app.runners.paper_service import PaperService
@@ -296,7 +296,7 @@ def test_해외_키가_없으면_해외_변수_이름을_알려_주며_거부한
     assert response.status_code == 503 and "NH_OVERSEAS_APP_KEY" in response.json()["detail"]
 
 
-def test_해외_종목은_해외_브로커와_실시간_없는_연결로_시작한다(tmp_path, monkeypatch):
+def test_해외_종목은_해외_브로커와_체결_구독으로_시작한다(tmp_path, monkeypatch):
     env = Env(tmp_path, monkeypatch, manifest=OVERSEAS, nh_overseas_app_key="k", nh_overseas_app_secret="s")
     env.broker.quote = paper_quote("ZNZ26")
     seen = {}
@@ -311,6 +311,8 @@ def test_해외_종목은_해외_브로커와_실시간_없는_연결로_시작�
 
     assert response.status_code == 202, response.text
     assert seen["instrument"].exchange == "FCME" and seen["minutes"] == 3
+    env.wait(lambda: env.hub and env.hub[0].started)
+    assert env.hub[0].feeds == [Feed("FA", "ZNZ26")]
     env.client.post("/api/trading/stop")
 
 

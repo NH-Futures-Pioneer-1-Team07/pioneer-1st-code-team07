@@ -55,8 +55,6 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const target: MarketTarget | undefined = instrument
     ? { market: instrument.market, exchange: instrument.exchange }
     : undefined;
-  // 해외 종목은 실시간 체결 연결이 없어 REST 조회로만 갱신한다.
-  const realtime = instrument?.market !== "overseas";
   const quote = usePolling(() => fetchQuote(code as string, target), 3000, [code], !!code);
   const candles = usePolling(
     () => fetchCandles(code as string, interval, undefined, target),
@@ -65,8 +63,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     !!code,
   );
   const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
-  const stream = useMarketStream(realtime ? code : null);
-  const streamState = realtime ? stream.state : "polling";
+  const stream = useMarketStream(code, market);
+  const streamState = stream.state;
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;
   const prevClose = quote.data?.prev_close ?? null;
