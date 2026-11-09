@@ -1,4 +1,4 @@
-import type { Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
+import type { ChartLineSpec, Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -27,6 +27,10 @@ export function instrumentLabel(name: string): string {
   return name;
 }
 
+/** 상단바 장 상태 앞에 붙는 시장 이름. */
+export const marketNameLabel = (market: "domestic" | "overseas" | null | undefined): string =>
+  market === "overseas" ? "해외장" : "국내장";
+
 const MARKET_SESSION_LABELS: Record<MarketSession, string> = {
   before_open: "장 시작 전",
   auction: "동시호가",
@@ -41,7 +45,11 @@ export const marketSessionLabel = (session: MarketSession | null | undefined): s
 
 /** 상단바에 보이는 시세 스트림 연결 문구. 장이 열렸는지가 아니라 연결 여부만 뜻한다. */
 export const streamLabel = (state: string, failure: string | null): string =>
-  state === "live" ? "시세 연결됨" : failure ? `시세 연결 끊김: ${failure}` : "시세 연결 중";
+  state === "live"
+    ? "시세 연결됨"
+    : failure
+      ? `시세 연결 끊김: ${failure}`
+      : "시세 연결 중";
 
 /** 이력 제목 옆에 보이는 이력 웹소켓 연결 문구. */
 export const runStreamLabel = (state: string): string =>
@@ -49,6 +57,8 @@ export const runStreamLabel = (state: string): string =>
 
 /** 상단바에 보일 국내장 장 상태와 시세 연결 상태. 모의매매 화면이 채운다. */
 export interface MarketStatus {
+  /** 장 상태를 보여 줄 시장. 종목을 아직 모르면 국내장으로 본다 */
+  market?: "domestic" | "overseas" | null;
   session: MarketSession | null;
   stream: string;
   failure: string | null;
@@ -69,6 +79,8 @@ export interface DecisionRowView {
   at: string;
   action: string;
   reason: string;
+  /** 판단의 근거 수치. "이름: 값" 줄로 펼친 것 */
+  detail: string[];
   price: number | null;
   quantity: number | null;
 }
@@ -80,9 +92,23 @@ export interface FillRowView {
   quantity: number;
   price: number;
   fee: number | null;
+  reason: string;
 }
 
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
+
+/** 중첩된 근거 수치를 `경로: 값` 줄로 펼친다. 값이 없는 항목은 건너뛴다. */
+export function flattenDetail(value: unknown, path = ""): string[] {
+  if (value === null || value === undefined || value === "") return [];
+  if (Array.isArray(value)) return [`${path}: ${value.join(", ")}`];
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, inner]) =>
+      flattenDetail(inner, path ? `${path}.${key}` : key),
+    );
+  }
+  const shown = typeof value === "number" && !Number.isInteger(value) ? String(Number(value.toFixed(6))) : String(value);
+  return [`${path}: ${shown}`];
+}
 
 export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
   return lines.map((line) => {
@@ -93,6 +119,7 @@ export function mapDecisions(lines: JournalLine[]): DecisionRowView[] {
       at: formatDateTime(line.time),
       action: resultLabels[String(line.result)] ?? String(line.result ?? ""),
       reason: typeof line.reason === "string" ? line.reason : "",
+      detail: flattenDetail(line.detail),
       price: null,
       quantity: quantity > 0 ? quantity : null,
     };
@@ -107,6 +134,7 @@ export function mapFills(lines: JournalLine[]): FillRowView[] {
     quantity: num(line.quantity) ?? 0,
     price: num(line.price) ?? 0,
     fee: num(line.fee),
+    reason: typeof line.reason === "string" ? line.reason : "",
   }));
 }
 
@@ -154,17 +182,26 @@ export interface ChartLayout {
   lastY: number | null;
   min: number;
   max: number;
+  /** 가격을 차트의 세로 위치로 바꾼다 */
+  y: (price: number) => number;
 }
 
 /** 캔들과 거래량을 `width × height` 안에 놓는다. 오른쪽 `axisWidth`는 가격 눈금 자리다. */
-export function chartLayout(candles: Candle[], width: number, height: number, axisWidth: number): ChartLayout {
-  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0 };
+export function chartLayout(
+  candles: Candle[],
+  width: number,
+  height: number,
+  axisWidth: number,
+  /** 캔들 밖에서 차트 안에 들어와야 하는 가격(선의 값). 세로 범위에 포함한다 */
+  extraPrices: number[] = [],
+): ChartLayout {
+  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0 };
   if (!candles.length || width <= axisWidth) return empty;
   const top = 12;
   const priceBottom = height * 0.76;
   const volumeBottom = height - 22;
-  const lows = candles.map((c) => c.low);
-  const highs = candles.map((c) => c.high);
+  const lows = [...candles.map((c) => c.low), ...extraPrices];
+  const highs = [...candles.map((c) => c.high), ...extraPrices];
   const min = Math.min(...lows);
   const max = Math.max(...highs);
   const span = max - min || Math.max(max * 0.001, 1);
@@ -195,7 +232,50 @@ export function chartLayout(candles: Candle[], width: number, height: number, ax
     const value = max - (span * row) / 3;
     return { y: y(value), value };
   });
-  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max };
+  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y };
+}
+
+/** 종가의 단순이동평균. 봉이 `period`개 모이기 전 자리는 `null`이다. */
+export function movingAverage(candles: Candle[], period: number): (number | null)[] {
+  let sum = 0;
+  return candles.map((candle, index) => {
+    sum += candle.close;
+    if (index >= period) sum -= candles[index - period].close;
+    return index >= period - 1 ? sum / period : null;
+  });
+}
+
+/** 선 하나의 봉마다의 값. `previous_close`는 `today`보다 앞선 마지막 일봉의 종가를 모든 자리에 깐다. */
+export function lineValues(line: ChartLineSpec, candles: Candle[], today: string): (number | null)[] {
+  if (line.kind === "sma") return movingAverage(candles, line.period ?? 1);
+  const previous = [...candles].reverse().find((candle) => candle.time.slice(0, 10) < today);
+  return candles.map(() => previous?.close ?? null);
+}
+
+/** 선택한 차트 주기에 그릴 선. 판단 기준 봉과 같은 분봉이면 `bar` 계열, 일봉이면 `daily` 계열이다. */
+export function linesForInterval(lines: ChartLineSpec[], interval: string, barMinutes: number | null): ChartLineSpec[] {
+  const series = interval === "day" ? "daily" : barMinutes !== null && interval === String(barMinutes) ? "bar" : null;
+  return series ? lines.filter((line) => line.series === series) : [];
+}
+
+export interface ResolvedLine {
+  spec: ChartLineSpec;
+  color: string;
+  values: (number | null)[];
+  /** 마지막 봉에서의 값 */
+  latest: number | null;
+}
+
+const LINE_COLORS = ["#2dd4bf", "#a78bfa", "#f472b6"];
+const PREVIOUS_CLOSE_COLOR = "#e5e7eb";
+
+export function resolveLines(specs: ChartLineSpec[], candles: Candle[], today: string): ResolvedLine[] {
+  let palette = 0;
+  return specs.map((spec) => {
+    const values = lineValues(spec, candles, today);
+    const color = spec.kind === "previous_close" ? PREVIOUS_CLOSE_COLOR : LINE_COLORS[palette++ % LINE_COLORS.length];
+    return { spec, color, values, latest: values.length ? values[values.length - 1] : null };
+  });
 }
 
 /** 가로축에 보여 줄 시각 눈금 네 개. */
@@ -211,15 +291,15 @@ export function timeTicks(candles: Candle[], daily: boolean): { index: number; l
 /** 실행 하나를 가리키는 키. 목록에서 선택·갱신할 때 쓴다. */
 export const runKey = (run: RunRef) => `${run.strategy_id}/${run.run_id}`;
 
-/** 모의매매 이력 목록과 상세에 보이는 운용 상태 문구. */
+/** 모의매매 이력 목록과 상세에 보이는 운용 상태 문구. 서버 재시작으로 중단된 이력은 종료 시각이 없어도 중단으로 본다. */
 export const runStatusLabel = (run: Pick<RunSummary, "ended_at" | "status">): string =>
-  run.ended_at
-    ? run.status === "error"
-      ? "오류"
-      : run.status === "interrupted"
-        ? "중단"
-        : "종료"
-    : "운용 중";
+  run.status === "error"
+    ? "오류"
+    : run.status === "interrupted"
+      ? "중단"
+      : run.ended_at
+        ? "종료"
+        : "운용 중";
 
 /** 시작 시각이 최근인 실행이 앞에 오도록 목록에 실행 하나를 넣거나 바꾼다. */
 export const upsertRun = (runs: RunSummary[], run: RunSummary): RunSummary[] =>

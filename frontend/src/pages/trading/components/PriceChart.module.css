@@ -63,3 +63,59 @@
   width: 100%;
   height: 100%;
 }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.legend li {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: help;
+}
+.legend i {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+.legend i.dashed {
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important;
+  color: #e5e7eb;
+}
+.legend strong {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.lineTip {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  top: calc(100% + 6px);
+  width: 240px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1a1e25;
+  box-shadow:
+    0 8px 24px #000b,
+    inset 0 0 0 1px #ffffff14;
+  color: #e4e6ea;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.legend li:hover .lineTip,
+.legend li:focus-visible .lineTip {
+  opacity: 1;
+}

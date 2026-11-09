@@ -5,26 +5,30 @@ import dataclasses
 import logging
 import threading
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, Protocol
 
 from app.config import Settings
+from app.data.vix import load as load_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
-from app.nh.overseas import OVERSEAS_UNSUPPORTED
 from app.nh.realtime import RealtimeConnection
 from app.nh.realtime_data import Feed
 from app.records.store import RunRecorder, RunStore
-from app.runners.broker import Broker, NHBroker
+from app.runners.broker import Broker, NHBroker, OverseasNHBroker
 from app.runners.clearing import (
     AccountGateway,
     ClearConfig,
     NHAccountGateway,
+    OverseasAccountGateway,
     account_view,
     run_clear,
 )
+from app.runners.inputs import ExtraInputs
+from app.runners.overseas import has_keys, key_names, overseas_instrument_ready
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
-from strategy_base.manifest import Manifest
+from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
+from strategy_base.manifest import Instrument, Manifest
 from strategy_base.registry import StrategyRegistry
 
 logger = logging.getLogger(__name__)
@@ -63,6 +67,21 @@ def nh_components(settings: Settings) -> ComponentsFactory:
     return build
 
 
+# (종목, 봉 분 단위) -> (NH 호출 묶음, 실시간 연결 만드는 함수)
+OverseasComponentsFactory = Callable[[Instrument, int], tuple[Broker, RealtimeFactory]]
+
+
+def overseas_components(settings: Settings) -> OverseasComponentsFactory:
+    """해외 종목은 해외 키로 실시간 체결(FA)을 받고, 연결이 끊긴 동안은 세션이 현재가를 조회한다."""
+
+    def build(instrument: Instrument, minutes: int) -> tuple[Broker, RealtimeFactory]:
+        client = NHClient(settings, market="overseas")
+        broker = OverseasNHBroker(client, instrument.exchange or "", instrument.code or "", minutes)
+        return broker, lambda on_event, on_state: RealtimeConnection(client, on_event=on_event, on_state=on_state)
+
+    return build
+
+
 class PaperService:
     def __init__(
         self,
@@ -71,16 +90,21 @@ class PaperService:
         store: RunStore,
         *,
         components: ComponentsFactory | None = None,
+        overseas_factory: OverseasComponentsFactory | None = None,
         clock: Callable[[], datetime] = kst_now,
         config_overrides: dict[str, Any] | None = None,
         gateway_factory: Callable[[], AccountGateway] | None = None,
         clear_config: ClearConfig | None = None,
+        daily_fetcher: DailyFetcher | None = None,
+        overseas_gateway_factory: Callable[[], AccountGateway] | None = None,
     ):
         self._settings = settings
         self._registry = registry
         self._store = store
         self._components = components or nh_components(settings)
+        self._overseas_components = overseas_factory or overseas_components(settings)
         self._clock = clock
+        self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
         self._overrides = config_overrides or {}
         self._lock = threading.Lock()
         self._session: PaperSession | None = None
@@ -91,6 +115,10 @@ class PaperService:
         self._recorder: RunRecorder | None = None
         self._gateway_factory = gateway_factory or (lambda: NHAccountGateway(NHClient(settings)))
         self._gateway: AccountGateway | None = None
+        self._overseas_gateway_factory = overseas_gateway_factory or (
+            lambda: OverseasAccountGateway(NHClient(settings, market="overseas"))
+        )
+        self._overseas_gateway: AccountGateway | None = None
         self._clear_config = clear_config or ClearConfig()
         self._clear: dict[str, Any] | None = None
         self._clear_thread: threading.Thread | None = None
@@ -103,8 +131,6 @@ class PaperService:
             raise TradingRejected(404, "전략을 찾을 수 없습니다")
         manifest = registered.manifest
         instrument = manifest.instruments[0]
-        if instrument.market != "domestic":
-            raise TradingRejected(422, OVERSEAS_UNSUPPORTED)
         if manifest.bar.unit != "minute":
             raise TradingRejected(422, "분봉 전략만 운용할 수 있습니다")
         if not instrument.code or not instrument.multiplier:
@@ -112,13 +138,20 @@ class PaperService:
         if self._settings.trading_env != "mock":
             raise TradingRejected(422, "모의매매는 모의 환경(TRADING_ENV=mock)에서만 운용할 수 있습니다")
         merged = self._merge_params(manifest, params)
-        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
-            raise TradingRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        if instrument.market == "overseas":
+            problem = overseas_instrument_ready(instrument)
+            if problem:
+                raise TradingRejected(422, problem)
+        if not has_keys(self._settings, instrument.market):
+            raise TradingRejected(503, f"{key_names(instrument.market)} 환경변수를 설정하세요")
 
         with self._lock:
             if self._session is not None:
                 raise TradingRejected(409, "이미 운용 중인 전략이 있습니다")
-            broker, make_realtime = self._components(instrument.code, manifest.bar.size)
+            if instrument.market == "overseas":
+                broker, make_realtime = self._overseas_components(instrument, manifest.bar.size)
+            else:
+                broker, make_realtime = self._components(instrument.code, manifest.bar.size)
             deposit, last_trading_day = self._check_account(broker, instrument.code)
             started_at = self._clock()
             config = dataclasses.replace(
@@ -128,6 +161,9 @@ class PaperService:
                     multiplier=instrument.multiplier,
                     minutes=manifest.bar.size,
                     fee_rate=self._settings.backtest_fee_rate,
+                    history_bars=manifest.history_bars,
+                    market=instrument.market,
+                    **({"session_anchor": time(0, 0)} if instrument.market == "overseas" else {}),
                 ),
                 **self._overrides,
             )
@@ -149,12 +185,19 @@ class PaperService:
                 last_trading_day=last_trading_day,
                 deposit_before=deposit,
                 clock=self._clock,
+                extras=self._extra_inputs(manifest, instrument),
             )
             self._session = session
             self._recorder = recorder
             self._run = {"strategy_id": strategy_id, "mode": "paper", "run_id": recorder.run_id}
+            # 국내는 체결과 주문/체결 알림을, 해외는 체결만 받는다(해외 주문 상태는 계좌 조회로 맞춘다).
+            feeds = (
+                [Feed("FA", config.code)]
+                if instrument.market == "overseas"
+                else [Feed("KA", config.code), Feed("O1")]
+            )
             self._thread = threading.Thread(
-                target=self._thread_main, args=(session, make_realtime, config.code, recorder), daemon=True
+                target=self._thread_main, args=(session, make_realtime, feeds, recorder), daemon=True
             )
             self._thread.start()
             return dict(self._run)
@@ -184,21 +227,23 @@ class PaperService:
                 status["phase"] = "clearing"
         return status
 
-    def account(self) -> dict[str, Any]:
-        """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문."""
-        gateway = self._account_gateway()
+    def account(self, market: str = "domestic") -> dict[str, Any]:
+        """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. `market`이 `overseas`이면 해외 모의계좌다."""
+        gateway = self._account_gateway(market)
         try:
             return account_view(gateway)
         except NHError as error:
             raise TradingRejected(502, f"NH 모의계좌를 조회하지 못했습니다: {type(error).__name__}") from error
 
-    def clear(self) -> dict[str, str]:
-        """미체결 주문을 모두 취소하고 남은 포지션을 모두 청산한다. 운용 중인 전략은 판단을 멈추고 끝낸다."""
-        gateway = self._account_gateway()
+    def clear(self, market: str = "domestic") -> dict[str, str]:
+        """미체결 주문을 모두 취소하고 남은 포지션을 모두 청산한다. 같은 시장에서 운용 중인 전략은 판단을 멈추고 끝낸다."""
+        gateway = self._account_gateway(market)
         with self._lock:
             if self._clear is not None and self._clear["state"] == "running":
                 raise TradingRejected(409, "이미 정리 중입니다")
             session, loop, recorder = self._session, self._loop, self._recorder
+            if session is not None and session.config.market != market:
+                session, loop, recorder = None, None, None  # 다른 시장의 운용은 건드리지 않는다
             self._clear = {"state": "running", "step": "start", "detail": "정리를 시작합니다", "result": None}
             if session is not None:
                 self._call_in_loop(loop, session, session.begin_pause)
@@ -215,11 +260,15 @@ class PaperService:
 
     # ---- 검증과 준비 ----
 
-    def _account_gateway(self) -> AccountGateway:
+    def _account_gateway(self, market: str = "domestic") -> AccountGateway:
         if self._settings.trading_env != "mock":
             raise TradingRejected(422, "모의 환경(TRADING_ENV=mock)에서만 쓸 수 있습니다")
-        if not (self._settings.nh_app_key and self._settings.nh_app_secret):
-            raise TradingRejected(503, "NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+        if not has_keys(self._settings, market):
+            raise TradingRejected(503, f"{key_names(market)} 환경변수를 설정하세요")
+        if market == "overseas":
+            if self._overseas_gateway is None:
+                self._overseas_gateway = self._overseas_gateway_factory()
+            return self._overseas_gateway
         if self._gateway is None:
             self._gateway = self._gateway_factory()
         return self._gateway
@@ -231,10 +280,19 @@ class PaperService:
         else:
             call(*args)
 
+    def _extra_inputs(self, manifest: Manifest, instrument: Any) -> ExtraInputs:
+        loader = None
+        if manifest.series:
+            def loader(day):  # noqa: ANN001 - 날짜가 바뀔 때마다 일봉을 다시 받는다
+                bars = self._daily_fetcher(instrument, DAILY_MARGIN)
+                return {name: bars for name in manifest.series}
+
+        return ExtraInputs(vix=load_vix(), margin=instrument.margin, loader=loader)
+
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
-        unknown = sorted(set(overrides or {}) - set(manifest.parameters))
-        if unknown:
-            raise TradingRejected(422, f"전략에 없는 파라미터입니다: {', '.join(unknown)}")
+        problem = manifest.override_problem(overrides)
+        if problem:
+            raise TradingRejected(422, problem)
         return {**manifest.default_params(), **(overrides or {})}
 
     def _check_account(self, broker: Broker, code: str) -> tuple[dict[str, Any], Any]:
@@ -262,14 +320,14 @@ class PaperService:
     # ---- 전용 스레드 ----
 
     def _thread_main(
-        self, session: PaperSession, make_realtime: RealtimeFactory, code: str, recorder: RunRecorder
+        self, session: PaperSession, make_realtime: RealtimeFactory, feeds: list[Feed], recorder: RunRecorder
     ) -> None:
         async def main() -> None:
             self._loop = asyncio.get_running_loop()
             realtime = make_realtime(session.post, lambda state, detail: session.post(StateChange(str(state), detail)))
             try:
-                await realtime.subscribe(Feed("KA", code))
-                await realtime.subscribe(Feed("O1"))
+                for feed in feeds:
+                    await realtime.subscribe(feed)
                 realtime.start()
                 await session.run()
             finally:

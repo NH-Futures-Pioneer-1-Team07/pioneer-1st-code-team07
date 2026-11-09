@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { Candle } from "../../../apis/types";
 import { formatNumber } from "../../../data/format";
 import { chartLayout, timeTicks } from "../../../data/tradingView";
+import type { ResolvedLine } from "../../../data/tradingView";
 import styles from "./PriceChart.module.css";
 
 export const intervals = [
@@ -20,19 +21,23 @@ export default function PriceChart({
   interval,
   onIntervalChange,
   error,
+  lines = [],
 }: {
   name: string;
   candles: Candle[] | null;
   interval: string;
   onIntervalChange: (value: string) => void;
   error: string | null;
+  /** 전략이 판단에 쓰는 선. 선택한 주기에 맞는 것만 넘어온다 */
+  lines?: ResolvedLine[];
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState({ w: BASE_WIDTH, h: BASE_HEIGHT });
   const daily = interval === "day";
-  const layout = chartLayout(candles ?? [], size.w, size.h, AXIS_WIDTH);
+  const lineValues = lines.flatMap((line) => line.values.filter((value): value is number => value !== null));
+  const layout = chartLayout(candles ?? [], size.w, size.h, AXIS_WIDTH, lineValues);
   const ticks = timeTicks(candles ?? [], daily);
   const slot = candles?.length ? (size.w - AXIS_WIDTH) / candles.length : 0;
   const lastPrice = candles?.length ? candles[candles.length - 1].close : null;
@@ -88,6 +93,23 @@ export default function PriceChart({
               : "캔들 · 거래량"}
         </span>
       </div>
+      {lines.length > 0 && (
+        <ul className={styles.legend} aria-label="전략 판단 선">
+          {lines.map((line) => (
+            <li key={line.spec.label} tabIndex={0} aria-describedby={`line-tip-${line.spec.label}`}>
+              <i
+                style={{ background: line.color }}
+                className={line.spec.kind === "previous_close" ? styles.dashed : undefined}
+              />
+              {line.spec.label}
+              <strong>{line.latest === null ? "—" : formatNumber(Number(line.latest.toFixed(4)))}</strong>
+              <span role="tooltip" id={`line-tip-${line.spec.label}`} className={styles.lineTip}>
+                {line.spec.description}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div ref={frameRef} className={styles.frame}>
         <svg
           viewBox={`0 0 ${size.w} ${size.h}`}
@@ -120,6 +142,22 @@ export default function PriceChart({
                 <rect x={shape.x} y={shape.volumeTop} width={shape.width} height={shape.volumeHeight} fill={color} opacity=".24" rx="1" />
               </g>
             );
+          })}
+          {lines.map((line) => {
+            const points = line.values.flatMap((value, index) =>
+              value === null ? [] : [`${(index * slot + slot / 2).toFixed(1)},${layout.y(value).toFixed(1)}`],
+            );
+            return points.length > 1 ? (
+              <polyline
+                key={line.spec.label}
+                points={points.join(" ")}
+                fill="none"
+                stroke={line.color}
+                strokeWidth="1.5"
+                strokeDasharray={line.spec.kind === "previous_close" ? "5 4" : undefined}
+                opacity=".9"
+              />
+            ) : null;
           })}
           {layout.lastY !== null && lastPrice !== null && (
             <>

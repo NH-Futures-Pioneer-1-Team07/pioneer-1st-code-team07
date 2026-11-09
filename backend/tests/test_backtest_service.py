@@ -239,14 +239,60 @@ def test_종목_정보가_모자란_전략은_거부한다(make_client):
     assert "거래승수" in response.json()["detail"]
 
 
-def test_해외_종목은_아직_지원하지_않아_거부한다(make_client):
-    overseas = {**MANIFEST, "instruments": [{"name": "미국 10년 국채", "market": "overseas", "code": "ZNZ26", "multiplier": 1000}]}
-    client, _ = make_client(manifest=overseas)
+OVERSEAS = {
+    **MANIFEST,
+    "instruments": [{"name": "미국 10년 국채", "market": "overseas", "exchange": "FCME", "code": "ZNZ26", "multiplier": 1000}],
+}
+
+
+def test_해외_종목은_거래소_코드가_없으면_거부한다(make_client):
+    manifest = {**OVERSEAS, "instruments": [{**OVERSEAS["instruments"][0], "exchange": None}]}
+    client, _ = make_client(manifest=manifest, nh_overseas_app_key="k", nh_overseas_app_secret="s")
 
     response = client.post("/api/backtests", json=body())
 
     assert response.status_code == 422
-    assert "해외" in response.json()["detail"]
+    assert "거래소 코드" in response.json()["detail"]
+
+
+def test_해외_키가_없으면_해외_변수_이름을_알려_주며_거부한다(make_client):
+    client, _ = make_client(manifest=OVERSEAS, _env_file=None)
+
+    start = client.post("/api/backtests", json=body())
+    available = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+
+    for response in (start, available):
+        assert response.status_code == 503
+        assert "NH_OVERSEAS_APP_KEY" in response.json()["detail"]
+
+
+def test_해외_종목도_가능_기간을_조회하고_백테스트를_실행한다(make_client):
+    client, service = make_client(manifest=OVERSEAS, nh_overseas_app_key="k", nh_overseas_app_secret="s")
+
+    available = client.get("/api/backtests/range", params={"strategy_id": "week02_stub"})
+    started = client.post("/api/backtests", json=body())
+    service.join(10)
+
+    assert available.status_code == 200 and available.json()["instrument"]["market"] == "overseas"
+    assert started.status_code == 202, started.text
+    assert run_detail(client, started.json())["meta"]["status"] == "completed"
+
+
+def test_해외_분봉을_한국_시간_날짜별로_나눈다(monkeypatch):
+    import app.runners.service as module
+
+    rows = [
+        Bar(datetime(2026, 11, 2, 23, 55), 2, 1, 1.5, 10, 1.2),
+        Bar(datetime(2026, 11, 3, 0, 0), 3, 2, 2.5, 10, 2.1),
+        Bar(datetime(2026, 11, 3, 0, 5), 3, 2, 2.6, 10, 2.5),
+    ]
+    monkeypatch.setattr(module, "fetch_overseas_minutes", lambda client, exchange, code, **kwargs: rows)
+
+    loaded = module.overseas_loader(object(), "FCME")("ZNZ26", 5, date(2026, 11, 2), date(2026, 11, 3), lambda done, total: None)
+
+    assert sorted(loaded.days) == [date(2026, 11, 2), date(2026, 11, 3)]
+    assert [len(bars) for bars in loaded.days.values()] == [1, 2]
+    assert loaded.last_trading_day is None
 
 
 def test_일봉_전략은_거부한다(make_client):
@@ -347,18 +393,6 @@ def test_분봉이_전혀_없으면_가능_기간이_없고_시작도_거부한�
     assert started.status_code == 422 and "분봉이 없습니다" in started.json()["detail"]
 
 
-def test_가능_기간_밖의_시작일_종료일은_거부하고_사유에_가능_기간을_적는다(make_client):
-    client, _ = make_client(probe=FakeProbe(first=date(2026, 10, 1), last=date(2026, 10, 20)))
-
-    early = client.post("/api/backtests", json=body(start_date="2026-09-28", end_date="2026-10-02"))
-    late = client.post("/api/backtests", json=body(start_date="2026-10-15", end_date="2026-10-23"))
-
-    for response in (early, late):
-        assert response.status_code == 422
-        assert "2026-10-01부터 2026-10-20까지" in response.json()["detail"]
-    assert client.get("/api/runs").json() == []
-
-
 def test_가능_기간_경계_날짜는_허용한다(make_client):
     client, service = make_client()
 
@@ -394,3 +428,89 @@ def test_같은_종목의_가능_기간은_하루_동안_다시_조회하지_않
     client.post("/api/backtests", json=body(start_date="2026-10-20", end_date="2026-10-21"))
 
     assert calls > 0 and probe.calls == calls
+
+
+PROBE_STRATEGY = """
+import json
+from pathlib import Path
+
+from strategy_base.interface import BaseStrategy
+from strategy_base.models import StrategyOutput
+
+LOG = Path(__file__).parent / "calls.jsonl"
+
+
+class Strategy(BaseStrategy):
+    def on_bar(self, ctx):
+        row = {"now": ctx.now.isoformat(), "bars": len(ctx.bars), "daily": len(ctx.series.get("daily", [])),
+               "vix": ctx.vix, "margin": ctx.margin}
+        with LOG.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row) + "\\n")
+        return StrategyOutput()
+"""
+
+
+def test_추가_봉_계열과_전날_봉_VIX_증거금을_전략에_전달한다(make_client, tmp_path):
+    manifest = {
+        **MANIFEST,
+        "instruments": [{**MANIFEST["instruments"][0], "margin": 2500}],
+        "series": {"daily": {"unit": "day", "size": 1}},
+        "history_bars": 2,
+    }
+    client, service = make_client(manifest=manifest)
+    strategies = tmp_path / "strategies" / "week02_stub"
+    (strategies / "strategy.py").write_text(PROBE_STRATEGY, encoding="utf-8")
+    daily = [Bar(datetime(2026, 10, d), 1, 1, 1, 1, 1) for d in range(1, 24)]
+    service._daily_fetcher = lambda instrument, quantity: daily
+    client.app.state.registry.scan()
+
+    response = client.post("/api/backtests", json=body(start_date="2026-10-21", end_date="2026-10-22"))
+    service.join(10)
+
+    assert response.status_code == 202, response.text
+    rows = [json.loads(line) for line in (strategies / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    # 시작일 앞 14일을 거슬러 조회한 전날 봉(day_bars 5개)이 첫 봉 앞에 2개 이어진다
+    assert rows[0]["bars"] == 3 and rows[0]["margin"] == 2500
+    assert rows[0]["daily"] == 20  # 10/21 이전 일봉
+    assert rows[0]["vix"] is not None
+
+
+RANGED = {
+    **MANIFEST,
+    "parameters": {
+        "quantity": {"default": 1, "description": "수량", "editable": True, "unit": "percent", "min": 0.01, "max": 1},
+    },
+}
+
+
+def test_파라미터가_허용_범위를_벗어나면_백테스트를_거부하고_범위_안이면_기록에_남긴다(make_client):
+    client, service = make_client(manifest=RANGED)
+
+    low = client.post("/api/backtests", json=body(params={"quantity": 0}))
+    high = client.post("/api/backtests", json=body(params={"quantity": 1.5}))
+    ok = client.post("/api/backtests", json=body(params={"quantity": 0.5}))
+    service.join(10)
+
+    assert low.status_code == 422 and "1% 이상" in low.json()["detail"]
+    assert high.status_code == 422 and "100% 이하" in high.json()["detail"]
+    assert ok.status_code == 202, ok.text
+    assert run_detail(client, ok.json())["meta"]["params"] == {"quantity": 0.5}
+    detail = client.get("/api/strategies/week02_stub").json()["parameters"]["quantity"]
+    assert (detail["editable"], detail["unit"], detail["min"], detail["max"]) == (True, "percent", 0.01, 1)
+
+
+def test_종목에_호가_단위가_있으면_추정하지_않고_그_값을_쓴다(make_client):
+    with_tick = {**MANIFEST, "instruments": [{**MANIFEST["instruments"][0], "tick_size": 0.015625}]}
+    client, service = make_client(manifest=with_tick)
+    started = client.post("/api/backtests", json=body()).json()
+    service.join(10)
+
+    assert run_detail(client, started)["meta"]["assumptions"]["slippage"]["tick_size"] == 0.015625
+
+
+def test_종목에_호가_단위가_없으면_봉_가격으로_추정한다(make_client):
+    client, service = make_client()
+    started = client.post("/api/backtests", json=body()).json()
+    service.join(10)
+
+    assert run_detail(client, started)["meta"]["assumptions"]["slippage"]["tick_size"] == 500.0

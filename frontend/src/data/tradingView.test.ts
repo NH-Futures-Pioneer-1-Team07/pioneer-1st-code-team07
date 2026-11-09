@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import {
   chartLayout,
   formatClock,
+  flattenDetail,
+  linesForInterval,
+  lineValues,
+  movingAverage,
+  resolveLines,
   formatDateTime,
   instrumentLabel,
   mapDecisions,
@@ -14,6 +19,7 @@ import {
   runKey,
   runStatusLabel,
   runStreamLabel,
+  marketNameLabel,
   streamLabel,
   timeTicks,
   upsertRun,
@@ -48,7 +54,7 @@ test("매매 판단 기록을 화면 행으로 바꾼다", () => {
   ]);
   assert.deepEqual(rows[0], {
     key: "1", at: "2026.10.28 10:03:00", action: "매수", reason: "상승 추세에서 기준 고점 돌파",
-    price: null, quantity: 12,
+    detail: [], price: null, quantity: 12,
   });
   assert.equal(rows[1].action, "진입 보류");
   assert.equal(rows[1].quantity, null);
@@ -57,7 +63,29 @@ test("매매 판단 기록을 화면 행으로 바꾼다", () => {
 
 test("체결 기록을 화면 행으로 바꾼다", () => {
   const [row] = mapFills([line({ seq: 7, kind: "fill", side: "sell", quantity: 3, price: 243500, fee: 62 })]);
-  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62 });
+  assert.deepEqual(row, { key: "7", at: "2026.10.28 10:03:00", side: "매도", quantity: 3, price: 243500, fee: 62, reason: "" });
+});
+
+test("판단 기록은 근거 수치를 줄로 펼치고 체결 기록은 사유를 담는다", () => {
+  const [row] = mapDecisions([
+    line({
+      seq: 1,
+      result: "hold",
+      reason: "교차 없음",
+      detail: { mid: { signal: "buy", close: 106.640625, short_ma: null }, intraday: { cross: null, position: "above" }, today: { entered: 0, rates: [1, 2] } },
+    }),
+  ]);
+  assert.deepEqual(row.detail, [
+    "mid.signal: buy",
+    "mid.close: 106.640625",
+    "intraday.position: above",
+    "today.entered: 0",
+    "today.rates: 1, 2",
+  ]);
+  const [fill] = mapFills([line({ seq: 2, kind: "fill", side: "buy", quantity: 1, price: 106.5, reason: "장중 이동평균 교차 (중기 매수 허용)" })]);
+  assert.equal(fill.reason, "장중 이동평균 교차 (중기 매수 허용)");
+  assert.deepEqual(flattenDetail(undefined), []);
+  assert.deepEqual(flattenDetail({ a: 1.23456789 }), ["a: 1.234568"]);
 });
 
 const status = (fields: Partial<TradingStatus>): TradingStatus => ({ phase: "idle", run: null, ...fields });
@@ -136,6 +164,12 @@ test("장 종류를 한글로 보여 주고 모르는 값은 장 정보 없음�
   assert.equal(marketSessionLabel(undefined), "장 정보 없음");
 });
 
+test("상단바는 종목의 시장에 따라 국내장·해외장을 구분한다", () => {
+  assert.equal(marketNameLabel("overseas"), "해외장");
+  assert.equal(marketNameLabel("domestic"), "국내장");
+  assert.equal(marketNameLabel(null), "국내장");
+});
+
 test("시세 연결 문구는 연결 여부만 말한다", () => {
   assert.equal(streamLabel("live", null), "시세 연결됨");
   assert.equal(streamLabel("connecting", null), "시세 연결 중");
@@ -158,6 +192,7 @@ test("운용 상태 문구는 끝났는지와 종료 사유로 정한다", () =>
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "completed" }), "종료");
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "error" }), "오류");
   assert.equal(runStatusLabel({ ended_at: "2026-10-29T15:00:00", status: "interrupted" }), "중단");
+  assert.equal(runStatusLabel({ ended_at: null, status: "interrupted" }), "중단");
 });
 
 test("실행 목록에 넣으면 같은 실행은 바꾸고 최근에 시작한 것이 앞에 온다", () => {
@@ -169,4 +204,41 @@ test("실행 목록에 넣으면 같은 실행은 바꾸고 최근에 시작한 
   const merged = upsertRun([second, first], finished);
   assert.deepEqual(merged.map((run) => run.run_id), ["b", "a"]);
   assert.equal(merged[1].net_pnl, 5);
+});
+
+
+const closes = (values: number[], day = "2026-11-0") =>
+  values.map((close, index): Candle => ({ time: `${day}${index + 1}`, open: close, high: close, low: close, close, volume: 1 }));
+
+test("이동평균은 기간이 모이기 전 자리를 비워 둔다", () => {
+  assert.deepEqual(movingAverage(closes([1, 2, 3, 4]), 3), [null, null, 2, 3]);
+  assert.deepEqual(movingAverage(closes([5]), 1), [5]);
+  assert.deepEqual(movingAverage([], 3), []);
+});
+
+test("직전 거래일 종가선은 오늘보다 앞선 마지막 일봉의 종가다", () => {
+  const candles = closes([10, 11, 12]); // 2026-11-01, 02, 03
+  const line = { series: "daily", kind: "previous_close", period: null, label: "직전 거래일 종가", description: "" } as const;
+  assert.deepEqual(lineValues(line, candles, "2026-11-04"), [12, 12, 12]); // 오늘(4일) 일봉이 아직 없으면 마지막 일봉
+  assert.deepEqual(lineValues(line, candles, "2026-11-03"), [11, 11, 11]); // 오늘 일봉은 제외
+  assert.deepEqual(lineValues(line, candles, "2026-11-01"), [null, null, null]);
+});
+
+test("차트 주기에 맞는 선만 고르고 이동평균 선에는 색을 돌려가며 준다", () => {
+  const specs = [
+    { series: "daily", kind: "previous_close", period: null, label: "직전", description: "d" },
+    { series: "daily", kind: "sma", period: 2, label: "2일선", description: "d" },
+    { series: "bar", kind: "sma", period: 2, label: "단기선", description: "d" },
+    { series: "bar", kind: "sma", period: 3, label: "장기선", description: "d" },
+  ] as const;
+
+  assert.deepEqual(linesForInterval([...specs], "day", 5).map((l) => l.label), ["직전", "2일선"]);
+  assert.deepEqual(linesForInterval([...specs], "5", 5).map((l) => l.label), ["단기선", "장기선"]);
+  assert.deepEqual(linesForInterval([...specs], "1", 5), []);
+  assert.deepEqual(linesForInterval([...specs], "5", null), []);
+
+  const resolved = resolveLines(linesForInterval([...specs], "5", 5), closes([1, 2, 3, 4]), "2026-11-04");
+  assert.equal(resolved[0].latest, 3.5);
+  assert.equal(resolved[1].latest, 3);
+  assert.notEqual(resolved[0].color, resolved[1].color);
 });

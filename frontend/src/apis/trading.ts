@@ -22,28 +22,41 @@ export const fetchStrategy = (id: string) =>
 export const fetchStatus = () =>
   http.get<TradingStatus>("/api/trading/status").then((r) => r.data);
 
-export const fetchAccount = () =>
-  http.get<AccountView>("/api/trading/account").then((r) => r.data);
+export const fetchAccount = (market: "domestic" | "overseas" = "domestic") =>
+  http.get<AccountView>("/api/trading/account", { params: { market } }).then((r) => r.data);
 
-export const startTrading = (strategyId: string) =>
-  http.post<RunRef>("/api/trading/start", { strategy_id: strategyId }).then((r) => r.data);
+export const startTrading = (strategyId: string, params?: Record<string, number>) =>
+  http
+    .post<RunRef>("/api/trading/start", { strategy_id: strategyId, ...(params && Object.keys(params).length ? { params } : {}) })
+    .then((r) => r.data);
 
 export const stopTrading = () =>
   http.post<{ phase: string }>("/api/trading/stop").then((r) => r.data);
 
-export const clearAccount = () =>
-  http.post<{ phase: string }>("/api/trading/clear").then((r) => r.data);
+export const clearAccount = (market: "domestic" | "overseas" = "domestic") =>
+  http.post<{ phase: string }>("/api/trading/clear", null, { params: { market } }).then((r) => r.data);
 
-export const fetchQuote = (code: string) =>
-  http.get<Quote>(`/api/market/${code}/quote`).then((r) => r.data);
+/** 시세를 조회할 종목의 시장. 해외 종목은 거래소 코드도 보낸다. */
+export interface MarketTarget {
+  market: "domestic" | "overseas";
+  exchange?: string | null;
+}
 
-export const fetchCandles = (code: string, interval: string, count = 120) =>
+const marketParams = (target?: MarketTarget) =>
+  target ? { market: target.market, ...(target.exchange ? { exchange: target.exchange } : {}) } : {};
+
+export const fetchQuote = (code: string, target?: MarketTarget) =>
+  http.get<Quote>(`/api/market/${code}/quote`, { params: marketParams(target) }).then((r) => r.data);
+
+export const fetchCandles = (code: string, interval: string, count = 120, target?: MarketTarget) =>
   http
-    .get<Candle[]>(`/api/market/${code}/candles`, { params: { interval, count } })
+    .get<Candle[]>(`/api/market/${code}/candles`, { params: { interval, count, ...marketParams(target) } })
     .then((r) => r.data);
 
-export const fetchOrderBook = (code: string) =>
-  http.get<OrderBook>(`/api/market/${code}/orderbook`).then((r) => r.data);
+export const fetchOrderBook = (code: string, target?: MarketTarget) =>
+  http
+    .get<OrderBook>(`/api/market/${code}/orderbook`, { params: marketParams(target) })
+    .then((r) => r.data);
 
 export const fetchRuns = (mode: "paper" | "backtest") =>
   http.get<RunSummary[]>("/api/runs", { params: { mode } }).then((r) => r.data);

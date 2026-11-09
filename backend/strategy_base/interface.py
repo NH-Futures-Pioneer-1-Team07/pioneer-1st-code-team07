@@ -18,6 +18,14 @@ class BaseStrategy(ABC):
     def on_bar(self, ctx: Context) -> StrategyOutput:
         """봉이 마감될 때마다 호출된다. `ctx.bars[-1]`이 방금 마감된 봉이다."""
 
+    def describe(self, ctx: Context) -> Mapping[str, Any]:
+        """지금의 판단을 화면에 보여 줄 구조로 설명한다. 주문은 내지 않는다. 설명할 것이 없으면 빈 값을 돌려준다.
+
+        돌려주는 형식은 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}, ...]}`다.
+        `tone`은 `buy`·`sell`·`neutral` 중 하나로 화면의 색을 정한다.
+        """
+        return {}
+
     def on_price(self, ctx: Context) -> StrategyOutput:
         """장중 가격이 갱신될 때 호출된다. 손절·목표 확인이 필요한 전략만 재정의한다."""
         return StrategyOutput()

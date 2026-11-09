@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { marketSessionLabel, streamLabel } from "./data/tradingView";
+import { marketNameLabel, marketSessionLabel, streamLabel } from "./data/tradingView";
 import type { MarketStatus } from "./data/tradingView";
 import Icon from "./components/common/Icon";
 import TradingPage from "./pages/trading/TradingPage";
@@ -42,7 +42,7 @@ export default function App() {
             </span>
             <span className={`${styles.marketStatus} ${market.session === "regular" ? styles.statusOn : ""}`}>
               <i />
-              국내장 {marketSessionLabel(market.session)}
+              {marketNameLabel(market.market)} {marketSessionLabel(market.session)}
             </span>
             <span className={`${styles.marketStatus} ${market.stream === "live" ? styles.statusOn : ""}`}>
               <i />

@@ -3,7 +3,9 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from app.data.vix import VixHistory
 from app.records.store import KST, RunStore
+from app.runners.inputs import ExtraInputs
 from app.runners.backtest import (
     END_OF_PERIOD_REASON,
     Assumptions,
@@ -466,3 +468,82 @@ def test_시가가_없는_봉은_거부한다(tmp_path):
 
     with pytest.raises(ValueError, match="시가"):
         engine.run({DAY1: [candle]})
+
+
+# ---- 전략 입력 확장 ----
+
+
+class Probe(BaseStrategy):
+    def __init__(self):
+        super().__init__({})
+        self.contexts = []
+
+    def on_bar(self, ctx):
+        self.contexts.append(ctx)
+        return StrategyOutput()
+
+
+def test_전날_봉을_history_bars만큼_앞에_이어_전달한다(tmp_path):
+    probe = Probe()
+    engine, _ = engine_for(tmp_path, probe)
+    engine.history_bars = 2
+    before = bars_of(DAY1, [(100, 110, 95, 105)], start=(8, 57))
+    engine._prefix = before
+    days = {
+        DAY1: bars_of(DAY1, [(100, 110, 95, 105), (105, 120, 100, 115)]),
+        DAY2: bars_of(DAY2, [(115, 118, 90, 98)]),
+    }
+
+    engine.run(days)
+
+    sizes = [(c.now.date(), [b.time.strftime("%d %H:%M") for b in c.bars]) for c in probe.contexts]
+    assert sizes[0][1] == ["26 08:57", "26 09:00"]
+    assert sizes[1][1] == ["26 08:57", "26 09:00", "26 09:03"]
+    assert sizes[2][1] == ["26 09:00", "26 09:03", "27 09:00"]  # 둘째 날 첫 봉에서도 전날 봉 2개가 이어진다
+
+
+def test_history_bars가_0이면_당일_봉만_전달한다(tmp_path):
+    probe = Probe()
+    engine, _ = engine_for(tmp_path, probe)
+    days = {DAY1: bars_of(DAY1, [(100, 110, 95, 105)]), DAY2: bars_of(DAY2, [(115, 118, 90, 98)])}
+
+    engine.run(days)
+
+    assert [len(c.bars) for c in probe.contexts] == [1, 1]
+
+
+def test_추가_입력과_평가손익을_전달한다(tmp_path):
+    probe = Probe()
+    engine, _ = engine_for(tmp_path, probe)
+    daily = [
+        Bar(datetime(DAY1.year, DAY1.month, DAY1.day), 1, 1, 1, 1, 1),
+        Bar(datetime(DAY2.year, DAY2.month, DAY2.day), 2, 2, 2, 2, 2),
+    ]
+    engine.extras = ExtraInputs(series={"daily": daily}, vix=VixHistory({DAY1: 18.0, date(2026, 10, 20): 25.0}), margin=2500.0)
+    days = {DAY1: bars_of(DAY1, [(100, 110, 95, 105)]), DAY2: bars_of(DAY2, [(115, 118, 90, 98)])}
+
+    engine.run(days)
+
+    first, second = probe.contexts
+    assert first.series == {"daily": []} and first.vix == 25.0  # DAY1 이전 마지막 종가
+    assert second.series == {"daily": [daily[0]]} and second.vix == 18.0
+    assert first.margin == 2500.0 and first.unrealized_pnl == 0.0
+
+
+def test_보유분이_있으면_평가손익을_계산해_전달한다(tmp_path):
+    entry = market(Side.BUY, 2, IntentKind.ENTRY, "e1")
+    probe = Probe()
+    seen = []
+
+    class Holder(Probe):
+        def on_bar(self, ctx):
+            seen.append(ctx.unrealized_pnl)
+            return StrategyOutput(orders=[entry]) if len(seen) == 1 else StrategyOutput()
+
+    engine, _ = engine_for(tmp_path, Holder())
+    days = {DAY1: bars_of(DAY1, [(100, 110, 95, 105), (105, 120, 100, 115), (115, 118, 90, 98)])}
+
+    engine.run(days)
+
+    # 2번째 봉 시가(105)에 2계약 진입, 거래승수 10. 세 번째 봉 마감 종가 98 기준 평가손익은 (98-105)*2*10
+    assert seen[0] == 0.0 and seen[-1] == (98 - 105) * 2 * 10

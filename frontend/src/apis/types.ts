@@ -8,12 +8,36 @@ export interface StrategyInstrument {
   name: string;
   market: "domestic" | "overseas";
   code: string | null;
+  exchange: string | null;
   multiplier: number | null;
+  margin: number | null;
+}
+
+/** 전략 파라미터 명세. `editable`이면 시작 전에 화면에서 바꿀 수 있고 `percent`는 0.2를 20%로 보여 준다. */
+export interface ParameterSpec {
+  default: unknown;
+  description: string;
+  editable: boolean;
+  label: string | null;
+  unit: "percent" | null;
+  min: number | null;
+  max: number | null;
+}
+
+/** 모의매매 차트에 그릴 전략의 판단용 선. `bar`는 판단 기준 봉 차트, `daily`는 일봉 차트에 그린다. */
+export interface ChartLineSpec {
+  series: "bar" | "daily";
+  kind: "sma" | "previous_close";
+  period: number | null;
+  label: string;
+  description: string;
 }
 
 export interface StrategyDetail extends StrategySummary {
   instruments: StrategyInstrument[];
   bar: { unit: string; size: number };
+  parameters: Record<string, ParameterSpec>;
+  chart_lines: ChartLineSpec[];
 }
 
 export type MarketSession = "before_open" | "auction" | "regular" | "closed" | "holiday" | "unknown";
@@ -94,6 +118,18 @@ export interface RunRef {
   run_id: string;
 }
 
+/** 전략이 설명하는 현재 판단. 구역마다 제목·한 줄 결론·색·표로 이루어진다. */
+export interface JudgmentSection {
+  title: string;
+  headline: string;
+  tone: "buy" | "sell" | "neutral";
+  rows: [string, string][];
+}
+
+export interface Judgment {
+  sections: JudgmentSection[];
+}
+
 export interface TradingStatus {
   phase: Phase;
   run: RunRef | null;
@@ -105,6 +141,7 @@ export interface TradingStatus {
   last_bar_time?: string | null;
   entry_blocks?: string[];
   pnl?: RunPnl;
+  judgment?: Judgment | null;
   clear?: ClearState;
   last_run?: (RunRef & { status: string }) | null;
 }
@@ -149,7 +186,9 @@ export interface AccountView {
 
 export interface RunSummary extends RunRef {
   strategy_name: string;
-  instrument: { name: string; code: string };
+  /** 실행 때 쓴 전략 파라미터 */
+  params?: Record<string, unknown> | null;
+  instrument: { name: string; code: string; market?: "domestic" | "overseas" };
   started_at: string;
   ended_at: string | null;
   status: string;
@@ -213,7 +252,7 @@ export interface BacktestProgress {
 
 export interface BacktestMeta extends RunRef {
   strategy_name: string;
-  instrument: { name: string; code: string };
+  instrument: { name: string; code: string; market?: "domestic" | "overseas" };
   started_at: string;
   ended_at: string | null;
   status: string;

@@ -1,11 +1,13 @@
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.runners.paper_service import PaperService, TradingRejected
 
 router = APIRouter(prefix="/api/trading")
+
+MarketParam = Annotated[Literal["domestic", "overseas"], Query(description="계좌의 시장")]
 
 
 class StartRequest(BaseModel):
@@ -42,18 +44,18 @@ def status(request: Request) -> dict[str, Any]:
 
 
 @router.get("/account")
-def account(request: Request) -> dict[str, Any]:
-    """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문."""
+def account(request: Request, market: MarketParam = "domestic") -> dict[str, Any]:
+    """NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 해외 종목은 `market=overseas`로 해외 모의계좌를 본다."""
     try:
-        return _service(request).account()
+        return _service(request).account(market)
     except TradingRejected as rejected:
         raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
 
 
 @router.post("/clear", status_code=202)
-def clear(request: Request) -> dict[str, str]:
+def clear(request: Request, market: MarketParam = "domestic") -> dict[str, str]:
     """계좌 전체의 미체결 주문을 취소하고 남은 포지션을 청산한다. 진행과 결과는 상태 API로 읽는다."""
     try:
-        return _service(request).clear()
+        return _service(request).clear(market)
     except TradingRejected as rejected:
         raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected

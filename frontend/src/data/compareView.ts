@@ -1,5 +1,8 @@
 import type { BacktestMeta, BacktestResult, RunSummary } from "../apis/types.ts";
 import { formatMoney, formatNumber } from "./format.ts";
+import type { Currency } from "./format.ts";
+import { editableValueText } from "./paramView.ts";
+import type { ParameterSpec } from "../apis/types.ts";
 
 /** 한 번에 비교할 수 있는 이력 수 */
 export const MAX_COMPARE = 4;
@@ -24,18 +27,18 @@ export function compareBlocker(base: RunSummary | undefined, run: RunSummary): s
 
 export type Unit = "money" | "rate" | "count" | "ratio";
 
-export function formatValue(unit: Unit, value: number): string {
-  if (unit === "money") return formatMoney(value);
+export function formatValue(unit: Unit, value: number, currency: Currency = "KRW"): string {
+  if (unit === "money") return formatMoney(value, currency);
   if (unit === "rate") return `${(value * 100).toFixed(2)}%`;
   if (unit === "count") return `${formatNumber(value)}건`;
   return value.toFixed(2);
 }
 
 /** 기준과의 차이. 비율은 %p로 쓴다. */
-export function formatDelta(unit: Unit, delta: number): string {
+export function formatDelta(unit: Unit, delta: number, currency: Currency = "KRW"): string {
   const sign = delta > 0 ? "+" : "";
   if (unit === "rate") return `${sign}${(delta * 100).toFixed(2)}%p`;
-  return `${sign}${formatValue(unit, delta)}`;
+  return `${sign}${formatValue(unit, delta, currency)}`;
 }
 
 export type MetricGroup = "수익성" | "위험" | "거래" | "비용" | "곡선";
@@ -127,6 +130,8 @@ export function curveRows(entries: CompareEntry[], shape: "equity" | "drawdown" 
 
 export interface ParamRow {
   name: string;
+  /** 표에 보여 줄 이름. 화면에서 바꿀 수 있는 파라미터는 전략 명세의 이름이다 */
+  label: string;
   /** 이력 순서대로의 값. 그 이력의 전략에 없는 파라미터는 null */
   values: (string | null)[];
   differs: boolean;
@@ -144,17 +149,25 @@ function settings(meta: BacktestMeta): Record<string, unknown> {
   };
 }
 
-/** 모든 이력의 파라미터 이름을 합쳐, 값이 다른 파라미터를 앞에 둔다. */
-export function paramRows(entries: CompareEntry[]): ParamRow[] {
+/**
+ * 모든 이력의 파라미터 이름을 합쳐, 값이 다른 파라미터를 앞에 둔다.
+ * `specs`(전략 id별 파라미터 명세)가 있으면 바꿀 수 있는 파라미터를 입력칸과 같은 이름·단위로 보여 준다.
+ */
+export function paramRows(
+  entries: CompareEntry[],
+  specs: Record<string, Record<string, ParameterSpec>> = {},
+): ParamRow[] {
   const names: string[] = [];
   for (const entry of entries)
     for (const name of Object.keys(settings(entry.meta))) if (!names.includes(name)) names.push(name);
   const rows = names.map((name) => {
+    const specOf = (entry: CompareEntry) => specs[entry.strategyId]?.[name];
     const values = entries.map((entry) => {
       const params = settings(entry.meta);
-      return name in params ? paramText(params[name]) : null;
+      return name in params ? (editableValueText(specOf(entry), params[name]) ?? paramText(params[name])) : null;
     });
-    return { name, values, differs: new Set(values).size > 1 };
+    const label = entries.map((entry) => specOf(entry)).find((spec) => spec?.editable)?.label ?? name;
+    return { name, label, values, differs: new Set(values).size > 1 };
   });
   return [...rows.filter((row) => row.differs), ...rows.filter((row) => !row.differs)];
 }

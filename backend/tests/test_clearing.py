@@ -237,3 +237,30 @@ def test_계좌_조회는_예탁금과_포지션과_미체결을_돌려주고_�
         "filled_quantity": 2, "remaining_quantity": 3, "price": 0.0, "received_time": "100000",
     }]
     assert "ac_no" not in repr(view) and "계좌" not in repr(view)
+
+
+def test_해외_게이트웨이는_해외_API로_조회하고_정리한다():
+    import httpx
+
+    from app.config import Settings
+    from app.nh.client import NHClient
+    from app.runners.clearing import OverseasAccountGateway
+    from tests.test_nh_client import FakeLimiter, Server
+
+    server = Server(
+        {"dps_csh_amt": "100000", "dps_aset_amt": "100500", "ord_psb_amt": "90000", "init_mrgn": "2000", "mtn_mrgn": "1500", "pl_amt": "500"},
+        {"Occurs1": [{"occurs1_sym": "ZNZ26", "occurs1_trd_tp": "1", "occurs1_opint_qty": "3", "occurs1_cls_psb_qty": "3"}]},
+        {"Occurs1": []},
+        {"ord_no": "7"},
+        {"ord_no": "8"},
+    )
+    settings = Settings(_env_file=None, trading_env="mock", nh_overseas_app_key="k", nh_overseas_app_secret="s")
+    client = NHClient(settings, market="overseas", http_client=httpx.Client(transport=httpx.MockTransport(server)), limiter=FakeLimiter())
+    gateway = OverseasAccountGateway(client)
+
+    assert gateway.deposit().total_assets == 100500
+    assert [(p.code, p.quantity) for p in gateway.positions()] == [("ZNZ26", 3)]
+    assert gateway.open_orders() == []
+    assert gateway.close("ZNZ26", Side.SELL, 3) == "7"
+    assert gateway.cancel("ZNZ26", Side.BUY, 1, "5") == "8"
+    assert [r.url.path.rsplit("/", 1)[-1] for r in server.api_requests()] == ["deposit", "open-interest", "order-history", "order", "order"]

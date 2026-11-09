@@ -1,7 +1,7 @@
 import type { BacktestController } from "../useBacktestPage";
 import Icon from "../../../components/common/Icon";
 import EquityChart from "./EquityChart";
-import { dotted, formatMoney, pnlClass } from "../../../data/format";
+import { currencyOf, dotted, formatMoney, moneyIn, pnlClass } from "../../../data/format";
 import { progressLabel, returnText, statusLabel } from "../../../data/backtestView";
 import { formatDateTime, instrumentLabel, signed } from "../../../data/tradingView";
 import styles from "./ResultPanel.module.css";
@@ -21,6 +21,7 @@ export default function ResultPanel({ ctl }: { ctl: BacktestController }) {
     busy,
     percent,
   } = ctl;
+  const currency = currencyOf(reportMeta?.instrument.market);
   return (
     <section
       className={`panel ${styles.result}`}
@@ -107,18 +108,18 @@ export default function ResultPanel({ ctl }: { ctl: BacktestController }) {
           <div className={styles.performanceCards}>
             <div>
               <span>초기자금</span>
-              <strong>{formatMoney(reportMeta.initial_capital)}</strong>
+              <strong>{formatMoney(reportMeta.initial_capital, currency)}</strong>
             </div>
             <div>
               <span>최종자산</span>
-              <strong>{result ? formatMoney(result.final_equity) : "—"}</strong>
+              <strong>{result ? formatMoney(result.final_equity, currency) : "—"}</strong>
             </div>
             <div>
               <span>
                 순손익 <small>비용 반영</small>
               </span>
               <strong className={result ? pnlClass(result.net_pnl) : ""}>
-                {result ? signed(result.net_pnl, formatMoney) : "—"}
+                {result ? signed(result.net_pnl, moneyIn(currency)) : "—"}
               </strong>
               {result && (
                 <small className={pnlClass(result.net_pnl)}>
@@ -144,11 +145,11 @@ export default function ResultPanel({ ctl }: { ctl: BacktestController }) {
           <EquityChart meta={reportMeta} result={result} />
           <div className={styles.resultFooter}>
             <span>
-              수수료 합계 <strong>{result ? formatMoney(result.fee) : "—"}</strong>
+              수수료 합계 <strong>{result ? formatMoney(result.fee, currency) : "—"}</strong>
             </span>
             <span>
               {result
-                ? `거래 ${result.trade_count}건 (승 ${result.win_count} · 패 ${result.loss_count}) · 최대 낙폭 ${formatMoney(result.max_drawdown)} (${(result.max_drawdown_rate * 100).toFixed(2)}%)`
+                ? `거래 ${result.trade_count}건 (승 ${result.win_count} · 패 ${result.loss_count}) · 최대 낙폭 ${formatMoney(result.max_drawdown, currency)} (${(result.max_drawdown_rate * 100).toFixed(2)}%)`
                 : "결과가 없습니다. 상세 기록에서 원인을 확인하세요."}
             </span>
           </div>

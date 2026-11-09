@@ -33,7 +33,7 @@ class MinuteBacktestEngine(BacktestEngine):
         step = timedelta(minutes=self.minutes)
         source = sorted(self.minute_days[day], key=lambda b: b.time)
         for index, bar in enumerate(bars):
-            completed = list(bars[:index])
+            completed = self._prefix + list(bars[:index])
             if index and bar.time - bars[index-1].time != step:
                 pending = [order for order in pending if order.kind == IntentKind.EXIT]
             group = [m for m in source if bar.time <= m.time < bar.time + step]

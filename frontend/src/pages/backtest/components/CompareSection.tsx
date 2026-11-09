@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useStrategySpecs } from "../../../apis/useStrategySpecs";
+import RunName from "../../../components/common/RunName";
 import {
   Bar,
   BarChart,
@@ -29,7 +31,7 @@ import {
   paramRows,
 } from "../../../data/compareView";
 import type { CompareEntry, MetricDef } from "../../../data/compareView";
-import { dotted, formatMoney, pnlClass } from "../../../data/format";
+import { currencyOf, dotted, formatMoney, pnlClass } from "../../../data/format";
 import { formatDateTime, instrumentLabel, runKey } from "../../../data/tradingView";
 import styles from "./CompareSection.module.css";
 
@@ -59,6 +61,7 @@ function RunTag({ slot }: { slot: Slot }) {
 }
 
 function ScalarCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
+  const currency = currencyOf(slots[0]?.entry.meta.instrument.market);
   const values = slots.map((slot) => def.value?.(slot.entry.result) ?? null);
   const best = bestIndex(values, def.better);
   const scale = Math.max(...values.map((value) => Math.abs(value ?? 0)), 1e-9);
@@ -76,10 +79,10 @@ function ScalarCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
               )}
             </div>
             <strong className={def.unit === "money" ? pnlClass(value) : undefined}>
-              {value === null ? "—" : formatValue(def.unit, value)}
+              {value === null ? "—" : formatValue(def.unit, value, currency)}
             </strong>
             <small className={styles.delta}>
-              {index > 0 && value !== null && base !== null ? formatDelta(def.unit, value - base) : ""}
+              {index > 0 && value !== null && base !== null ? formatDelta(def.unit, value - base, currency) : ""}
             </small>
             <span className={styles.best}>{best === index ? "최고" : ""}</span>
           </li>
@@ -113,13 +116,18 @@ function WinLossCard({ slots }: { slots: Slot[] }) {
 }
 
 function CurveCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
+  const currency = currencyOf(slots[0]?.entry.meta.instrument.market);
   const shape = def.shape as "equity" | "drawdown" | "daily";
   const data = useMemo(() => curveRows(slots.map((slot) => slot.entry), shape), [slots, shape]);
   const tick = (value: number) =>
-    shape === "daily" ? `${Math.round(value / 10000).toLocaleString("ko-KR")}만` : `${(value * 100).toFixed(1)}%`;
+    shape === "daily"
+      ? currency === "USD"
+        ? `$${Math.round(value / 1000).toLocaleString("en-US")}k`
+        : `${Math.round(value / 10000).toLocaleString("ko-KR")}만`
+      : `${(value * 100).toFixed(1)}%`;
   const tip = (value: unknown) => {
     const number = Number(value);
-    return shape === "daily" ? formatMoney(number) : `${(number * 100).toFixed(2)}%`;
+    return shape === "daily" ? formatMoney(number, currency) : `${(number * 100).toFixed(2)}%`;
   };
   const common = (
     <>
@@ -159,8 +167,19 @@ function CurveCard({ def, slots }: { def: MetricDef; slots: Slot[] }) {
   );
 }
 
+/** 불러온 비교 이력의 전략 이름. 사용한 파라미터가 있으면 괄호로 붙인다. */
+function EntryName({ entry, specs }: { entry: CompareEntry; specs: ReturnType<typeof useStrategySpecs> }) {
+  return (
+    <RunName
+      run={{ strategy_id: entry.strategyId, strategy_name: entry.strategyName, params: entry.meta.params }}
+      specs={specs}
+    />
+  );
+}
+
 function ParamCard({ slots }: { slots: Slot[] }) {
-  const rows = paramRows(slots.map((slot) => slot.entry));
+  const specs = useStrategySpecs(slots.map((slot) => slot.entry.strategyId));
+  const rows = paramRows(slots.map((slot) => slot.entry), specs);
   return (
     <div className="table-wrap" style={{ height: "auto", maxHeight: 360 }}>
       <table className={`data-table ${styles.paramTable}`}>
@@ -178,12 +197,14 @@ function ParamCard({ slots }: { slots: Slot[] }) {
           <tr>
             <td>전략</td>
             {slots.map((slot) => (
-              <td key={slot.entry.key}>{slot.entry.strategyName}</td>
+              <td key={slot.entry.key}>
+                <EntryName entry={slot.entry} specs={specs} />
+              </td>
             ))}
           </tr>
           {rows.map((row) => (
             <tr key={row.name} className={row.differs ? styles.differs : undefined}>
-              <td>{row.name}</td>
+              <td>{row.label}</td>
               {row.values.map((value, index) => (
                 <td key={slots[index].entry.key}>{value ?? "—"}</td>
               ))}
@@ -203,6 +224,7 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
   const [loaded, setLoaded] = useState<Record<string, BacktestRun>>({});
   const [failed, setFailed] = useState<string[]>([]);
 
+  const specs = useStrategySpecs(list.map((run) => run.strategy_id));
   const candidates = list.filter((run) => run.status === "completed");
   const byKey = new Map(list.map((run) => [runKey(run), run]));
   const chosen = keys.flatMap((key) => byKey.get(key) ?? []);
@@ -310,11 +332,13 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
                     </td>
                     <td className={styles.reason}>{picked ? (index === 0 ? "기준" : "선택됨") : (reason ?? "가능")}</td>
                     <td>{formatDateTime(run.started_at)}</td>
-                    <td>{run.strategy_name}</td>
+                    <td>
+                      <RunName run={run} specs={specs} />
+                    </td>
                     <td>{instrumentLabel(run.instrument.name)}</td>
                     <td>{run.period ? `${dotted(run.period.start)} — ${dotted(run.period.end)}` : "—"}</td>
                     <td className={pnlClass(run.net_pnl)}>
-                      {run.net_pnl === null ? "—" : `${run.net_pnl > 0 ? "+" : ""}${formatMoney(run.net_pnl)}`}
+                      {run.net_pnl === null ? "—" : `${run.net_pnl > 0 ? "+" : ""}${formatMoney(run.net_pnl, currencyOf(run.instrument.market))}`}
                     </td>
                   </tr>
                 );
@@ -372,7 +396,7 @@ export default function CompareSection({ ctl }: { ctl: BacktestController }) {
                   <li key={slot.entry.key}>
                     <RunTag slot={slot} />
                     <span>
-                      {slot.entry.strategyName} · {formatDateTime(slot.entry.meta.started_at)}
+                      <EntryName entry={slot.entry} specs={specs} /> · {formatDateTime(slot.entry.meta.started_at)}
                     </span>
                   </li>
                 ))}

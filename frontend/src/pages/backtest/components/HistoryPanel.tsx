@@ -1,10 +1,12 @@
 import type { BacktestController } from "../useBacktestPage";
-import { dotted, formatMoney, formatNumber, pnlClass } from "../../../data/format";
+import { currencyOf, dotted, formatMoney, moneyIn, pnlClass } from "../../../data/format";
 import { formatDateTime, instrumentLabel, runKey, signed } from "../../../data/tradingView";
 import { percentText, statusLabel } from "../../../data/backtestView";
 import RecordDetail from "../../../components/common/RecordDetail";
 import { scrollToPanel } from "../../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
+import { useStrategySpecs } from "../../../apis/useStrategySpecs";
+import RunName from "../../../components/common/RunName";
 import styles from "./HistoryPanel.module.css";
 
 export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
@@ -19,6 +21,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
     splitRef,
     reportMeta,
   } = ctl;
+  const specs = useStrategySpecs(list.map((run) => run.strategy_id));
   const listPanel = (
     <section
       className={`panel ${styles.history}`}
@@ -76,7 +79,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
                       </button>
                     </td>
                     <td>
-                      <strong>{run.strategy_name}</strong>
+                      <RunName run={run} specs={specs} />
                     </td>
                     <td>{instrumentLabel(run.instrument.name)}</td>
                     <td>
@@ -87,7 +90,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
                     <td>
                       {run.initial_capital === undefined
                         ? "—"
-                        : formatMoney(run.initial_capital)}
+                        : formatMoney(run.initial_capital, currencyOf(run.instrument.market))}
                     </td>
                     <td>
                       {run.assumptions?.slippage?.ticks == null
@@ -95,7 +98,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
                         : `${run.assumptions.slippage.ticks}틱`}
                     </td>
                     <td className={run.net_pnl === null ? "" : pnlClass(run.net_pnl)}>
-                      {run.net_pnl === null ? "—" : signed(run.net_pnl, formatMoney)}
+                      {run.net_pnl === null ? "—" : signed(run.net_pnl, moneyIn(currencyOf(run.instrument.market)))}
                     </td>
                     <td>
                       <span
@@ -136,7 +139,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
             </div>
             <div>
               <dt>초기자금</dt>
-              <dd>{formatMoney(reportMeta.initial_capital)}</dd>
+              <dd>{formatMoney(reportMeta.initial_capital, currencyOf(reportMeta.instrument.market))}</dd>
             </div>
             <div>
               <dt>비용</dt>
@@ -147,7 +150,7 @@ export default function HistoryPanel({ ctl }: { ctl: BacktestController }) {
               <dd>
                 {reportMeta.assumptions.slippage.ticks}틱
                 {reportMeta.assumptions.slippage.tick_size !== null &&
-                  `(${formatNumber(reportMeta.assumptions.slippage.tick_size)})`}{" "}
+                  `(${reportMeta.assumptions.slippage.tick_size.toLocaleString("ko-KR", { maximumFractionDigits: 6 })})`}{" "}
                 · {reportMeta.assumptions.slippage.direction}
               </dd>
             </div>

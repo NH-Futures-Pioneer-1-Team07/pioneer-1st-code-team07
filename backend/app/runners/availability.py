@@ -16,9 +16,9 @@ LATEST_LOOKBACK_DAYS = 14
 SESSION_MINUTES = 420
 
 
-def sparse_below(minutes: int) -> int:
+def sparse_below(minutes: int, session_minutes: int = SESSION_MINUTES) -> int:
     """봉이 적은 날의 기준. 하루 정상 봉 수의 절반보다 적으면 봉이 적은 날이다."""
-    return SESSION_MINUTES // minutes // 2
+    return session_minutes // minutes // 2
 
 
 @dataclass(frozen=True)

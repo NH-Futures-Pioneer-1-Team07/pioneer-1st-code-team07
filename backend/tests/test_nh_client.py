@@ -101,17 +101,6 @@ def test_해외_클라이언트는_해외_키로_토큰을_발급받는다():
     assert form["appkey"] == ["OVERSEAS-KEY"] and form["appsecret"] == ["OVERSEAS-SECRET"]
 
 
-def test_해외_키가_없으면_해외_변수_이름을_알려_준다():
-    server = Server()
-    settings = Settings(trading_env="mock", nh_app_key=KEY, nh_app_secret=SECRET)
-    http = httpx.Client(transport=httpx.MockTransport(server))
-    client = NHClient(settings, market="overseas", http_client=http, limiter=FakeLimiter())
-
-    with pytest.raises(NHConfigError, match="NH_OVERSEAS_APP_KEY, NH_OVERSEAS_APP_SECRET"):
-        client.call("/trade/v1/overseas/price", {}, Limit.QUOTE)
-    assert server.requests == []
-
-
 def test_인증_정보_설정은_값을_출력하지_않는다():
     settings = Settings(trading_env="mock", nh_app_key=KEY, nh_app_secret=SECRET)
 

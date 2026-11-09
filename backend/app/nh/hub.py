@@ -1,6 +1,7 @@
 """화면용 시세 허브. NH 실시간 연결 하나를 여러 화면이 나눠 쓴다.
 
-종목마다 체결(`KA`)과 호가(`KB`)를 구독하고, 그 종목을 보는 화면의 대기열로 메시지를 나눠 준다.
+국내와 해외는 키가 달라 NH 실시간 연결을 시장마다 하나씩 둔다. 종목마다 체결(국내 `KA`, 해외 `FA`)과
+호가(국내 `KB`, 해외 `FB`)를 구독하고, 그 종목을 보는 화면의 대기열로 메시지를 나눠 준다.
 구독은 종목별로 화면 수를 세어 첫 화면이 붙을 때 걸고 마지막 화면이 떠날 때 푼다.
 """
 
@@ -23,6 +24,9 @@ QUEUE_SIZE = 256
 
 RealtimeFactory = Callable[[Callable[[Any], None], Callable[[Any, str], None]], Any]
 
+MARKETS = ("domestic", "overseas")
+FEED_CODES = {"domestic": ("KA", "KB"), "overseas": ("FA", "FB")}
+
 
 class HubFull(NHError):
     pass
@@ -31,8 +35,9 @@ class HubFull(NHError):
 class Subscriber:
     """화면 하나. 대기열이 가득 차면 오래된 메시지부터 버린다."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, market: str = "domestic"):
         self.code = code
+        self.market = market
         self.queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=QUEUE_SIZE)
         self.dropped = 0
 
@@ -90,87 +95,113 @@ def serialize(event: Any) -> dict[str, Any] | None:
 
 
 class MarketHub:
-    def __init__(self, settings: Settings, *, realtime_factory: RealtimeFactory | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        realtime_factory: RealtimeFactory | None = None,
+        overseas_realtime_factory: RealtimeFactory | None = None,
+    ):
         self._settings = settings
-        self._factory = realtime_factory or (
-            lambda on_event, on_state: RealtimeConnection(NHClient(settings), on_event=on_event, on_state=on_state)
-        )
-        self._connection: Any = None
-        self._subscribers: dict[str, set[Subscriber]] = {}
-        self._state = "connecting"
+        self._factories: dict[str, RealtimeFactory] = {
+            "domestic": realtime_factory
+            or (lambda on_event, on_state: RealtimeConnection(NHClient(settings), on_event=on_event, on_state=on_state)),
+            "overseas": overseas_realtime_factory
+            or (
+                lambda on_event, on_state: RealtimeConnection(
+                    NHClient(settings, market="overseas"), on_event=on_event, on_state=on_state
+                )
+            ),
+        }
+        self._connections: dict[str, Any] = {}
+        self._subscribers: dict[tuple[str, str], set[Subscriber]] = {}
+        self._states = {market: "connecting" for market in MARKETS}
         self._lock = asyncio.Lock()
 
-    def has_credentials(self) -> bool:
+    def has_credentials(self, market: str = "domestic") -> bool:
+        if market == "overseas":
+            return bool(self._settings.nh_overseas_app_key and self._settings.nh_overseas_app_secret)
         return bool(self._settings.nh_app_key and self._settings.nh_app_secret)
 
-    @property
-    def state(self) -> str:
-        return self._state
+    def state(self, market: str = "domestic") -> str:
+        return self._states[market]
 
     @property
     def codes(self) -> frozenset[str]:
-        return frozenset(self._subscribers)
+        return frozenset(code for market, code in self._subscribers if market == "domestic")
 
-    async def join(self, code: str) -> Subscriber:
-        """종목을 보는 화면을 등록한다. 서로 다른 종목이 `MAX_CODES`개를 넘으면 `HubFull`이다."""
-        if not self.has_credentials():
-            raise NHConfigError("NH_APP_KEY, NH_APP_SECRET 환경변수를 설정하세요")
+    async def join(self, code: str, market: str = "domestic") -> Subscriber:
+        """종목을 보는 화면을 등록한다. 시장마다 서로 다른 종목이 `MAX_CODES`개를 넘으면 `HubFull`이다."""
+        if not self.has_credentials(market):
+            names = "NH_OVERSEAS_APP_KEY, NH_OVERSEAS_APP_SECRET" if market == "overseas" else "NH_APP_KEY, NH_APP_SECRET"
+            raise NHConfigError(f"{names} 환경변수를 설정하세요")
         async with self._lock:
-            if code not in self._subscribers and len(self._subscribers) >= MAX_CODES:
+            key = (market, code)
+            in_market = sum(1 for item in self._subscribers if item[0] == market)
+            if key not in self._subscribers and in_market >= MAX_CODES:
                 raise HubFull(f"시세는 서로 다른 종목 {MAX_CODES}개까지 볼 수 있습니다")
-            if self._connection is None:
-                self._connection = self._factory(self._on_event, self._on_state)
-                self._connection.start()
-            subscriber = Subscriber(code)
-            if code not in self._subscribers:
-                self._subscribers[code] = set()
-                await self._connection.subscribe(Feed("KA", code))
-                await self._connection.subscribe(Feed("KB", code))
-            self._subscribers[code].add(subscriber)
-            subscriber.push({"type": "state", "state": self._state, "detail": ""})
+            connection = self._connections.get(market)
+            if connection is None:
+                connection = self._factories[market](
+                    lambda event, market=market: self._on_event(market, event),
+                    lambda state, detail, market=market: self._on_state(market, state, detail),
+                )
+                self._connections[market] = connection
+                connection.start()
+            subscriber = Subscriber(code, market)
+            if key not in self._subscribers:
+                self._subscribers[key] = set()
+                for action_code in FEED_CODES[market]:
+                    await connection.subscribe(Feed(action_code, code))
+            self._subscribers[key].add(subscriber)
+            subscriber.push({"type": "state", "state": self._states[market], "detail": ""})
             return subscriber
 
     async def leave(self, subscriber: Subscriber) -> None:
         async with self._lock:
-            group = self._subscribers.get(subscriber.code)
+            key = (subscriber.market, subscriber.code)
+            group = self._subscribers.get(key)
             if group is None:
                 return
             group.discard(subscriber)
             if group:
                 return
-            del self._subscribers[subscriber.code]
-            if self._connection is not None:
-                await self._connection.unsubscribe(Feed("KA", subscriber.code))
-                await self._connection.unsubscribe(Feed("KB", subscriber.code))
+            del self._subscribers[key]
+            connection = self._connections.get(subscriber.market)
+            if connection is not None:
+                for action_code in FEED_CODES[subscriber.market]:
+                    await connection.unsubscribe(Feed(action_code, subscriber.code))
 
     async def close(self) -> None:
         async with self._lock:
-            connection, self._connection = self._connection, None
+            connections, self._connections = list(self._connections.values()), {}
             self._subscribers.clear()
-        if connection is not None:
+        for connection in connections:
             await connection.stop()
 
     # ---- NH 실시간에서 오는 것 ----
 
-    def _on_state(self, state: Any, detail: str) -> None:
-        self._state = str(state.value if isinstance(state, State) else state)
-        self._broadcast({"type": "state", "state": self._state, "detail": detail})
+    def _on_state(self, market: str, state: Any, detail: str) -> None:
+        self._states[market] = str(state.value if isinstance(state, State) else state)
+        self._broadcast(market, {"type": "state", "state": self._states[market], "detail": detail})
 
-    def _on_event(self, event: Any) -> None:
+    def _on_event(self, market: str, event: Any) -> None:
         message = serialize(event)
         if message is None:
             return
         if message["type"] == "reconnected":
-            self._broadcast(message)
+            self._broadcast(market, message)
             return
         code = message["code"]
-        if code is None:  # 어느 종목의 거절인지 모르면 모든 화면에 알린다
-            self._broadcast(message)
+        if code is None:  # 어느 종목의 거절인지 모르면 그 시장의 모든 화면에 알린다
+            self._broadcast(market, message)
             return
-        for subscriber in list(self._subscribers.get(code, ())):
+        for subscriber in list(self._subscribers.get((market, code), ())):
             subscriber.push(message)
 
-    def _broadcast(self, message: dict[str, Any]) -> None:
-        for group in list(self._subscribers.values()):
+    def _broadcast(self, market: str, message: dict[str, Any]) -> None:
+        for (group_market, _), group in list(self._subscribers.items()):
+            if group_market != market:
+                continue
             for subscriber in list(group):
                 subscriber.push(message)

@@ -15,11 +15,14 @@ export interface MarketStream {
 
 const RETRY_MS = [1000, 2000, 5000];
 
-export const streamUrl = (code: string, location: Pick<Location, "protocol" | "host">) =>
-  `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/market?code=${code}`;
+export const streamUrl = (
+  code: string,
+  location: Pick<Location, "protocol" | "host">,
+  market: "domestic" | "overseas" = "domestic",
+) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/market?code=${code}&market=${market}`;
 
 /** 종목의 실시간 체결·호가를 받는다. 끊기면 다시 연결한다. */
-export function useMarketStream(code: string | null): MarketStream {
+export function useMarketStream(code: string | null, market: "domestic" | "overseas" = "domestic"): MarketStream {
   const [stream, setStream] = useState<MarketStream>({
     state: "connecting",
     lastTrade: null,
@@ -37,7 +40,7 @@ export function useMarketStream(code: string | null): MarketStream {
     let timer: number | undefined;
 
     const connect = () => {
-      socket = new WebSocket(streamUrl(code, window.location));
+      socket = new WebSocket(streamUrl(code, window.location, market));
       socket.onmessage = (event) => {
         retry = 0;
         const message = JSON.parse(event.data) as MarketMessage;
@@ -59,7 +62,7 @@ export function useMarketStream(code: string | null): MarketStream {
       window.clearTimeout(timer);
       socket?.close();
     };
-  }, [code]);
+  }, [code, market]);
 
   return stream;
 }

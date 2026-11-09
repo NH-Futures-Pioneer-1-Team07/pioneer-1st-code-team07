@@ -30,17 +30,16 @@ npm run dev
 | 개발 도구 | Vite | 로컬 개발 서버와 빌드 |
 | 패키지 관리 | npm | 의존성 설치와 스크립트 실행 |
 | HTTP 통신 | Axios | FastAPI에 조회·실행 요청 |
-| 차트 | Recharts | 백테스트 자산 변화 차트(가격 일봉·거래 막대·호버 상세) |
+| 차트 | Recharts | 모의매매 가격 차트, 백테스트 자산 변화 차트 |
 | 스타일 | CSS Modules | 컴포넌트별 스타일 관리 |
 
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.
-- 두 화면은 FastAPI를 폴링하고, 실시간 시세는 WebSocket(`/ws/market`)으로 수신한다.
+- 두 화면은 FastAPI를 폴링하고, 실시간 시세(`/ws/market`)와 실행 이력 변경(`/ws/runs`)은 WebSocket으로 수신한다.
 - 개발 서버는 `/api`·`/ws`를 백엔드(기본 `http://127.0.0.1:8000`, `BACKEND_URL`로 변경)로 프록시한다.
 
 ## 폴더 구조
 
-아래 구조를 기준으로 필요한 파일과 폴더부터 만든다.
-`data/`에는 숫자 서식과 API 응답을 화면용으로 바꾸는 함수를 둔다.
+`data/`에는 숫자 서식(`format.ts`)과 API 응답을 화면용으로 바꾸는 함수(`*View.ts`)를 둔다.
 두 화면 모두 `apis/`로 백엔드에 연결한다.
 
 ```text
@@ -50,32 +49,33 @@ src/
 ├── pages/
 │   ├── trading/
 │   │   ├── TradingPage.tsx
-│   │   ├── TradingPage.module.css
+│   │   ├── useTradingPage.ts
 │   │   └── components/
 │   └── backtest/
 │       ├── BacktestPage.tsx
-│       ├── BacktestPage.module.css
+│       ├── useBacktestPage.ts
 │       └── components/
-│           ├── EquityChart.tsx
-│           └── RecordDetail.tsx
 ├── components/
 │   └── common/
 ├── data/
-│   ├── fixtures.ts
+│   ├── format.ts
+│   ├── tradingView.ts
+│   ├── backtestView.ts
+│   ├── compareView.ts
+│   ├── paramView.ts
+│   └── *.test.ts
+├── apis/
+│   ├── client.ts
 │   ├── trading.ts
 │   ├── backtest.ts
-│   ├── trading.test.ts
-│   └── backtest.test.ts
-├── apis/
-│   ├── axiosInstance.ts
-│   ├── trading.ts
-│   └── backtest.ts
-├── styles/
-│   ├── global.css
-│   ├── colors.css
-│   └── fonts.css
-└── assets/
-    └── fonts/
+│   ├── polling.ts
+│   ├── marketStream.ts
+│   ├── runStream.ts
+│   ├── useStrategySpecs.ts
+│   └── types.ts
+└── styles/
+    ├── global.css
+    └── colors.css
 ```
 
 | 위치 | 관리할 내용 |
@@ -89,11 +89,11 @@ src/
 | `apis/backtest.ts` | 백테스트 실행·가능 기간·가정·실행 상세 API 호출 함수 |
 | `apis/polling.ts` | 주기적 조회 훅 |
 | `apis/marketStream.ts` | 실시간 시세 WebSocket 훅 |
+| `apis/runStream.ts` | 실행 이력 변경 WebSocket 훅 |
+| `apis/useStrategySpecs.ts` | 전략 목록·파라미터 명세 조회 훅 |
 | `apis/types.ts` | API 응답 타입 |
 | `styles/global.css` | 전역 기본 스타일 |
 | `styles/colors.css` | 공통 색상 변수 |
-| `styles/fonts.css` | 글꼴 선언 |
-| `assets/fonts` | 로컬에서 사용하는 폰트 파일 |
 
 - 컴포넌트의 CSS Module은 해당 컴포넌트 파일 옆에 둔다.
 - `OrderTable.tsx`의 스타일 파일은 `OrderTable.module.css`로 작성한다.

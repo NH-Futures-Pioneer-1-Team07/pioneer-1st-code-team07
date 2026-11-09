@@ -1,0 +1,126 @@
+{
+  "name": "ZN 미국 10년 국채선물 이동평균 전략",
+  "description": "일봉 15일선·30일선으로 매매 방향을 허용하고, 5분봉 5개·20개 이동평균 교차로 진입합니다. VIX 구간별 하루 신규 진입 한도와 증거금 대비 손익 기준으로 관리합니다.",
+  "instruments": [
+    {
+      "name": "미국 10년 국채선물 2026년 12월물",
+      "market": "overseas",
+      "exchange": "FCME",
+      "code": "ZNZ26",
+      "multiplier": 1000,
+      "margin": 2083,
+      "tick_size": 0.015625
+    }
+  ],
+  "bar": {
+    "unit": "minute",
+    "size": 5
+  },
+  "series": {
+    "daily": {
+      "unit": "day",
+      "size": 1
+    }
+  },
+  "history_bars": 20,
+  "chart_lines": [
+    {
+      "series": "daily",
+      "kind": "previous_close",
+      "label": "직전 거래일 종가",
+      "description": "중기 판단의 기준 가격입니다. 15일선·30일선과 비교해 그날 허용하는 방향(매수·매도·중립)을 정합니다."
+    },
+    {
+      "series": "daily",
+      "kind": "sma",
+      "period": 15,
+      "label": "15일선",
+      "description": "최근 일봉 15개 종가의 단순이동평균입니다. 직전 거래일 종가가 15일선과 30일선 위에 있고 15일선이 30일선보다 높으면 매수만 허용합니다."
+    },
+    {
+      "series": "daily",
+      "kind": "sma",
+      "period": 30,
+      "label": "30일선",
+      "description": "최근 일봉 30개 종가의 단순이동평균입니다. 직전 거래일 종가가 15일선과 30일선 아래에 있으면 매도만 허용하고, 그 사이이면 중립입니다."
+    },
+    {
+      "series": "bar",
+      "kind": "sma",
+      "period": 5,
+      "label": "단기선(5봉)",
+      "description": "최근 5분봉 5개 종가의 단순이동평균입니다. 장기선을 아래에서 위로 뚫으면 매수 신호, 위에서 아래로 뚫으면 매도 신호입니다."
+    },
+    {
+      "series": "bar",
+      "kind": "sma",
+      "period": 20,
+      "label": "장기선(20봉)",
+      "description": "최근 5분봉 20개 종가의 단순이동평균입니다. 하루 안의 추세를 가늠하는 기준선입니다."
+    }
+  ],
+  "parameters": {
+    "mid_short_days": {
+      "default": 15,
+      "description": "중기 단기 이동평균의 일봉 개수"
+    },
+    "mid_long_days": {
+      "default": 30,
+      "description": "중기 장기 이동평균의 일봉 개수"
+    },
+    "short_bars": {
+      "default": 5,
+      "description": "장중 단기 이동평균의 5분봉 개수"
+    },
+    "long_bars": {
+      "default": 20,
+      "description": "장중 장기 이동평균의 5분봉 개수"
+    },
+    "entry_quantity": {
+      "default": 1,
+      "description": "진입 신호당 수량(계약)"
+    },
+    "max_position": {
+      "default": 30,
+      "description": "전날 보유분을 합친 전체 보유 한도(계약)"
+    },
+    "vix_thresholds": {
+      "default": [
+        15,
+        20,
+        25,
+        30
+      ],
+      "description": "하루 신규 진입 한도를 나누는 VIX 구간의 경계"
+    },
+    "daily_limit_buy": {
+      "default": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "description": "매수 허용일 VIX 구간별 하루 신규 진입 한도(계약)"
+    },
+    "daily_limit_sell": {
+      "default": [
+        5,
+        4,
+        3,
+        2,
+        1
+      ],
+      "description": "매도 허용일 VIX 구간별 하루 신규 진입 한도(계약)"
+    },
+    "profit_loss_rate": {
+      "default": 0.2,
+      "description": "전체 보유분의 증거금 대비 합산 손익이 이 비율에 이르면 전량 청산(익절·손절 공통)",
+      "editable": true,
+      "label": "익절·손절 기준",
+      "unit": "percent",
+      "min": 0.01,
+      "max": 1
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { clearAccount, stopTrading } from "../../apis/trading";
 import type { MarketStatus } from "../../data/tradingView";
 import AccountSection from "./components/AccountSection";
 import AccountSummary from "./components/AccountSummary";
+import JudgmentPanel from "./components/JudgmentPanel";
 import ControlPanel from "./components/ControlPanel";
 import MarketPanel from "./components/MarketPanel";
 import OrderBookPanel from "./components/OrderBookPanel";
@@ -12,7 +13,7 @@ import styles from "./TradingPage.module.css";
 
 export default function TradingPage({ onMarketStatus }: { onMarketStatus: (status: MarketStatus) => void }) {
   const ctl = useTradingPage(onMarketStatus);
-  const { confirm, setConfirm, act, runStream } = ctl;
+  const { confirm, setConfirm, act, runStream, market } = ctl;
 
   return (
     <>
@@ -22,6 +23,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
         <MarketPanel ctl={ctl} />
         <OrderBookPanel ctl={ctl} />
       </div>
+      <JudgmentPanel ctl={ctl} />
       <AccountSection ctl={ctl} />
       <RunHistory stream={runStream} />
       {confirm && (
@@ -32,7 +34,7 @@ export default function TradingPage({ onMarketStatus }: { onMarketStatus: (statu
           action={confirm === "all" ? "계좌 전체 정리" : "운용 종료"}
           onClose={() => setConfirm(null)}
           onConfirm={() => {
-            void act(confirm === "all" ? clearAccount : stopTrading);
+            void act(confirm === "all" ? () => clearAccount(market) : stopTrading);
             setConfirm(null);
           }}
         >

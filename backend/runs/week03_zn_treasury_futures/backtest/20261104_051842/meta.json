@@ -1,0 +1,72 @@
+{
+  "run_id": "20261104_051842",
+  "strategy_id": "week03_zn_treasury_futures",
+  "strategy_name": "ZN 미국 10년 국채선물 이동평균 전략",
+  "mode": "backtest",
+  "instrument": {
+    "name": "미국 10년 국채선물 2026년 12월물",
+    "market": "overseas",
+    "code": "ZNZ26",
+    "multiplier": 1000
+  },
+  "params": {
+    "mid_short_days": 15,
+    "mid_long_days": 30,
+    "short_bars": 5,
+    "long_bars": 20,
+    "entry_quantity": 1,
+    "max_position": 30,
+    "vix_thresholds": [
+      15,
+      20,
+      25,
+      30
+    ],
+    "daily_limit_buy": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "daily_limit_sell": [
+      5,
+      4,
+      3,
+      2,
+      1
+    ],
+    "profit_loss_rate": 0.15
+  },
+  "started_at": "2026-11-04T05:18:42.866212+09:00",
+  "ended_at": "2026-11-04T05:18:53.070693+09:00",
+  "status": "completed",
+  "period": {
+    "start": "2026-08-11",
+    "end": "2026-11-03"
+  },
+  "initial_capital": 100000.0,
+  "assumptions": {
+    "fee": {
+      "rate": 8.5e-05,
+      "basis": "체결대금(체결가 × 거래승수 × 수량)",
+      "source": "NH선물 수수료 부과 기준(2026-09-07 개정) 개별주식선물 온라인 매매 표준수수료 0.0085%"
+    },
+    "slippage": {
+      "ticks": 1,
+      "tick_size": 0.015625,
+      "direction": "시장가 체결마다 불리한 방향"
+    },
+    "fill": {
+      "on_bar": "봉 마감 판단의 시장가 주문은 다음 봉 시가에 전량 체결(그날 마지막 봉이면 그 봉 종가)",
+      "on_price": "장중 가격 판단의 시장가 주문은 그 가격에 전량 체결",
+      "intrabar_path": "봉마다 시가 → 불리한 극단 → 유리한 극단 → 종가 순으로 호가 단위씩 이동"
+    },
+    "margin": "증거금과 주문가능수량을 제한하지 않음"
+  },
+  "progress": {
+    "stage": "done",
+    "done": 73,
+    "total": 73
+  }
+}

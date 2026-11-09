@@ -3,7 +3,7 @@ import { errorMessage } from "../../../apis/client";
 import type { RunStream } from "../../../apis/runStream";
 import { fetchRuns } from "../../../apis/trading";
 import type { RunSummary } from "../../../apis/types";
-import { formatMoney } from "../../../data/format";
+import { currencyOf, moneyIn } from "../../../data/format";
 import {
   formatDateTime,
   instrumentLabel,
@@ -16,9 +16,10 @@ import {
 import RecordDetail from "../../../components/common/RecordDetail";
 import { scrollToPanel } from "../../../components/common/scrollToPanel";
 import SplitPanel, { PanelCloseButton } from "../../../components/common/SplitPanel";
+import { useStrategySpecs } from "../../../apis/useStrategySpecs";
+import RunName from "../../../components/common/RunName";
 import styles from "./RunHistory.module.css";
 
-const signedMoney = (value: number) => signed(value, formatMoney);
 
 export default function RunHistory({ stream }: { stream: RunStream }) {
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
@@ -60,6 +61,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
   );
 
   const list = runs ?? [];
+  const specs = useStrategySpecs(list.map((run) => run.strategy_id));
   const selected = list.find((run) => runKey(run) === selectedKey);
   return (
     <SplitPanel
@@ -124,14 +126,14 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
                           aria-pressed={!!active}
                           aria-label={`${run.strategy_name} ${formatDateTime(run.started_at)} 운용 상세 보기`}
                         >
-                          <strong>{run.strategy_name}</strong>
+                          <RunName run={run} specs={specs} />
                         </button>
                       </td>
                       <td>{instrumentLabel(run.instrument.name)}</td>
                       <td>{formatDateTime(run.started_at)}</td>
                       <td>{run.ended_at ? formatDateTime(run.ended_at) : "—"}</td>
                       <td className={pnl === null ? "" : pnl >= 0 ? "positive" : "negative"}>
-                        {pnl === null ? "—" : signedMoney(pnl)}
+                        {pnl === null ? "—" : signed(pnl, moneyIn(currencyOf(run.instrument.market)))}
                       </td>
                       <td>
                         <span className={`badge state ${run.ended_at ? "" : "running"}`}>
@@ -153,6 +155,7 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
           <RunDetail
             key={runKey(selected)}
             run={selected}
+            specs={specs}
             stream={stream}
             onClose={() => setOpen(false)}
           />
@@ -164,10 +167,12 @@ export default function RunHistory({ stream }: { stream: RunStream }) {
 
 function RunDetail({
   run,
+  specs,
   stream,
   onClose,
 }: {
   run: RunSummary;
+  specs: ReturnType<typeof useStrategySpecs>;
   stream: RunStream;
   onClose: () => void;
 }) {
@@ -176,7 +181,7 @@ function RunDetail({
       <div className={styles.detailHeading}>
         <div>
           <h3 id="run-detail-title">
-            {run.strategy_name}
+            <RunName run={run} specs={specs} />
             <span className={`badge state ${run.ended_at ? "" : "running"}`}>
               <i />
               {runStatusLabel(run)}

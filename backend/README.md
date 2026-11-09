@@ -49,19 +49,27 @@ uv run pytest
 | `strategies/` | 전략 폴더. 폴더 하나가 전략 하나다 |
 | `strategies/_template/` | 새 전략을 만들 때 복사하는 템플릿. `_`로 시작하는 폴더는 등록하지 않는다 |
 | `app/nh/` | NH선물 API 호출. 공통(인증, 호출 제한)은 바로 아래, 국내 종목은 `domestic/`, 해외 종목은 `overseas/` |
-| `app/records/` | 실행 기록의 저장·조회와 비밀정보 제거 |
+| `app/runners/` | 백테스트·모의매매 실행, 전략 입력 준비, 포지션·손익 계산, 계좌 정리 |
+| `app/data/` | VIX 일 종가 읽기·갱신. 데이터 파일은 `data/vixcls.csv` |
+| `app/records/` | 실행 기록의 저장·조회·변경 알림과 비밀정보 제거 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `tests/` | 테스트 |
 
 ## 전략 추가 방법
 
 1. `strategies/_template/`을 `strategies/<전략 id>/`로 복사한다.
-   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week02_samsung_futures_intraday`
+   - 폴더명이 전략 `id`다. 소문자 영문으로 시작하고 소문자·숫자·밑줄만 쓴다. 예: `week03_zn_treasury_futures`
 2. `manifest.json`을 고친다.
    - `name`, `description`: UI에 표시한다.
-   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다.
-   - `bar`: 봉 단위. 예: `{"unit": "minute", "size": 3}`
+   - `instruments`: 지원 종목. 첫 번째 종목이 기본 종목이다. 각 종목에 `market`(`domestic` 또는 `overseas`)을 반드시 쓴다. 없거나 다른 값이면 전략이 등록되지 않는다. 해외 종목은 `exchange`(예: `FCME`)도 쓴다.
+   - `bar`: 판단 기준 봉 단위. 봉이 마감될 때마다 `on_bar`가 호출된다. 예: `{"unit": "minute", "size": 3}`
+   - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
+   - `instruments[].tick_size`(선택): 호가 단위. 백테스트의 슬리피지와 가격 경로가 쓰며, 없으면 봉 가격 차이로 추정한다(소수 둘째 자리까지만 구별하므로 ZN처럼 1/64 단위인 종목은 적어야 한다).
+   - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
+   - `chart_lines`(선택): 모의매매 차트에 그릴 판단용 선. 항목은 `series`(`bar`는 판단 기준 봉 차트, `daily`는 일봉 차트), `kind`(`sma` 단순이동평균은 `period` 필요, `previous_close` 직전 거래일 종가선은 일봉만), `label`, 마우스를 올렸을 때 보이는 `description`이다. `label`을 `describe`의 항목 이름과 같게 쓰면 "현재 판단" 패널의 같은 항목에도 설명이 붙는다.
+   - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
    - `parameters`: 파라미터 이름, 기본값, 설명. 전략 문서의 파라미터 목록과 같은 이름을 쓴다.
+     - 화면에서 시작 전에 바꿀 수 있는 값이면 `editable`을 켜고, 입력칸 이름 `label`, `unit`(`percent`는 0.2를 20%로 표시), 허용 범위 `min`·`max`를 적는다. 모의매매·백테스트 시작 요청의 `params`가 범위를 벗어나거나 숫자가 아니면 `422`로 거부한다.
 3. `strategy.py`의 `Strategy` 클래스에 전략 문서의 판단 규칙을 구현한다.
 4. `README.md`에 전략 문서 링크와 구현 메모를 쓴다.
 5. `tests/`에 전략 테스트를 추가하고 `uv run pytest`로 확인한다.
@@ -71,11 +79,24 @@ uv run pytest
 
 - 전략은 `Context`를 읽고 `StrategyOutput`을 돌려준다. 형식은 `strategy_base/models.py`에 있다.
 - 봉이 마감될 때 `on_bar(ctx)`가 호출된다. 장중 가격 갱신에 반응해야 하면 `on_price(ctx)`도 구현한다.
+- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다.
+- 판단의 근거 수치는 `Decision.detail`에 담는다. 판단 기록(`decision`)의 `detail`로 모의매매·백테스트 기록에 남는다. 주문 사유(`OrderIntent.reason`)는 체결 기록(`fill`)에 그대로 남으므로 판단 요약을 사유에 포함하면 체결 기록에서도 볼 수 있다.
 - 입력 `ctx`: 완성된 봉(`bars`, 마지막이 판단 대상), 현재 시각, 종목 최종거래일, 진입분별 포지션(`lots`), 미체결 주문(`open_orders`), 파라미터, 직전 호출의 상태(`state`)
+- 추가 입력 `ctx`: 추가 봉 계열(`series`, 일봉은 오늘 이전 날짜만), 직전 거래일 종가 VIX(`vix`), 계약당 기준 증거금(`margin`), 보유분 전체의 평가손익(`unrealized_pnl`, 수수료 제외). 값을 알 수 없으면 `None`이다.
 - 출력 `StrategyOutput`: 주문 의도(`orders`), 미체결 취소 요청(`cancels`), 매매 판단 기록(`decisions`), 다음 호출에 넘길 상태(`state`)
 - 주문 의도는 방향, 수량, 진입·청산 구분, 진입분 id, 이유, 주문 유형, 유효 시한(봉 개수)으로 이루어진다.
 - 전략은 시세 수신, 주문 전송, 계좌 조회, 파일 저장을 직접 호출하지 않는다.
 - 아무것도 하지 않으려면 빈 `StrategyOutput()`을 돌려준다.
+
+### VIX
+
+- 전략에는 직전 거래일 종가 VIX를 넘긴다. 장중 VIX는 다루지 않는다.
+- 출처는 FRED `VIXCLS` 일 종가이며 `data/vixcls.csv`에 저장한다. 백테스트와 모의매매가 같은 파일을 읽는다.
+- 파일은 다음 명령으로 갱신한다. 받기에 실패하면 기존 파일을 그대로 둔다.
+
+```bash
+uv run python -m app.data.vix
+```
 
 ### 공통 지표
 
@@ -95,12 +116,12 @@ uv run pytest
 `strategy_base/testing.py`로 서버 없이 고정 봉 데이터에 전략을 실행한다.
 
 - `make_bars(rows, start, minutes)`: (고가, 저가, 종가, 거래량) 목록으로 연속한 봉을 만든다.
-- `run_on_bars(strategy, bars, lots=..., open_orders=..., last_trading_day=...)`: 봉이 하나씩 마감되는 것처럼 `on_bar`를 호출하고 호출마다 출력을 돌려준다. 체결은 흉내 내지 않는다.
+- `run_on_bars(strategy, bars, lots=..., open_orders=..., last_trading_day=..., series=..., vix=..., margin=...)`: 봉이 하나씩 마감되는 것처럼 `on_bar`를 호출하고 호출마다 출력을 돌려준다. 체결은 흉내 내지 않는다.
 - 예시는 `tests/test_template_strategy.py`를 따른다.
 
 ## NH선물 API
 
-`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 구현할 자리만 있고, 구현 전까지 백테스트·모의매매 시작을 `422`로 거부한다.
+`app/nh/`가 NH선물 API 호출을 맡는다. 전략은 직접 부르지 않고 러너가 부른다. 종목의 `market`이 `domestic`이면 `app/nh/domestic/`을 쓴다. `overseas`는 `app/nh/overseas/`에 시세(`quotes`)·주문(`orders`)·계좌와 상품 조회(`account`)가 구현되어 있다. 러너는 해외 종목도 실행한다. 해외 종목은 전략 종목에 `exchange`가 있어야 하고(없으면 `422`) 해외 키가 없으면 `503`이다. 해외 분봉은 국내와 같이 한국 시간이며 봉이 시작한 시각이다(모의환경에서 진행 중인 봉의 거래량이 늘어나는 것으로 확인). 모의환경의 해외 분봉 조회는 조회 기간을 무시하고 최신 봉부터 한 쪽(약 495개)씩 돌려주므로, 다음 데이터 키로 과거 쪽을 이어받아 기간 밖의 봉을 거른다(2026-11-04 확인, 2026-03-30보다 오래된 봉은 없고 2026-08-10 이전은 드문드문하다). 해외 모의매매는 해외 키로 실시간 체결(`FA`)을 받고(주문/체결 알림은 구독하지 않고 계좌 조회로 맞춘다), 실시간이 끊긴 동안만 5초마다 현재가를 조회한다. 최종거래일은 알 수 없어 `None`이다. 해외 실시간의 체결시간은 거래소 시간(`exch_tm`, 미국 중부)이 아니라 한국 시간(`ko_exec_tm`)을 쓴다(2026-11-05 모의환경 확인).
 
 | 파일 | 내용 |
 | --- | --- |
@@ -202,7 +223,7 @@ await connection.stop()
 
 시작 요청 본문은 `strategy_id`, `start_date`, `end_date`, `initial_capital`이고, 전략 파라미터를 바꾸려면 `params`를 더한다.
 
-- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 하고, `market`은 `domestic`이어야 한다(`overseas`는 `422`).
+- 종목은 전략 `manifest.json`의 첫 번째 종목이다. 종목코드와 `multiplier`(거래승수)가 있어야 하고, `market`이 `overseas`이면 `exchange`도 있어야 한다.
 - 거부: 없는 전략 `404`, 잘못된 기간·초기자금·파라미터·일봉 전략·종목 정보 부족 `422`, 이미 실행 중 `409`, NH 인증 정보 없음 `503`.
 - 종료일은 오늘보다 이전이어야 하고 기간은 366일 이하다. 시작일과 종료일은 아래 가능 기간 안이어야 하고 밖이면 `422`다.
 - 한 번에 하나만 실행한다. 실행은 백그라운드에서 한다.
@@ -251,9 +272,9 @@ await connection.stop()
 | --- | --- |
 | `POST /api/trading/start` | 운용을 시작하고 `202`와 실행 식별자를 돌려준다. 본문은 `strategy_id`(와 선택으로 `params`) |
 | `POST /api/trading/stop` | 정상 종료를 시작한다 |
-| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전체 정리 진행과 결과(`clear`) |
-| `GET /api/trading/account` | NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 운용 중이 아니어도 조회된다 |
-| `POST /api/trading/clear` | 미체결 취소·전체 포지션 청산을 시작한다 |
+| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전략이 설명한 현재 판단(`judgment`, 설명하지 않는 전략은 `null`), 전체 정리 진행과 결과(`clear`) |
+| `GET /api/trading/account?market=` | NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 운용 중이 아니어도 조회된다. `market`은 `domestic`(기본) 또는 `overseas`(해외 모의계좌, 예탁금은 USD) |
+| `POST /api/trading/clear?market=` | 미체결 취소·전체 포지션 청산을 시작한다. `market`의 계좌를 정리하며 같은 시장에서 운용 중인 전략만 멈춘다 |
 
 - 시작 거부: 없는 전략 `404`, 잘못된 파라미터·일봉 전략·종목 정보 부족·모의 환경이 아님 `422`, 이미 운용 중이거나 그 종목에 기존 포지션·미체결 주문이 있음 `409`, NH 인증 정보 없음 `503`, NH 계좌 조회 실패 `502`.
 - 한 번에 전략 1개·종목 1개(전략의 첫 번째 종목)만 운용한다. 세션은 전용 스레드의 이벤트 루프에서 돈다.
@@ -263,8 +284,8 @@ await connection.stop()
 
 ### 동작
 
-- **분봉**: 5초마다 분봉을 조회해 마감된 봉(봉 끝 2초 뒤)을 시간순으로 한 번씩 `on_bar`에 전달한다. 운용을 시작한 뒤에 시작한 당일 봉만 쓰고 시작 전 봉과 전일 봉은 쓰지 않는다. `ctx.now`는 봉이 끝나는 시각이다.
-- **가격**: 실시간 체결(`KA`)을 `on_price`에 전달한다(같은 가격이 1초 안에 반복되면 한 번만). 실시간이 연결 상태가 아니면 5초마다 현재가를 조회해 대신한다.
+- **분봉**: 5초마다 분봉을 조회해 마감된 봉(봉 끝 2초 뒤)을 시간순으로 한 번씩 `on_bar`에 전달한다. 운용을 시작한 뒤에 시작한 봉만 판단하며, 시작 전 봉은 `history_bars`가 있는 전략에 한해 첫 판단의 앞쪽 봉으로만 쓴다(오늘 시작 전 봉과 전일 봉을 합쳐 최근 `history_bars`개). `ctx.now`는 봉이 끝나는 시각이다.
+- **가격**: 실시간 체결(국내 `KA`, 해외 `FA`)을 `on_price`에 전달한다(같은 가격이 1초 안에 반복되면 한 번만). 실시간이 연결 상태가 아니면 5초마다 현재가를 조회해 대신한다.
 - **주문**: 전략의 주문 의도를 시장가 주문으로 보낸다.
   - 신규 진입은 주문 전에 주문가능수량을 조회해 가능한 수량만 주문한다. 계획 수량(`planned_quantity`)과 실제 수량(`quantity`)을 기록하고, 가능 수량이 0이면 주문하지 않는다.
   - 청산은 진입분의 보유 수량에서 이미 청산 주문이 나간 수량을 뺀 만큼만 낸다.
@@ -311,7 +332,7 @@ await connection.stop()
 
 ### 전체 정리
 
-`POST /api/trading/clear`는 `202`와 `{"phase": "clearing"}`을 돌려주고 백그라운드에서 다음 순서로 처리한다. 이미 정리 중이면 `409`다. 모의 환경이 아니면 `422`, 인증 정보가 없으면 `503`이다.
+`POST /api/trading/clear`는 `202`와 `{"phase": "clearing"}`을 돌려주고 백그라운드에서 다음 순서로 처리한다. 이미 정리 중이면 `409`다. 모의 환경이 아니면 `422`, 인증 정보가 없으면 `503`이다(해외 계좌는 해외 키 이름을 알려 준다).
 
 1. 운용 중인 전략의 판단을 멈춘다. 전략을 더 부르지 않고 신규 주문을 내지 않는다(`clearing`).
 2. 계좌 전체의 미체결 주문을 종목과 관계없이 취소하고, 조회로 모두 사라졌는지 확인한다(30초).
@@ -339,7 +360,7 @@ await connection.stop()
 
 ## 실시간 시세 웹소켓
 
-`/ws/market?code=<종목코드>`가 한 종목의 실시간 체결·호가를 화면에 보낸다. `app/nh/hub.py`의 `MarketHub`가 NH 실시간 연결 하나를 여러 화면이 나눠 쓰게 한다. 모의매매 운용의 실시간 연결(체결·주문 알림)과는 별개다.
+`/ws/market?code=<종목코드>&market=<domestic|overseas>`가 한 종목의 실시간 체결·호가를 화면에 보낸다. `market`을 생략하면 `domestic`이다. `app/nh/hub.py`의 `MarketHub`가 시장마다 NH 실시간 연결 하나(국내 키, 해외 키)를 여러 화면이 나눠 쓰게 한다. 모의매매 운용의 실시간 연결(체결·주문 알림)과는 별개다.
 
 ### 메시지
 
@@ -360,13 +381,13 @@ await connection.stop()
 
 | 코드 | 뜻 |
 | --- | --- |
-| `4422` | 종목코드 형식이 올바르지 않음 |
-| `4503` | NH 인증 정보가 설정되지 않음 |
-| `4429` | 서로 다른 종목을 4개까지만 볼 수 있음. 이미 보고 있는 종목에는 계속 붙을 수 있다 |
+| `4422` | 종목코드 형식이 올바르지 않음(국내 6~16자, 해외 3~16자 영문·숫자) 또는 `market` 값이 잘못됨 |
+| `4503` | NH 인증 정보가 설정되지 않음. 해외는 `NH_OVERSEAS_APP_KEY`, `NH_OVERSEAS_APP_SECRET`을 사유에 알려 준다 |
+| `4429` | 시장마다 서로 다른 종목을 4개까지만 볼 수 있음. 이미 보고 있는 종목에는 계속 붙을 수 있다 |
 
 ### 동작
 
-- 종목마다 체결(`KA`)과 호가(`KB`)를 구독한다. 첫 화면이 붙을 때 구독하고 마지막 화면이 떠날 때 해제한다. NH의 구독 한도(20건) 가운데 모의매매 운용이 쓸 몫을 남기려고 종목을 4개(8건)로 제한한다.
+- 종목마다 체결(국내 `KA`, 해외 `FA`)과 호가(국내 `KB`, 해외 `FB`)를 구독한다. 해외 모의환경에서 `FA`·`FB`가 오는 것을 확인했다(2026-11-05, ZNZ26). 첫 화면이 붙을 때 구독하고 마지막 화면이 떠날 때 해제한다. NH의 구독 한도(20건) 가운데 모의매매 운용이 쓸 몫을 남기려고 종목을 4개(8건)로 제한한다.
 - 화면마다 대기열(256개)이 있고 가득 차면 오래된 메시지부터 버린다. 느린 화면이 다른 화면과 NH 수신을 막지 않는다.
 - 서버를 끌 때 NH 실시간 연결을 정리한다.
 - 모의환경 확인(2026-10-28, 장 마감 후): `/ws/market?code=A116B000`에 연결하면 `connecting`에 이어 `live`가 온다. 체결·호가 데이터는 장 시간에 확인해야 한다.
@@ -400,13 +421,13 @@ await connection.stop()
 
 ## 시세 조회
 
-`app/nh/domestic/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 종목코드는 영문·숫자 6~16자여야 하고(`422`), NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
+`app/nh/domestic/market.py`와 `app/api/market.py`가 화면에 쓸 종목 시세·차트·호가를 돌려준다. 국내 종목코드는 영문·숫자 6~16자여야 하고(`422`), 해외 종목은 `market=overseas`와 `exchange`(예: `FCME`)를 함께 보내야 한다(`exchange`가 없으면 `422`, 해외 키가 없으면 해외 변수 이름과 함께 `503`). 해외 종목은 `app/nh/overseas/quotes.py`의 시세를 쓰고 월물·만기·가격 제한·거래승수는 `null`이고 장 종류(`market_session`)는 NH 해외 장운영 조회의 거래시간(한국 시간, 예: `08:00 ~ 07:00`)으로 판정하며(`regular`·`closed`, 주말 휴장 반영, 공휴일·조기 마감 미반영, 조회에 실패하면 `unknown`, 거래시간은 1시간 보관)  호가는 5단계다. 실시간 체결·호가는 `/ws/market?market=overseas`로 받는다(아래 [실시간 시세 웹소켓](#실시간-시세-웹소켓)). NH 인증 정보가 없으면 `503`, NH가 거절하거나 조회에 실패하면 `502`다. 같은 요청이 몰려도 NH 호출 제한을 넘지 않도록 시세와 호가는 1초, 차트는 2초 동안 서버 메모리에 보관한다.
 
 | 요청 | 내용 |
 | --- | --- |
-| `GET /api/market/<종목코드>/quote` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
-| `GET /api/market/<종목코드>/candles?interval=&count=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
-| `GET /api/market/<종목코드>/orderbook` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
+| `GET /api/market/<종목코드>/quote?market=&exchange=` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
+| `GET /api/market/<종목코드>/candles?interval=&count=&market=&exchange=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
+| `GET /api/market/<종목코드>/orderbook?market=&exchange=` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
 
 - 전일대비와 등락률은 NH의 부호 구분(`chg_sign`)이 `-`이면 음수로 돌려준다.
 - 종목명은 NH 응답의 연속 공백을 하나로 줄인다(`삼성전자 F 202611 ( 10)`).

@@ -8,6 +8,10 @@ from app.nh.values import count, number, text
 from strategy_base.models import Side
 
 BOOK_LEVELS = 10
+# 종목이 필요한 시세 구독. 국내 체결 KA·호가 KB, 해외 체결 FA·호가 FB. 해외 키로 연결해야 하는 것은 FA·FB다.
+SYMBOL_FEEDS = ("KA", "KB", "FA", "FB")
+TRADE_FEEDS = ("KA", "FA")
+BOOK_FEEDS = ("KB", "FB")
 
 
 @dataclass(frozen=True)
@@ -18,7 +22,7 @@ class Feed:
     symbol: str | None = None
 
     def __post_init__(self) -> None:
-        if self.action_code in ("KA", "KB"):
+        if self.action_code in SYMBOL_FEEDS:
             if not self.symbol:
                 raise ValueError(f"{self.action_code} 구독에는 종목코드가 필요합니다")
         elif self.action_code == "O1":
@@ -30,7 +34,7 @@ class Feed:
 
 @dataclass(frozen=True)
 class Trade:
-    """체결(KA). `tick`이 `1`인 것만 실제 체결이고, `0`은 체결량이 0인 기타 데이터다."""
+    """체결(KA·FA). `tick`이 `1`인 것만 실제 체결이고, `0`은 체결량이 0인 기타 데이터다."""
 
     code: str
     time: str
@@ -59,7 +63,7 @@ class BookLevel:
 
 @dataclass(frozen=True)
 class OrderBook:
-    """호가(KB). `levels[0]`이 1단계(최우선)다."""
+    """호가(KB·FB). `levels[0]`이 1단계(최우선)다."""
 
     code: str
     time: str
@@ -102,10 +106,15 @@ class Reconnected:
     """끊겼다가 다시 연결됐다. 끊긴 동안의 값은 오지 않으므로 조회로 채워야 한다."""
 
 
+def _time(body: dict[str, Any]) -> str:
+    """해외 메시지는 한국 시간 체결시간(`ko_exec_tm`)을 쓴다. 국내는 `exch_tm`이 한국 시간이다."""
+    return text(body.get("ko_exec_tm")) or text(body.get("exch_tm"))
+
+
 def parse_trade(body: dict[str, Any], symbol: str = "") -> Trade:
     return Trade(
         code=text(body.get("sym")) or symbol,
-        time=text(body.get("exch_tm")),
+        time=_time(body),
         price=number(body.get("last_pric")),
         quantity=count(body.get("exec_qty")),
         cum_volume=count(body.get("cum_trd_qty")),
@@ -131,7 +140,7 @@ def parse_order_book(body: dict[str, Any], symbol: str = "") -> OrderBook:
             levels.append(level)
     return OrderBook(
         code=text(body.get("sym")) or symbol,
-        time=text(body.get("exch_tm")),
+        time=_time(body),
         total_ask_quantity=count(body.get("ask_qty")),
         total_bid_quantity=count(body.get("bid_qty")),
         levels=levels,

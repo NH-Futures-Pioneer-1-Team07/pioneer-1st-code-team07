@@ -11,7 +11,10 @@ import {
   fetchStatus,
   fetchStrategies,
   fetchStrategy,
+  type MarketTarget,
 } from "../../apis/trading";
+import { useParamInputs } from "../../components/common/EditableParams";
+import { currencyOf } from "../../data/format";
 import { formatClock } from "../../data/tradingView";
 import type { MarketStatus } from "../../data/tradingView";
 
@@ -25,7 +28,6 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
 
   const strategies = usePolling(fetchStrategies, 60000);
   const status = usePolling(fetchStatus, 2000);
-  const account = usePolling(fetchAccount, 5000);
   const runStream = useRunStream("paper");
 
   const phase = status.data?.phase ?? "idle";
@@ -42,18 +44,27 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     [strategyId],
     !!strategyId,
   );
+  const paramInputs = useParamInputs(strategyId, detail.data?.parameters);
   const instrument = detail.data?.instruments[0] ?? null;
+  // 계좌는 선택한 전략 종목의 시장에 맞는 모의계좌를 본다.
+  const market = instrument?.market ?? "domestic";
+  const currency = currencyOf(market);
+  const account = usePolling(() => fetchAccount(market), 5000, [market], !!instrument);
   const code = instrument?.code ?? null;
 
-  const quote = usePolling(() => fetchQuote(code as string), 3000, [code], !!code);
+  const target: MarketTarget | undefined = instrument
+    ? { market: instrument.market, exchange: instrument.exchange }
+    : undefined;
+  const quote = usePolling(() => fetchQuote(code as string, target), 3000, [code], !!code);
   const candles = usePolling(
-    () => fetchCandles(code as string, interval),
+    () => fetchCandles(code as string, interval, undefined, target),
     5000,
     [code, interval],
     !!code,
   );
-  const book = usePolling(() => fetchOrderBook(code as string), 3000, [code], !!code);
-  const stream = useMarketStream(code);
+  const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
+  const stream = useMarketStream(code, market);
+  const streamState = stream.state;
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;
   const prevClose = quote.data?.prev_close ?? null;
@@ -77,8 +88,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const pnl = status.data?.pnl;
   const session = quote.data?.market_session ?? null;
   useEffect(() => {
-    onMarketStatus({ session, stream: stream.state, failure: stream.failure });
-  }, [onMarketStatus, session, stream.state, stream.failure]);
+    onMarketStatus({ market: instrument?.market ?? null, session, stream: streamState, failure: stream.failure });
+  }, [onMarketStatus, instrument?.market, session, streamState, stream.failure]);
   const receivedAt = formatClock(stream.lastTrade?.time);
 
   const act = async (action: () => Promise<unknown>) => {
@@ -96,7 +107,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   };
 
   return {
-    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, instrument, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
+    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, market, currency, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
   };
 }
 
