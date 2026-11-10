@@ -1,5 +1,6 @@
 import type { TradingController } from "../useTradingPage";
-import { won } from "../../../data/format";
+import { formatNumber, won } from "../../../data/format";
+import { spreadFormula } from "../../../data/tradingView";
 import styles from "./OrderBookPanel.module.css";
 
 export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
@@ -16,13 +17,13 @@ export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
         <div className="section-head">
           <h2>스프레드 구성</h2>
         </div>
-        <p className="empty">스프레드에는 호가가 없습니다. 두 종목의 현재가로 계산한 값입니다.</p>
-        <ul>
-          {instrument.legs.map((leg) => (
-            <li key={leg.code}>
-              {leg.code} × {leg.ratio > 0 ? `+${leg.ratio}` : leg.ratio}
-            </li>
-          ))}
+        <p className={styles.formula}>{spreadFormula(instrument.legs)}</p>
+        <ul className={styles.notes}>
+          <li>봉: 같은 시각의 두 종목 봉을 위 식으로 합친 값</li>
+          <li>현재가: 두 종목의 현재가로 계산한 값</li>
+          <li>
+            가격 1.0 = {instrument.multiplier ? `${formatNumber(instrument.multiplier)}달러` : "거래승수만큼의 금액"} (1세트)
+          </li>
         </ul>
       </section>
     );
