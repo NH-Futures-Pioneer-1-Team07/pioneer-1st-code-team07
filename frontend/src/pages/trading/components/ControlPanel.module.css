@@ -129,3 +129,9 @@
     margin-top: 15px;
   }
 }
+.expiryNote {
+  margin: 0 0 14px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}

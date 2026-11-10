@@ -9,7 +9,6 @@ from datetime import datetime, time
 from typing import Any, Protocol
 
 from app.config import Settings
-from app.nh.auth import KST
 from app.data.vix import load as load_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
@@ -143,9 +142,7 @@ class PaperService:
 
     # ---- API ----
 
-    def start(
-        self, strategy_id: str, params: dict[str, Any] | None = None, end_at: str | None = None
-    ) -> dict[str, str]:
+    def start(self, strategy_id: str, params: dict[str, Any] | None = None) -> dict[str, str]:
         registered = self._registry.get(strategy_id)
         if registered is None:
             raise TradingRejected(404, "전략을 찾을 수 없습니다")
@@ -158,7 +155,6 @@ class PaperService:
         if self._settings.trading_env != "mock":
             raise TradingRejected(422, "모의매매는 모의 환경(TRADING_ENV=mock)에서만 운용할 수 있습니다")
         merged = self._merge_params(manifest, params)
-        end = self._parse_end_at(end_at, required=bool(instrument.legs))
         if instrument.market == "overseas":
             problem = overseas_instrument_ready(instrument)
             if problem:
@@ -173,8 +169,6 @@ class PaperService:
                 broker, make_realtime = self._overseas_components(instrument, manifest.bar.size)
             else:
                 broker, make_realtime = self._components(instrument.code, manifest.bar.size)
-            if isinstance(broker, SpreadBroker) and "entry_confirm_seconds" in merged:
-                broker.entry_confirm_seconds = float(merged["entry_confirm_seconds"])
             deposit, last_trading_day = self._check_account(
                 broker, instrument.code, [leg.code for leg in instrument.legs or []]
             )
@@ -189,7 +183,6 @@ class PaperService:
                     fee_rate=self._settings.backtest_fee_rate,
                     history_bars=manifest.history_bars,
                     market=instrument.market,
-                    end_at=end,
                     fee_price=fee_price,
                     **({"session_anchor": time(0, 0)} if instrument.market == "overseas" else {}),
                 ),
@@ -324,21 +317,6 @@ class PaperService:
         if problem:
             raise TradingRejected(422, problem)
         return {**manifest.default_params(), **(overrides or {})}
-
-    def _parse_end_at(self, end_at: str | None, *, required: bool) -> datetime | None:
-        """운용 종료 일시(한국 시간)를 읽는다. 스프레드 전략은 필수이고 지금보다 뒤여야 한다."""
-        if not end_at:
-            if required:
-                raise TradingRejected(422, "운용 종료 일시(end_at)가 필요합니다")
-            return None
-        try:
-            parsed = datetime.fromisoformat(end_at)
-        except ValueError as error:
-            raise TradingRejected(422, "운용 종료 일시는 2026-11-20T18:00 형식이어야 합니다") from error
-        parsed = parsed.replace(tzinfo=None) if parsed.tzinfo is None else parsed.astimezone(KST).replace(tzinfo=None)
-        if parsed <= self._clock():
-            raise TradingRejected(422, "운용 종료 일시는 지금보다 뒤여야 합니다")
-        return parsed
 
     @staticmethod
     def _fee_price(broker: Broker) -> float | None:

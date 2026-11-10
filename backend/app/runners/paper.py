@@ -66,7 +66,6 @@ class PaperConfig:
     history_days: int = 10
     market: str = "domestic"
     # 이 시각이 되면 운용을 종료한다(신규 판단을 멈추고 미체결 취소·보유 청산). 없으면 직접 종료할 때까지 운용한다.
-    end_at: datetime | None = None
     # 수수료를 체결가가 아닌 이 가격으로 어림한다(스프레드 종목).
     fee_price: float | None = None
 
@@ -241,9 +240,6 @@ class PaperSession:
         if self.done.is_set():
             return
         await self._expire_orders(now)
-        if self.phase == RUNNING and self.config.end_at is not None and now >= self.config.end_at:
-            self._note("운용 종료 일시가 되어 종료합니다", end_at=self.config.end_at.isoformat())
-            await self._begin_stop(now)
         if self.phase == RUNNING and now >= self.next_poll:
             self.next_poll = now + timedelta(seconds=self.config.poll_interval)
             await self._poll_bars(now)

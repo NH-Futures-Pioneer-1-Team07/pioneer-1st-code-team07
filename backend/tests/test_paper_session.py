@@ -1072,18 +1072,3 @@ def test_history_bars가_있으면_첫_봉_전에도_판단을_설명한다(tmp_
         assert h.strategy.bar_calls == []
 
     run(scenario)
-
-
-def test_운용_종료_일시가_되면_보유도_미체결도_없을_때_바로_종료한다(tmp_path):
-    async def scenario():
-        h = Harness(tmp_path, config=dataclasses.replace(CONFIG, end_at=at(seconds=30)))
-        await h.at(seconds=29)
-        assert h.session.final_status is None
-
-        await h.at(seconds=31)
-        await h.at(seconds=32)
-
-        assert h.session.final_status == "completed"
-        assert any("운용 종료 일시" in e["text"] for e in h.journal("event"))
-
-    run(scenario)

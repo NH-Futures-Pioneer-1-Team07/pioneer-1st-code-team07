@@ -26,7 +26,6 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const [confirm, setConfirm] = useState<"stop" | "all" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [endAt, setEndAt] = useState("");
 
   const strategies = usePolling(fetchStrategies, 60000);
   const status = usePolling(fetchStatus, 2000);
@@ -110,7 +109,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   };
 
   return {
-    selected, setSelected, endAt, setEndAt, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, market, currency, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
+    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, market, currency, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
   };
 }
 

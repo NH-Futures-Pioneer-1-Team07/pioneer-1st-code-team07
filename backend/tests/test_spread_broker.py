@@ -252,26 +252,6 @@ def test_실시간_체결은_두_종목이_모두_들어온_뒤에_스프레드_
 # ---- 모의매매 서비스 ----
 
 
-def test_운용_종료_일시는_스프레드_전략에서_필수이고_지금보다_뒤여야_한다(tmp_path):
-    from app.config import Settings
-    from app.main import create_app
-    from app.runners.paper_service import TradingRejected
-
-    app = create_app(Settings(trading_env="mock", strategies_dir=tmp_path, runs_dir=tmp_path / "runs"))
-    service = app.state.trading
-    service._clock = lambda: START
-
-    with pytest.raises(TradingRejected, match="필요"):
-        service._parse_end_at(None, required=True)
-    assert service._parse_end_at(None, required=False) is None
-    with pytest.raises(TradingRejected, match="형식"):
-        service._parse_end_at("내일", required=True)
-    with pytest.raises(TradingRejected, match="뒤"):
-        service._parse_end_at("2026-11-11T09:00", required=True)
-    assert service._parse_end_at("2026-11-12T18:00", required=True) == datetime(2026, 11, 12, 18, 0)
-    assert service._parse_end_at("2026-11-12T18:00+09:00", required=True) == datetime(2026, 11, 12, 18, 0)
-
-
 def test_시작_전_계좌_확인은_두_종목의_기존_미체결도_거부한다(setup):
     from app.runners.paper_service import PaperService, TradingRejected
 
