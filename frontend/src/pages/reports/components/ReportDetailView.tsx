@@ -2,6 +2,8 @@ import type { ReportsController } from "../useReportsPage";
 import { dotted } from "../../../data/format";
 import { paramText, roleLabel } from "../../../data/reportView";
 import MarkdownView from "./MarkdownView";
+import ReportCharts from "./ReportCharts";
+import TradesPanel from "./TradesPanel";
 import ReportTable from "./ReportTable";
 import styles from "./ReportDetailView.module.css";
 
@@ -76,6 +78,15 @@ export default function ReportDetailView({ ctl }: { ctl: ReportsController }) {
       )}
 
       <MarkdownView text={report.body} title={meta.title} />
+
+      <ReportCharts report={report} />
+
+      {meta.recommended.length > 0 && (
+        <section className={styles.tableSection} aria-labelledby="report-trades-title">
+          <h3 id="report-trades-title">거래</h3>
+          <TradesPanel meta={meta} />
+        </section>
+      )}
 
       <section className={styles.tableSection} aria-labelledby="report-table-title">
         <h3 id="report-table-title">비교표</h3>
