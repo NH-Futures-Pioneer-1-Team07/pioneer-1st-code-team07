@@ -103,6 +103,7 @@ cd frontend && npm test
 ```text
 pioneer-1st-code-team07/
 ├── AGENTS.md                         AI 에이전트 작업 지침
+├── .agents/skills/                   Codex 전용 스킬 (조합 탐색 실행 sweep-run, 보고서 작성 sweep-report)
 ├── README.md
 ├── .github/
 │   ├── ISSUE_TEMPLATE/task.md        이슈 양식
@@ -120,6 +121,7 @@ pioneer-1st-code-team07/
 │   │   │   ├── trading.py            모의매매 시작·종료·상태
 │   │   │   ├── backtests.py          백테스트 실행·가능 기간
 │   │   │   ├── runs.py               실행 기록 조회
+│   │   │   ├── reports.py            검증 보고서 조회
 │   │   │   ├── market.py             시세·종목 조회
 │   │   │   └── stream.py             실시간 시세 WebSocket
 │   │   ├── nh/                       NH선물 API 연동
@@ -152,6 +154,8 @@ pioneer-1st-code-team07/
 │   │   │   ├── broker.py             모의매매가 쓰는 NH 기능 묶음
 │   │   │   ├── ledger.py             포지션·손익 계산 (백테스트·모의매매 공용)
 │   │   │   └── clearing.py           계좌 전체 정리
+│   │   ├── sweep/                    조합 탐색 (파라미터·기간 조합 백테스트와 결과 누적, 비교표)
+│   │   ├── reports/                  검증 보고서 읽기
 │   │   └── records/                  실행 기록
 │   │       ├── store.py              저장·조회
 │   │       ├── events.py             기록 변경을 WebSocket 구독자에 알림
@@ -168,6 +172,8 @@ pioneer-1st-code-team07/
 │   │   └── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
 │   ├── data/vixcls.csv               VIX 일 종가 데이터
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
+│   ├── sweeps/                       조합 탐색 결과 (조합별 요약·거래·체결)
+│   ├── reports/                      검증 보고서와 비교표 (README.md에 형식 설명)
 │   └── tests/                        백엔드 테스트
 ├── frontend/                         React 화면 (TypeScript)
 │   ├── package.json, vite.config.ts  의존성·개발 서버·프록시
@@ -177,7 +183,8 @@ pioneer-1st-code-team07/
 │       ├── main.tsx, App.tsx         진입점·페이지 전환
 │       ├── pages/
 │       │   ├── trading/              모의매매 페이지 (PriceChart, JudgmentPanel, RunHistory)
-│       │   └── backtest/             백테스트 페이지 (EquityChart, RecordDetail, CompareSection)
+│       │   ├── backtest/             백테스트 페이지 (EquityChart, RecordDetail, CompareSection)
+│       │   └── reports/              검증 리포트 페이지 (보고서 목록·본문·비교표)
 │       ├── components/common/        공통 컴포넌트 (달력, 탭, 전략 선택, 파라미터 입력, 판단 타임라인 등)
 │       ├── apis/                     백엔드 호출 (Axios, 폴링, 시세 WebSocket)
 │       ├── data/                     화면용 데이터 변환·서식과 테스트
@@ -254,6 +261,16 @@ pioneer-1st-code-team07/
 ![일별 손익](docs/images/backtest-compare-daily.png)
 
 같은 날짜끼리 이력별 일별 손익 나란히 보기.
+
+### 검증 리포트
+
+- 조합 탐색 결과로 쓴 검증 보고서의 목록과 상세를 확인
+- 추천·대안 조합 카드, 본문(요약·근거·위험과 한계), 다음 탐색 요청(복사 버튼) 표시
+- 비교표에서 보고 싶은 지표를 고르고 열 제목을 눌러 정렬
+- 보고서는 `backend/reports/<전략 id>/<이름>/report.md`이며, 파일이 바뀌면 15초 안에 화면이 갱신됨
+- 조합 탐색 실행과 보고서 작성은 Codex 스킬(`sweep-run`, `sweep-report`)이 맡고 사용법은 [backend/README.md](backend/README.md)의 조합 탐색에 있음
+
+![검증 리포트 화면](docs/images/reports.jpg)
 
 ### 공통
 
