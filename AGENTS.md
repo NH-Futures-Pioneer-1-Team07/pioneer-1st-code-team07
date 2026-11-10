@@ -9,6 +9,8 @@
 - PR 양식: [.github/pull_request_template.md](.github/pull_request_template.md)
 - NH선물 API 명세를 찾을 때는 [API 문서 목록](docs/nh-api/README.md)에서 필요한 상세 문서를 확인한다.
 - 작업에 필요한 문서만 읽는다.
+- 전략 파라미터 조합 탐색·검증 보고서 작업은 `.agents/skills/`의 `sweep-run`, `sweep-report` 스킬을 따른다.
+- 조합 탐색 명령은 [backend/README.md](backend/README.md)의 "조합 탐색", 보고서 형식은 [backend/reports/README.md](backend/reports/README.md)에 있다.
 
 ## 작업 원칙
 
