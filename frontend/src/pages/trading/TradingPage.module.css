@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: 254px minmax(300px, 1fr) 195px;
   gap: 20px;
-  align-items: stretch;
+  align-items: start;
 }
 @media (min-width: 1650px) {
   .tradingGrid {
