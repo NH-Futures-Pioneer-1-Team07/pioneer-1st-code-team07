@@ -212,6 +212,8 @@ export interface ChartLayout {
   max: number;
   /** 가격을 차트의 세로 위치로 바꾼다 */
   y: (price: number) => number;
+  /** 차트의 세로 위치를 가격으로 바꾼다. 가격 영역 밖(거래량 영역)이면 `null` */
+  price: (y: number) => number | null;
 }
 
 /** 캔들과 거래량을 `width × height` 안에 놓는다. 오른쪽 `axisWidth`는 가격 눈금 자리다. */
@@ -223,7 +225,7 @@ export function chartLayout(
   /** 캔들 밖에서 차트 안에 들어와야 하는 가격(선의 값). 세로 범위에 포함한다 */
   extraPrices: number[] = [],
 ): ChartLayout {
-  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0 };
+  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0, price: () => null };
   if (!candles.length || width <= axisWidth) return empty;
   const top = 12;
   const priceBottom = height * 0.76;
@@ -234,6 +236,7 @@ export function chartLayout(
   const max = Math.max(...highs);
   const span = max - min || Math.max(max * 0.001, 1);
   const y = (price: number) => top + ((max - price) / span) * (priceBottom - top);
+  const price = (at: number) => (at < top || at > priceBottom ? null : max - ((at - top) / (priceBottom - top)) * span);
   const maxVolume = Math.max(...candles.map((c) => c.volume), 1);
   const slot = (width - axisWidth) / candles.length;
   const bar = Math.max(1, Math.min(slot * 0.7, 14));
@@ -260,7 +263,7 @@ export function chartLayout(
     const value = max - (span * row) / 3;
     return { y: y(value), value };
   });
-  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y };
+  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y, price };
 }
 
 /** 종가의 단순이동평균. 봉이 `period`개 모이기 전 자리는 `null`이다. */
@@ -330,6 +333,17 @@ export function timeTicks(candles: Candle[], daily: boolean): { index: number; l
     const time = candles[index].time;
     return { index, label: daily ? time.slice(5).replace("-", ".") : time.slice(11, 16) };
   });
+}
+
+/** 마우스 가로 위치 `x`에 있는 봉의 번호. 봉이 놓인 영역 밖이면 `null`. */
+export function candleIndexAt(x: number, slot: number, count: number): number | null {
+  if (slot <= 0 || count <= 0 || x < 0 || x >= slot * count) return null;
+  return Math.min(count - 1, Math.floor(x / slot));
+}
+
+/** 호버 툴팁에 보여 줄 봉 시각. 일봉은 날짜, 분봉은 날짜와 시각. */
+export function hoverTime(time: string, daily: boolean): string {
+  return daily ? time.slice(0, 10).replace(/-/g, ".") : `${time.slice(5, 10).replace("-", ".")} ${time.slice(11, 16)}`;
 }
 
 /** 실행 하나를 가리키는 키. 목록에서 선택·갱신할 때 쓴다. */
