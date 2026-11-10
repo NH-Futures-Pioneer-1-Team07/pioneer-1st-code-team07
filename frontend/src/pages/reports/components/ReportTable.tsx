@@ -4,6 +4,7 @@ import type { ReportPeriod, ReportTable as Table } from "../../../apis/types";
 import { pnlClass } from "../../../data/format";
 import {
   METRIC_LABEL,
+  type ParamSpecs,
   columnLabel,
   formatCell,
   isSigned,
@@ -15,7 +16,7 @@ import styles from "./ReportTable.module.css";
 
 const DEFAULT_METRICS = ["net_pnl", "max_drawdown_rate"];
 
-export default function ReportTable({ table, periods }: { table: Table; periods: ReportPeriod[] }) {
+export default function ReportTable({ table, periods, specs }: { table: Table; periods: ReportPeriod[]; specs?: ParamSpecs }) {
   const available = useMemo(() => metricsIn(table.columns), [table.columns]);
   const [metrics, setMetrics] = useState<Set<string>>(
     () => new Set(DEFAULT_METRICS.filter((metric) => available.includes(metric))),
@@ -70,7 +71,7 @@ export default function ReportTable({ table, periods }: { table: Table; periods:
                 return (
                   <th key={name} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
                     <button type="button" className={styles.head} onClick={() => sortBy(index)}>
-                      {columnLabel(name, periods)}
+                      {columnLabel(name, periods, specs)}
                       <span aria-hidden="true">{active ? (sort.direction === "asc" ? " ▲" : " ▼") : ""}</span>
                     </button>
                   </th>
@@ -87,7 +88,7 @@ export default function ReportTable({ table, periods }: { table: Table; periods:
                   const tone = isSigned(name) && typeof value === "number" ? pnlClass(value) : "";
                   return (
                     <td key={name} className={tone}>
-                      {formatCell(name, value)}
+                      {formatCell(name, value, specs)}
                     </td>
                   );
                 })}

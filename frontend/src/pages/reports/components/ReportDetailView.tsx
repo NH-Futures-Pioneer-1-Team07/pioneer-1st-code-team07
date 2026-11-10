@@ -1,3 +1,5 @@
+import { usePolling } from "../../../apis/polling";
+import { fetchStrategy } from "../../../apis/trading";
 import type { ReportsController } from "../useReportsPage";
 import { dotted } from "../../../data/format";
 import { paramText, roleLabel } from "../../../data/reportView";
@@ -9,6 +11,14 @@ import styles from "./ReportDetailView.module.css";
 
 export default function ReportDetailView({ ctl }: { ctl: ReportsController }) {
   const { list, selected, detail } = ctl;
+  // 파라미터를 한글 이름·단위로 보이려고 전략 명세를 함께 읽는다. 못 읽으면 코드 이름과 원값으로 보인다.
+  const strategy = usePolling(
+    () => fetchStrategy(selected!.strategy_id),
+    600000,
+    [selected?.strategy_id],
+    selected !== undefined && selected.error === null,
+  );
+  const specs = strategy.data?.parameters;
 
   if (list.data !== null && selected === undefined) {
     const broken = ctl.items.length > 0;
@@ -69,7 +79,7 @@ export default function ReportDetailView({ ctl }: { ctl: ReportsController }) {
               <strong>{item.label}</strong>
               <div className={styles.chips}>
                 {Object.entries(item.params).map(([name, value]) => (
-                  <span key={name}>{paramText(name, value)}</span>
+                  <span key={name}>{paramText(name, value, specs)}</span>
                 ))}
               </div>
             </article>
@@ -79,7 +89,7 @@ export default function ReportDetailView({ ctl }: { ctl: ReportsController }) {
 
       <MarkdownView text={report.body} title={meta.title} />
 
-      <ReportCharts report={report} />
+      <ReportCharts report={report} specs={specs} />
 
       {meta.recommended.length > 0 && (
         <section className={styles.tableSection} aria-labelledby="report-trades-title">
@@ -93,7 +103,7 @@ export default function ReportDetailView({ ctl }: { ctl: ReportsController }) {
         {report.table === null ? (
           <p className={styles.state}>이 보고서에는 비교표(table.csv)가 없습니다.</p>
         ) : (
-          <ReportTable table={report.table} periods={meta.periods} />
+          <ReportTable table={report.table} periods={meta.periods} specs={specs} />
         )}
       </section>
     </section>

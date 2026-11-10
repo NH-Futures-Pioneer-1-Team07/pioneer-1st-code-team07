@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ReportPeriod, ReportTable } from "../../../apis/types";
 import { numericParams, sensitivityData } from "../../../data/reportCharts";
-import { METRIC_LABEL, formatCell, metricsIn, paramText } from "../../../data/reportView";
+import { METRIC_LABEL, type ParamSpecs, columnLabel, formatCell, metricsIn, paramText } from "../../../data/reportView";
 import { CHART_HEIGHT, SERIES_COLORS, axisProps, tooltipStyle } from "./chartTheme";
 import styles from "./ReportCharts.module.css";
 
-export default function SensitivityChart({ table, periods }: { table: ReportTable; periods: ReportPeriod[] }) {
+export default function SensitivityChart({ table, periods, specs }: { table: ReportTable; periods: ReportPeriod[]; specs?: ParamSpecs }) {
   const params = useMemo(() => numericParams(table), [table]);
   const metrics = useMemo(() => metricsIn(table.columns), [table.columns]);
   const [xParam, setXParam] = useState(params[0]);
@@ -29,7 +29,7 @@ export default function SensitivityChart({ table, periods }: { table: ReportTabl
           <select value={x} onChange={(event) => setXParam(event.target.value)}>
             {params.map((name) => (
               <option key={name} value={name}>
-                {name}
+                {columnLabel(name, periods, specs)}
               </option>
             ))}
           </select>
@@ -42,14 +42,14 @@ export default function SensitivityChart({ table, periods }: { table: ReportTabl
           ))}
         </div>
       </div>
-      <div role="img" aria-label={`${x}에 따른 기간별 ${METRIC_LABEL[metric]}`}>
+      <div role="img" aria-label={`${columnLabel(x, periods, specs)}에 따른 기간별 ${METRIC_LABEL[metric]}`}>
         <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <LineChart data={data.points} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
             <CartesianGrid stroke="#20242c" vertical={false} />
-            <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} ticks={data.points.map((p) => p.x as number)} {...axisProps} />
+            <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} ticks={data.points.map((p) => p.x as number)} tickFormatter={(value) => formatCell(x, value as number, specs)} {...axisProps} />
             <YAxis width={64} tickFormatter={show} {...axisProps} />
             {metric === "net_pnl" && <ReferenceLine y={0} stroke="#ffffff40" />}
-            <Tooltip {...tooltipStyle} formatter={(value) => show(value)} labelFormatter={(label) => `${x} ${label}`} />
+            <Tooltip {...tooltipStyle} formatter={(value) => show(value)} labelFormatter={(label) => `${columnLabel(x, periods, specs)} ${formatCell(x, typeof label === "number" ? label : String(label), specs)}`} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             {data.series.map((name, index) => (
               <Line
@@ -66,7 +66,7 @@ export default function SensitivityChart({ table, periods }: { table: ReportTabl
         </ResponsiveContainer>
       </div>
       {data.fixed.length > 0 && (
-        <p className={styles.note}>고정한 파라미터: {data.fixed.map((item) => paramText(item.name, item.value)).join(" · ")} (가장 많이 시험한 값)</p>
+        <p className={styles.note}>고정한 파라미터: {data.fixed.map((item) => paramText(item.name, item.value, specs)).join(" · ")} (가장 많이 시험한 값)</p>
       )}
     </div>
   );

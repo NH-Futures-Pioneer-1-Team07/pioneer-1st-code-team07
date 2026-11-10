@@ -3,12 +3,13 @@ import { usePolling } from "../../../apis/polling";
 import { fetchSweepResults } from "../../../apis/reports";
 import type { ReportDetail } from "../../../apis/types";
 import { numericParams } from "../../../data/reportCharts";
+import type { ParamSpecs } from "../../../data/reportView";
 import EquityLineChart from "./EquityLineChart";
 import PeriodBarChart from "./PeriodBarChart";
 import SensitivityChart from "./SensitivityChart";
 import styles from "./ReportCharts.module.css";
 
-export default function ReportCharts({ report }: { report: ReportDetail }) {
+export default function ReportCharts({ report, specs }: { report: ReportDetail; specs?: ParamSpecs }) {
   const { meta, table } = report;
   const ids = useMemo(() => [...new Set(meta.recommended.flatMap((item) => Object.values(item.ids)))], [meta.recommended]);
   const results = usePolling(() => fetchSweepResults(meta.strategy_id, ids), 60000, [meta.strategy_id, ids.join(",")], ids.length > 0);
@@ -22,7 +23,7 @@ export default function ReportCharts({ report }: { report: ReportDetail }) {
             <h3 id="chart-sensitivity-title">파라미터별 성과</h3>
             <p>바꾼 파라미터 값에 따라 기간별 성과가 어떻게 달라지는지 봅니다. 선이 기간마다 같은 방향이면 일관성이 높습니다.</p>
           </header>
-          {hasSensitivity ? <SensitivityChart table={table} periods={meta.periods} /> : <p className={styles.note}>바꾼 숫자 파라미터가 없어 그래프를 그릴 수 없습니다.</p>}
+          {hasSensitivity ? <SensitivityChart table={table} periods={meta.periods} specs={specs} /> : <p className={styles.note}>바꾼 숫자 파라미터가 없어 그래프를 그릴 수 없습니다.</p>}
         </section>
       )}
       {ids.length > 0 && (
