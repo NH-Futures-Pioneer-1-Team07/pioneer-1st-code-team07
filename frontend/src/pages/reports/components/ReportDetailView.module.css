@@ -1,0 +1,84 @@
+.detail {
+  display: grid;
+  gap: 22px;
+  padding: 26px;
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 10px;
+}
+.question {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+}
+.card strong {
+  font-size: 14px;
+}
+.primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+.role {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 8%);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.primary .role {
+  background: var(--accent);
+  color: #1b1402;
+  font-weight: 600;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chips span {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.tableSection {
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--data-line);
+  min-width: 0;
+}
+.state {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.errorText {
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,53 @@
+.list {
+  padding: 24px;
+}
+.items {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.item:hover {
+  background: #1d2128;
+}
+.item strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.chosen {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+.strategy {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+.meta {
+  font-size: 11px;
+}
+.error {
+  font-size: 11px;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}

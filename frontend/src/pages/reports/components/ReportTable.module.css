@@ -1,0 +1,49 @@
+.wrap {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.metrics button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.metrics button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.table {
+  min-width: 640px;
+}
+.table th,
+.table td {
+  text-align: right;
+}
+.table th:first-child,
+.table td:first-child {
+  text-align: right;
+  padding-left: 12px;
+}
+.head {
+  padding: 0;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.head:hover {
+  color: var(--text-primary);
+}
+.note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
