@@ -296,3 +296,57 @@ export interface BacktestRun {
   meta: BacktestMeta;
   result: BacktestResult | null;
 }
+
+/** 검증 보고서 목록 항목. 머리말이 깨졌으면 `error`만 채워진다. */
+export interface ReportSummary {
+  strategy_id: string;
+  name: string;
+  title?: string;
+  question?: string;
+  updated?: string;
+  author?: string;
+  result_count?: number;
+  recommended?: (string | null)[];
+  error: string | null;
+}
+
+export interface ReportPeriod {
+  label: string;
+  start: string;
+  end: string;
+  kind: "full" | "split";
+}
+
+export interface ReportRecommendation {
+  label: string;
+  role: "recommended" | "alternative";
+  params: Record<string, unknown>;
+  ids: Record<string, string>;
+}
+
+export interface ReportMeta {
+  strategy_id: string;
+  name: string;
+  title: string;
+  question: string;
+  updated: string;
+  author: string;
+  result_count: number;
+  periods: ReportPeriod[];
+  recommended: ReportRecommendation[];
+}
+
+export type TableCell = number | string | null;
+
+export interface ReportTable {
+  columns: string[];
+  rows: TableCell[][];
+}
+
+export interface ReportDetail {
+  strategy_id: string;
+  name: string;
+  meta: ReportMeta;
+  body: string;
+  table: ReportTable | null;
+}
