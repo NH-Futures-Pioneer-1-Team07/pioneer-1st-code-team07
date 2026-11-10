@@ -64,8 +64,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     !!code,
   );
   const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
-  // 스프레드는 종목 하나의 실시간 체결이 없어 시세 조회 주기로 갱신한다.
-  const stream = useMarketStream(instrument?.legs?.length ? null : code, market);
+  // 스프레드는 서버가 두 종목의 실시간 체결을 합성해 보낸다(호가는 없다).
+  const stream = useMarketStream(code, market, instrument?.legs);
   const streamState = stream.state;
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;

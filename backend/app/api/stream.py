@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.nh.errors import NHConfigError
 from app.nh.hub import HubFull, MarketHub
+from strategy_base.manifest import SpreadLeg
 from app.records.events import RESYNC
 from app.records.store import MODES, RunStore
 
@@ -21,19 +22,40 @@ CLOSE_FULL = 4429
 CLOSE_BAD_MODE = 4422
 
 
+def _parse_legs(text: str) -> list[SpreadLeg] | None:
+    """`종목코드:비율,종목코드:비율`을 읽는다. 서로 다른 종목 2개가 아니거나 형식이 틀리면 `None`."""
+    parsed = []
+    for part in text.split(","):
+        leg_code, _, ratio = part.partition(":")
+        if not OVERSEAS_CODE_PATTERN.match(leg_code) or not re.fullmatch(r"-?[1-9][0-9]{0,2}", ratio):
+            return None
+        parsed.append(SpreadLeg(code=leg_code, ratio=int(ratio)))
+    if len(parsed) != 2 or parsed[0].code == parsed[1].code:
+        return None
+    return parsed
+
+
 @router.websocket("/ws/market")
-async def market_stream(websocket: WebSocket, code: str = "", market: str = "domestic") -> None:
-    """종목의 실시간 체결·호가를 JSON 메시지로 보낸다. `market`은 `domestic`(기본) 또는 `overseas`다. 메시지 형식은 `backend/README.md`를 본다."""
+async def market_stream(websocket: WebSocket, code: str = "", market: str = "domestic", legs: str = "") -> None:
+    """종목의 실시간 체결·호가를 JSON 메시지로 보낸다. `market`은 `domestic`(기본) 또는 `overseas`다. 메시지 형식은 `backend/README.md`를 본다.
+
+    `legs=종목코드:비율,종목코드:비율`(해외만)을 함께 보내면 두 종목의 체결을 합성한 스프레드 체결을 보낸다(호가는 없다).
+    """
     hub: MarketHub = websocket.app.state.hub
     await websocket.accept()
     if market not in ("domestic", "overseas"):
         await websocket.close(code=CLOSE_BAD_CODE, reason="market은 domestic 또는 overseas여야 합니다")
         return
-    if not (OVERSEAS_CODE_PATTERN if market == "overseas" else CODE_PATTERN).match(code):
+    spread = _parse_legs(legs) if legs else None
+    if legs and (spread is None or market != "overseas"):
+        await websocket.close(code=CLOSE_BAD_CODE, reason="스프레드 구성이 올바르지 않습니다")
+        return
+    plain = code.replace("-", "") if spread else code
+    if not (OVERSEAS_CODE_PATTERN if market == "overseas" else CODE_PATTERN).match(plain):
         await websocket.close(code=CLOSE_BAD_CODE, reason="종목코드 형식이 올바르지 않습니다")
         return
     try:
-        subscriber = await hub.join(code, market)
+        subscriber = await hub.join(code, market, spread)
     except NHConfigError as error:
         reason = str(error) if market == "overseas" else "NH 인증 정보가 설정되지 않았습니다"
         await websocket.close(code=CLOSE_NO_CREDENTIALS, reason=reason)

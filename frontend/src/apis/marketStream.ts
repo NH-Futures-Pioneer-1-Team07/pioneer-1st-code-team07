@@ -15,14 +15,25 @@ export interface MarketStream {
 
 const RETRY_MS = [1000, 2000, 5000];
 
+/** 스프레드 종목의 구성. 서버가 두 종목의 체결을 합성해 보낸다. */
+export type SpreadLegs = { code: string; ratio: number }[] | null | undefined;
+
 export const streamUrl = (
   code: string,
   location: Pick<Location, "protocol" | "host">,
   market: "domestic" | "overseas" = "domestic",
-) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/market?code=${code}&market=${market}`;
+  legs?: SpreadLegs,
+) =>
+  `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/market?code=${code}&market=${market}` +
+  (legs?.length ? `&legs=${legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",")}` : "");
 
 /** 종목의 실시간 체결·호가를 받는다. 끊기면 다시 연결한다. */
-export function useMarketStream(code: string | null, market: "domestic" | "overseas" = "domestic"): MarketStream {
+export function useMarketStream(
+  code: string | null,
+  market: "domestic" | "overseas" = "domestic",
+  legs?: SpreadLegs,
+): MarketStream {
+  const legsKey = legs?.length ? legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",") : "";
   const [stream, setStream] = useState<MarketStream>({
     state: "connecting",
     lastTrade: null,
@@ -40,7 +51,7 @@ export function useMarketStream(code: string | null, market: "domestic" | "overs
     let timer: number | undefined;
 
     const connect = () => {
-      socket = new WebSocket(streamUrl(code, window.location, market));
+      socket = new WebSocket(streamUrl(code, window.location, market, legs));
       socket.onmessage = (event) => {
         retry = 0;
         const message = JSON.parse(event.data) as MarketMessage;
@@ -62,7 +73,7 @@ export function useMarketStream(code: string | null, market: "domestic" | "overs
       window.clearTimeout(timer);
       socket?.close();
     };
-  }, [code, market]);
+  }, [code, market, legsKey]);
 
   return stream;
 }
