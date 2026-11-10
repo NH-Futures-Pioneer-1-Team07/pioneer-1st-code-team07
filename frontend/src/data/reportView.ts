@@ -1,4 +1,15 @@
-import type { ReportPeriod, TableCell } from "../apis/types.ts";
+import type { ParameterSpec, ReportPeriod, TableCell } from "../apis/types.ts";
+
+/** 전략 매니페스트의 파라미터 명세. 이름을 한글로, 값을 단위에 맞게 보여 줄 때 쓴다. */
+export type ParamSpecs = Record<string, ParameterSpec>;
+
+const paramLabel = (name: string, specs?: ParamSpecs) => specs?.[name]?.label ?? name;
+
+/** 퍼센트 단위 파라미터는 비율을 퍼센트로 바꾼다(0.1 → `10%`). 그 밖의 값은 글자 그대로. */
+function paramValue(name: string, value: unknown, specs?: ParamSpecs): string {
+  if (typeof value === "number" && specs?.[name]?.unit === "percent") return `${Number((value * 100).toFixed(6))}%`;
+  return Array.isArray(value) || (typeof value === "object" && value !== null) ? JSON.stringify(value) : String(value);
+}
 
 export const METRIC_LABEL: Record<string, string> = {
   net_pnl: "순손익",
@@ -41,11 +52,11 @@ export function periodName(range: string, periods: ReportPeriod[]): string {
   return found ? found.label : range;
 }
 
-export function columnLabel(name: string, periods: ReportPeriod[]): string {
+export function columnLabel(name: string, periods: ReportPeriod[], specs?: ParamSpecs): string {
   const column = parseColumn(name);
   if (column.kind === "metric") return `${METRIC_LABEL[column.metric]} · ${periodName(column.period, periods)}`;
   if (column.kind === "summary") return SUMMARY_LABEL[column.name];
-  return name;
+  return paramLabel(name, specs);
 }
 
 /** 손익 부호에 따라 색을 입힐 열인지. */
@@ -55,10 +66,11 @@ export function isSigned(name: string): boolean {
   return SIGNED.has(key);
 }
 
-export function formatCell(name: string, value: TableCell): string {
+export function formatCell(name: string, value: TableCell, specs?: ParamSpecs): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "string") return value;
   const column = parseColumn(name);
+  if (column.kind === "param") return paramValue(name, value, specs);
   const key = column.kind === "metric" ? column.metric : column.kind === "summary" ? column.name : "";
   if (PERCENT.has(key)) return `${(value * 100).toFixed(1)}%`;
   if (MONEY.has(key)) return Math.round(value).toLocaleString("ko-KR");
@@ -110,9 +122,8 @@ export function sortRows(rows: TableCell[][], index: number, direction: "asc" | 
 export const roleLabel = (role: string) => (role === "recommended" ? "추천" : "대안");
 
 /** 파라미터 값을 칩에 넣을 글로. */
-export function paramText(name: string, value: unknown): string {
-  const text = Array.isArray(value) || (typeof value === "object" && value !== null) ? JSON.stringify(value) : String(value);
-  return `${name} ${text}`;
+export function paramText(name: string, value: unknown, specs?: ParamSpecs): string {
+  return `${paramLabel(name, specs)} ${paramValue(name, value, specs)}`;
 }
 
 /** 금액을 통화 표시 없이 천 단위 쉼표로. 전략 문서의 단위(계약, 달러)는 보고서 본문이 설명한다. */

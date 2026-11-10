@@ -100,3 +100,17 @@ test("시각은 월.일 시:분으로 줄여 보여 준다", () => {
   assert.equal(shortTime("2026-08-13T23:05:00"), "08.13 23:05");
   assert.equal(shortTime(null), "—");
 });
+
+test("전략 명세가 있으면 파라미터를 한글 이름과 단위로 보여 준다", () => {
+  const specs = {
+    window_days: { default: 40, description: "", editable: true, label: "일봉 쌍 개수", unit: null, min: 5, max: 120 },
+    entry_pct: { default: 0, description: "", editable: true, label: "진입 백분위", unit: "percent" as const, min: 0, max: 0.49 },
+  };
+  assert.equal(paramText("window_days", 60, specs), "일봉 쌍 개수 60");
+  assert.equal(paramText("entry_pct", 0.1, specs), "진입 백분위 10%");
+  assert.equal(paramText("unknown", 3, specs), "unknown 3");
+  assert.equal(columnLabel("entry_pct", [], specs), "진입 백분위");
+  assert.equal(formatCell("entry_pct", 0.02, specs), "2%");
+  assert.equal(formatCell("window_days", 60, specs), "60");
+  assert.equal(formatCell("entry_pct", 0.02), "0.02");
+});
