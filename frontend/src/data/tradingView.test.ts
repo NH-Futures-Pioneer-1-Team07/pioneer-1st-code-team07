@@ -290,3 +290,19 @@ test("스프레드 계산식을 종목과 비율로 만든다", async () => {
   assert.equal(spreadFormula([{ code: "ZFZ26", ratio: 3 }, { code: "ZNZ26", ratio: -2 }]), "3 × ZFZ26 − 2 × ZNZ26");
   assert.equal(spreadFormula([{ code: "A", ratio: -1 }, { code: "B", ratio: 1 }]), "−1 × A + 1 × B");
 });
+
+test("마우스 위치에서 봉과 가격, 시각을 읽는다", async () => {
+  const { candleIndexAt, chartLayout, hoverTime } = await import("./tradingView.ts");
+  assert.equal(candleIndexAt(25, 10, 5), 2);
+  assert.equal(candleIndexAt(0, 10, 5), 0);
+  assert.equal(candleIndexAt(49.9, 10, 5), 4);
+  assert.equal(candleIndexAt(50, 10, 5), null);
+  assert.equal(candleIndexAt(-1, 10, 5), null);
+  assert.equal(candleIndexAt(5, 10, 0), null);
+  assert.equal(hoverTime("2026-11-10T09:05:00+09:00", false), "11.10 09:05");
+  assert.equal(hoverTime("2026-11-10T00:00:00+09:00", true), "2026.11.10");
+  const candles = [{ time: "t", open: 100, high: 110, low: 90, close: 105, volume: 5 }];
+  const layout = chartLayout(candles, 300, 200, 76);
+  assert.ok(Math.abs((layout.price(layout.y(100)) ?? 0) - 100) < 1e-9);
+  assert.equal(layout.price(199), null);
+});
