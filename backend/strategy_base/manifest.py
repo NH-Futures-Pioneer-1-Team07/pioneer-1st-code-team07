@@ -7,7 +7,29 @@ STRATEGY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 SERIES_NAME_PATTERN = STRATEGY_ID_PATTERN
 
 
+class SpreadLeg(BaseModel):
+    """스프레드를 이루는 한 종목. `ratio`가 양수이면 스프레드 값에 더하고 음수이면 뺀다. 절댓값이 한 세트의 계약 수다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1)
+    ratio: int
+
+    @field_validator("ratio")
+    @classmethod
+    def _ratio_not_zero(cls, ratio: int) -> int:
+        if ratio == 0:
+            raise ValueError("스프레드 구성의 계약 비율은 0이 될 수 없습니다")
+        return ratio
+
+
 class Instrument(BaseModel):
+    """전략이 매매하는 종목. `legs`가 있으면 두 종목의 가격을 비율대로 합친 스프레드 종목이다.
+
+    스프레드 종목의 가격은 `sum(비율 × 각 종목 가격)`이고 한 세트가 수량 1이다.
+    `multiplier`·`margin`·`tick_size`는 스프레드 한 세트 기준으로 적는다. 두 종목은 같은 `market`·`exchange`에서 거래한다.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
@@ -17,6 +39,17 @@ class Instrument(BaseModel):
     multiplier: int | None = Field(default=None, gt=0)
     margin: float | None = Field(default=None, gt=0)
     tick_size: float | None = Field(default=None, gt=0)
+    legs: list[SpreadLeg] | None = None
+
+    @model_validator(mode="after")
+    def _check_legs(self) -> "Instrument":
+        if self.legs is None:
+            return self
+        if len(self.legs) != 2:
+            raise ValueError("스프레드 구성은 종목 2개여야 합니다")
+        if self.legs[0].code == self.legs[1].code:
+            raise ValueError("스프레드 구성의 종목코드가 같습니다")
+        return self
 
 
 class BarSpec(BaseModel):
