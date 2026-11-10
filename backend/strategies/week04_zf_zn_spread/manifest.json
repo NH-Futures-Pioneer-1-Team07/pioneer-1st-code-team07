@@ -9,7 +9,7 @@
       "code": "ZFZ26-ZNZ26",
       "multiplier": 1000,
       "margin": 8251,
-      "tick_size": 0.0078125,
+      "tick_size": 0.0546875,
       "legs": [
         {"code": "ZFZ26", "ratio": 3},
         {"code": "ZNZ26", "ratio": -2}

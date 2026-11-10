@@ -54,6 +54,16 @@ def pair_bars(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, in
     return paired
 
 
+def _notional(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, int]) -> list[float]:
+    """같은 시각 유효한 쌍의 두 종목 종가 × |비율|의 합. 수수료 계산 가격으로 쓴다."""
+    others = {bar.time: bar for bar in second if is_valid(bar)}
+    return [
+        abs(ratios[0]) * bar.close + abs(ratios[1]) * others[bar.time].close
+        for bar in first
+        if is_valid(bar) and bar.time in others
+    ]
+
+
 def _ratios(legs: Sequence[SpreadLeg]) -> tuple[int, int]:
     return legs[0].ratio, legs[1].ratio
 
@@ -73,11 +83,13 @@ def spread_loader(base, legs: Sequence[SpreadLeg]):
             )
         first, second = loaded
         days: dict[date, list[Bar]] = {}
+        notional: list[float] = []
         for day in sorted(set(first.days) & set(second.days)):
             bars = pair_bars(first.days[day], second.days[day], _ratios(legs))
             if bars:
                 days[day] = bars
-        return LoadedData(days, None)
+                notional.extend(_notional(first.days[day], second.days[day], _ratios(legs)))
+        return LoadedData(days, None, sum(notional) / len(notional) if notional else None)
 
     return load
 
@@ -94,3 +106,22 @@ def spread_daily_fetcher(base: DailyFetcher) -> DailyFetcher:
         return pair_bars(bars[0], bars[1], _ratios(instrument.legs), daily=True)[-quantity:]
 
     return fetch
+
+
+def loader_for(instrument: Instrument, base):
+    """`legs`가 있는 종목이면 스프레드 로더로 감싸고, 아니면 그대로 돌려준다."""
+    return spread_loader(base, instrument.legs) if instrument.legs else base
+
+
+class SpreadProbe:
+    """두 종목의 날짜별 분봉 수를 합쳐 백테스트 가능 기간을 찾는 데 쓴다. 두 종목 중 적은 쪽을 그날의 봉 수로 본다."""
+
+    def __init__(self, probes: Sequence):
+        self._probes = probes
+
+    def bars_on(self, day: date) -> int:
+        return min(probe.bars_on(day) for probe in self._probes)
+
+    def last_trading_day(self) -> date | None:
+        days = [probe.last_trading_day() for probe in self._probes]
+        return min((day for day in days if day), default=None)

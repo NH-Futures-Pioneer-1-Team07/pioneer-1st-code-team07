@@ -32,6 +32,7 @@ from app.runners.overseas import (
     overseas_instrument_ready,
 )
 from app.runners.series import DailyFetcher, days_needed, nh_daily_fetcher, warmup_start
+from app.runners.spread import SpreadProbe, loader_for, spread_daily_fetcher
 from strategy_base.manifest import Manifest
 from strategy_base.models import Bar
 from strategy_base.registry import RegisteredStrategy, StrategyRegistry
@@ -57,6 +58,8 @@ class BacktestRejected(Exception):
 class LoadedData:
     days: dict[date, list[Bar]]
     last_trading_day: date | None
+    # 스프레드 종목의 수수료 계산 가격(두 종목 체결대금 합의 기간 평균). 일반 종목은 `None`이다.
+    fee_price: float | None = None
 
 
 # (종목코드, 봉 분 단위, 시작일, 종료일, 진행 알림(완료 일수, 전체 일수)) -> 데이터
@@ -64,20 +67,27 @@ DataLoader = Callable[[str, int, date, date, Callable[[int, int], None]], Loaded
 
 
 def describe_assumptions(
-    settings: Settings, tick_size: float | None = None, slippage_ticks: int | None = None
+    settings: Settings,
+    tick_size: float | None = None,
+    slippage_ticks: int | None = None,
+    fee_price: float | None = None,
 ) -> dict[str, Any]:
     """백테스트의 비용·체결 가정. 실행 기록과 수수료 조회 API가 같은 내용을 쓴다."""
     rate = settings.backtest_fee_rate
     return {
         "fee": {
             "rate": rate,
-            "basis": "체결대금(체결가 × 거래승수 × 수량)",
+            "basis": (
+                "체결대금(체결가 × 거래승수 × 수량)"
+                if fee_price is None
+                else f"두 종목 체결대금의 합(기간 평균 {fee_price:.4f} × 거래승수 × 수량)"
+            ),
             "source": FEE_SOURCE if rate == DEFAULT_FEE_RATE else "환경변수 BACKTEST_FEE_RATE로 지정",
         },
         "slippage": {
             "ticks": settings.backtest_slippage_ticks if slippage_ticks is None else slippage_ticks,
             "tick_size": tick_size,
-            "direction": "시장가 체결마다 불리한 방향",
+            "direction": "시장가 체결마다 불리한 방향" if fee_price is None else "시장가 체결마다 두 종목 모두 1호가씩 불리한 방향(스프레드 1틱)",
         },
         "fill": {
             "on_bar": "봉 마감 판단의 시장가 주문은 다음 봉 시가에 전량 체결(그날 마지막 봉이면 그 봉 종가)",
@@ -173,12 +183,14 @@ class BacktestService:
 
     def _make_loader(self, instrument: Any) -> DataLoader:
         if self._loader_factory is not None:
-            return self._loader_factory()
+            return loader_for(instrument, self._loader_factory())
         if instrument.market == "overseas":
-            return overseas_loader(NHClient(self._settings, market="overseas"), instrument.exchange or "")
-        return nh_loader(NHClient(self._settings))
+            return loader_for(instrument, overseas_loader(NHClient(self._settings, market="overseas"), instrument.exchange or ""))
+        return loader_for(instrument, nh_loader(NHClient(self._settings)))
 
     def _make_probe(self, instrument: Any, minutes: int) -> ProbeSource:
+        if instrument.legs:
+            return SpreadProbe([self._make_probe(instrument.model_copy(update={"code": leg.code, "legs": None}), minutes) for leg in instrument.legs])
         if self._probe_factory is not None:
             return self._probe_factory(instrument.code or "", minutes)
         if instrument.market == "overseas":
@@ -264,7 +276,7 @@ class BacktestService:
     def _extra_inputs(self, manifest: Manifest, instrument: Any, start: date) -> ExtraInputs:
         series = {}
         if manifest.series:
-            bars = self._daily_fetcher(instrument, days_needed(start, datetime.now(KST).date()))
+            bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(start, datetime.now(KST).date()))
             series = {name: bars for name in manifest.series}
         return ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
 
@@ -339,7 +351,7 @@ class BacktestService:
             if manifest.backtest
             else instrument.tick_size or infer_tick(loaded.days)
         )
-        described = describe_assumptions(self._settings, tick, slippage_ticks)
+        described = describe_assumptions(self._settings, tick, slippage_ticks, loaded.fee_price)
         if price_data is not None:
             described["fill"]["on_bar"] = "봉 마감 청산 주문은 다음 관측 1분 시가에 체결. 진입은 다음 가격에서 조건 검사. 당일 청산 미완료는 오류"
             described["fill"]["on_price"] = "관측 1분 가격 경로 판단의 시장가 주문은 해당 재현 가격에 전량 체결"
@@ -353,6 +365,7 @@ class BacktestService:
             slippage_ticks=self._settings.backtest_slippage_ticks if slippage_ticks is None else slippage_ticks,
             multiplier=instrument.multiplier or 1,
             tick_size=tick,
+            fee_price=loaded.fee_price,
         )
         engine_type = MinuteBacktestEngine if price_data is not None else BacktestEngine
         extra = {"minute_days": price_data.days} if price_data is not None else {}
