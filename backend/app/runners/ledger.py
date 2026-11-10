@@ -48,8 +48,11 @@ class Applied:
 
 
 class Ledger:
-    def __init__(self, *, multiplier: int, fee_rate: float, initial_capital: float = 0.0):
+    def __init__(
+        self, *, multiplier: int, fee_rate: float, initial_capital: float = 0.0, fee_price: float | None = None
+    ):
         self.multiplier = multiplier
+        self.fee_price = fee_price
         self.fee_rate = fee_rate
         self.initial_capital = initial_capital
         self.positions: dict[str, Position] = {}
@@ -60,7 +63,8 @@ class Ledger:
         self.losses = 0
 
     def fee_for(self, price: float, quantity: int) -> float:
-        return price * self.multiplier * quantity * self.fee_rate
+        # 스프레드처럼 체결가가 체결대금을 나타내지 못하는 종목은 정해 둔 가격으로 수수료를 계산한다.
+        return (self.fee_price or price) * self.multiplier * quantity * self.fee_rate
 
     @property
     def net_pnl(self) -> float:

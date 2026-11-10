@@ -14,6 +14,7 @@ from app.runners.inputs import ExtraInputs
 from app.runners.minute_backtest import MinuteBacktestEngine
 from app.runners.series import DailyFetcher, days_needed, warmup_start
 from app.runners.service import HISTORY_DAYS, MAX_SLIPPAGE_TICKS, DataLoader, LoadedData
+from app.runners.spread import loader_for, spread_daily_fetcher
 from app.sweep.recorder import SweepRecorder
 from app.sweep.spec import Combo, SweepSpec, expand
 from app.sweep.store import SweepStore, combo_id
@@ -129,13 +130,14 @@ class SweepRunner:
 
         self._log(f"분봉 준비: {first} ~ {last}")
         warm_from = warmup_start(first, HISTORY_DAYS) if manifest.history_bars else first
-        loaded = self._loader(code, minutes, warm_from, last, lambda done, total: None)
+        loader = loader_for(instrument, self._loader)
+        loaded = loader(code, minutes, warm_from, last, lambda done, total: None)
         prices: LoadedData | None = None
         if manifest.backtest is not None:
-            prices = self._loader(code, manifest.backtest.price_minutes, first, last, lambda done, total: None)
+            prices = loader(code, manifest.backtest.price_minutes, first, last, lambda done, total: None)
         series: dict[str, list[Bar]] = {}
         if manifest.series:
-            bars = self._daily_fetcher(instrument, days_needed(first, self._today()))
+            bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(first, self._today()))
             series = {name: bars for name in manifest.series}
         extras = ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
 
@@ -192,6 +194,7 @@ class SweepRunner:
                 slippage_ticks=slippage,
                 multiplier=instrument.multiplier or 1,
                 tick_size=tick,
+                fee_price=loaded.fee_price,
             ),
             initial_capital=initial_capital,
             minutes=minutes,
