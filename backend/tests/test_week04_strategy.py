@@ -52,7 +52,7 @@ def lot(side):
 
 def test_manifest_and_defaults():
     strategy, manifest = load()
-    assert manifest.default_params() == {"window_days": 40, "entry_pct": 0, "exit_buffer_ratio": 0.001}
+    assert manifest.default_params() == {"window_days": 40, "entry_pct": 0, "exit_buffer_ratio": 0.001, "entry_confirm_seconds": 30}
     assert manifest.instruments[0].legs[1].ratio == -2
     assert manifest.override_problem({"window_days": 4}) is not None
     assert manifest.override_problem({"entry_pct": 0.5}) is not None
