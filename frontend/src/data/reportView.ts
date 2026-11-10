@@ -114,3 +114,12 @@ export function paramText(name: string, value: unknown): string {
   const text = Array.isArray(value) || (typeof value === "object" && value !== null) ? JSON.stringify(value) : String(value);
   return `${name} ${text}`;
 }
+
+/** 금액을 통화 표시 없이 천 단위 쉼표로. 전략 문서의 단위(계약, 달러)는 보고서 본문이 설명한다. */
+export const moneyText = (value: number) => Math.round(value).toLocaleString("ko-KR");
+
+/** `2026-08-13T23:05:00+09:00` → `08.13 23:05`. 없으면 `—`. */
+export function shortTime(time: string | null | undefined): string {
+  if (!time) return "—";
+  return `${time.slice(5, 10).replace("-", ".")} ${time.slice(11, 16)}`;
+}

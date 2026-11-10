@@ -87,3 +87,16 @@ test("파라미터 값을 이름과 함께 글로 만든다", () => {
   assert.equal(paramText("profit_loss_rate", 0.4), "profit_loss_rate 0.4");
   assert.equal(paramText("vix_thresholds", [15, 20]), "vix_thresholds [15,20]");
 });
+
+import { moneyText, shortTime } from "./reportView.ts";
+
+test("금액은 반올림해 천 단위 쉼표로 보여 준다", () => {
+  assert.equal(moneyText(63224.4), "63,224");
+  assert.equal(moneyText(-989.6), "-990");
+});
+
+test("시각은 월.일 시:분으로 줄여 보여 준다", () => {
+  assert.equal(shortTime("2026-08-13T23:05:00+09:00"), "08.13 23:05");
+  assert.equal(shortTime("2026-08-13T23:05:00"), "08.13 23:05");
+  assert.equal(shortTime(null), "—");
+});
