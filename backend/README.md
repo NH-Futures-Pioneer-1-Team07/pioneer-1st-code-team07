@@ -69,6 +69,7 @@ uv run pytest
    - `bar`: 판단 기준 봉 단위. 봉이 마감될 때마다 `on_bar`가 호출된다. 예: `{"unit": "minute", "size": 3}`
    - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
    - `instruments[].tick_size`(선택): 호가 단위. 백테스트의 슬리피지와 가격 경로가 쓰며, 없으면 봉 가격 차이로 추정한다(소수 둘째 자리까지만 구별하므로 ZN처럼 1/64 단위인 종목은 적어야 한다).
+   - `instruments[].legs`(선택): 두 종목의 가격을 비율대로 합친 스프레드 종목을 선언한다. `[{"code": "ZFZ26", "ratio": 3}, {"code": "ZNZ26", "ratio": -2}]`처럼 종목 2개를 쓰며 스프레드 가격은 `3 × ZFZ26 − 2 × ZNZ26`이고 한 세트가 수량 1이다. 이때 `multiplier`·`margin`·`tick_size`는 한 세트 기준으로 적는다. `app/runners/spread.py`가 두 종목의 일봉(기준일)과 분봉(봉 시작 시각)을 짝지어 스프레드 봉을 만든다. 양쪽 종가가 양수이고 거래량이 0보다 큰 쌍만 쓰고, 고가·저가는 합친 시가와 종가의 최댓값·최솟값, 거래량은 두 종목 중 작은 값이다.
    - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
    - `chart_lines`(선택): 모의매매 차트에 그릴 판단용 선. 항목은 `series`(`bar`는 판단 기준 봉 차트, `daily`는 일봉 차트), `kind`(`sma` 단순이동평균은 `period` 필요, `previous_close` 직전 거래일 종가선은 일봉만), `label`, 마우스를 올렸을 때 보이는 `description`이다. `label`을 `describe`의 항목 이름과 같게 쓰면 "현재 판단" 패널의 같은 항목에도 설명이 붙는다.
    - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
