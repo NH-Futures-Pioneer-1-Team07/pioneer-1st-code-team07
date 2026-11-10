@@ -6,8 +6,74 @@
 - [모의매매 및 백테스트 프로그램 요구사항](docs/REQUIREMENTS.md)
 - [프론트엔드 기술 스택과 폴더 구조](frontend/README.md)
 - [백엔드 기술 스택](backend/README.md)
+- [조합 탐색 사용법](backend/README.md#조합-탐색), [검증 보고서 형식](backend/reports/README.md)
 
 > 실거래 전에 반드시 모의 환경(`TRADING_ENV=mock`)에서 충분히 시험. 매매 결과의 책임은 사용자에게 있음.
+
+## 전략 검증 흐름
+
+전략의 파라미터(테스트 기간 포함) 조합을 여러 개 백테스트해 결과를 쌓고, 쌓인 결과로 가장 적절한 조합과 그 근거를 보고서로 정리해 대시보드에서 확인하는 흐름이다. 조합 실행과 보고서 작성은 **로컬 Codex 스킬**이 맡고, 계산과 저장은 코드가 한다. LLM API는 호출하지 않는다.
+
+```mermaid
+flowchart LR
+    Doc["전략 문서<br/>docs/strategies/"] --> Code["전략 코드<br/>backend/strategies/"]
+    Code --> RunSkill["스킬 sweep-run<br/>조합 제안·실행"]
+    RunSkill -->|"python -m app.sweep run"| Sweeps[("backend/sweeps/<br/>결과·거래·요청")]
+    Sweeps -->|"python -m app.sweep table"| Table["reports/…/table.csv"]
+    Table --> ReportSkill["스킬 sweep-report<br/>report.md 작성·갱신"]
+    ReportSkill -->|"다음 탐색 요청"| RunSkill
+    ReportSkill --> Dash["대시보드<br/>검증 리포트 탭"]
+    Sweeps --> Dash
+    ReportSkill -->|"후보 확정"| Official["백테스트 화면<br/>runs/ 공식 기록"]
+```
+
+### 단계별 동작과 기록 위치
+
+| 단계 | 하는 일 | 하는 주체 | 생기는 파일 | 커밋 |
+|---|---|---|---|---|
+| 1. 전략 작성 | 한글 전략 문서를 쓰고 코드로 만든다. 조절할 파라미터와 허용 범위는 `manifest.json`에 둔다 | 사용자, Codex | `docs/strategies/<전략>.md`, `backend/strategies/<전략 id>/` | 예 |
+| 2. 조합 제안 | 전략 문서·파라미터·가능 기간·기존 결과를 읽고 조합과 기간 묶음을 제안한다. 사용자가 확인한다 | 스킬 `sweep-run` | `backend/sweeps/<전략 id>/requests/<날짜>-<설명>.json` (요청 파일) | 예 |
+| 3. 조합 실행 | 조합마다 백테스트하고 결과를 쌓는다. 같은 정의의 조합은 건너뛴다. 조합 하나는 약 1초 | `python -m app.sweep run` | `backend/sweeps/<전략 id>/results.jsonl` (조합×기간 한 줄: 정의·성과 요약·일별 자산)<br/>`backend/sweeps/<전략 id>/trades/<id>.jsonl` (거래·체결) | 예 |
+| 3-1. 분봉 저장 | 받은 분봉을 저장해 다음 실행에서 모자란 구간만 받는다 | `python -m app.sweep run` | `backend/data/minute_cache/` | **아니오** |
+| 4. 비교표 | 쌓인 결과로 조합 × 기간 비교표를 만든다 | `python -m app.sweep table` | `backend/reports/<전략 id>/<보고서 이름>/table.csv` | 예 |
+| 5. 보고서 | 추천 조합과 근거(기간별 일관성, 이웃 조합 안정성, 비용, 위험, 시도 횟수), 위험과 한계, 다음 탐색 요청을 쓴다. 갱신하면 같은 파일을 덮어쓰고 이전 내용은 Git 이력에 남는다 | 스킬 `sweep-report` | `backend/reports/<전략 id>/<보고서 이름>/report.md` | 예 |
+| 6. 반복 | 보고서의 "다음 탐색 제안"(`sweep-request` 블록)으로 2~5단계를 되풀이한다 | 스킬 | 위와 같음 | 예 |
+| 7. 확인 | 대시보드 **검증 리포트** 탭에서 보고서를 골라 본문·비교표·그래프·거래를 본다 | 사용자 | 없음(읽기만) | - |
+| 8. 후보 확정 | 고른 조합을 백테스트 화면에서 한 번 더 실행해 판단·주문·체결 전체 기록을 남긴다 | 사용자 | `backend/runs/<전략 id>/backtest/<실행 일시>/` | 예 |
+
+### 스킬
+
+스킬은 절차만 담고, 수치 계산과 저장은 명령이 한다. 스킬 파일은 `.agents/skills/<이름>/SKILL.md`이고 이 저장소 안에서만 쓴다.
+
+| 스킬 | 언제 쓰나 | 하는 일 | 하지 않는 일 |
+|---|---|---|---|
+| `sweep-run` | 파라미터를 바꿔 가며 성과를 비교하거나, 탐색을 이어서 더 돌릴 때 | 가능 기간 확인 → 조합 제안 → 요청 파일 작성 → `--dry-run` → 실행 → 건수·실패 보고. 한 번에 200회(조합×기간)를 넘기지 않는다 | 전략 코드·`manifest.json`·기존 결과 수정, 키 출력, 확인 없는 대규모 탐색 |
+| `sweep-report` | 쌓인 결과로 적절한 조합을 근거와 함께 정리하거나, 새 결과를 기존 보고서에 반영할 때 | `table.csv` 생성 → 분석 → `report.md` 작성·갱신(변경 이력 한 줄 추가) → 수치와 `id` 대조 | 수치를 암산·기억으로 쓰기, 결과 파일 수정, 투자 자문 표현 |
+
+Codex에는 이렇게 요청한다.
+
+```text
+week03 ZN 전략의 익절·손절 기준을 0.05~1.0으로 바꿔 가며 sweep-run으로 탐색해 줘.
+쌓인 결과로 sweep-report 스킬로 보고서를 갱신해 줘.
+```
+
+### 직접 실행하는 명령
+
+백엔드 폴더에서 실행한다. 자세한 사용법은 [backend/README.md](backend/README.md#조합-탐색)에 있다.
+
+```bash
+uv run python -m app.sweep range <전략 id>
+uv run python -m app.sweep run <요청.json> --dry-run
+uv run python -m app.sweep run <요청.json>
+uv run python -m app.sweep table <전략 id> --name <보고서 이름>
+```
+
+### 알아 둘 점
+
+- 봉마다 남는 판단(`decision`)과 주문은 `sweeps/`에 저장하지 않는다. 백테스트 기록 용량의 대부분이라서다. 거래(`trade`)와 체결(`fill`)만 저장한다.
+- 구간은 포지션을 비운 채 독립적으로 시작하므로 전체 기간 순손익은 구간 순손익의 합과 다르다.
+- 조합이 늘수록 `sweeps/trades/`가 커진다. 전체 기간(약 3개월) 조합 100개에 약 16~19MB다.
+- 보고서는 모의 백테스트의 비교 결과이며 투자 판단의 근거가 아니다.
 
 ## NH선물 Open API 신청
 
@@ -103,7 +169,9 @@ cd frontend && npm test
 ```text
 pioneer-1st-code-team07/
 ├── AGENTS.md                         AI 에이전트 작업 지침
-├── .agents/skills/                   Codex 전용 스킬 (조합 탐색 실행 sweep-run, 보고서 작성 sweep-report)
+├── .agents/skills/                   이 저장소 전용 Codex 스킬
+│   ├── sweep-run/SKILL.md            조합 탐색 실행
+│   └── sweep-report/SKILL.md         검증 보고서 작성·갱신
 ├── README.md
 ├── .github/
 │   ├── ISSUE_TEMPLATE/task.md        이슈 양식
@@ -172,9 +240,10 @@ pioneer-1st-code-team07/
 │   │   ├── _template/                새 전략용 템플릿
 │   │   └── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
 │   ├── data/vixcls.csv               VIX 일 종가 데이터
+│   ├── data/minute_cache/            조합 탐색이 받아 둔 분봉 (Git에 올리지 않음)
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
-│   ├── sweeps/                       조합 탐색 결과 (조합별 요약·거래·체결)
-│   ├── reports/                      검증 보고서와 비교표 (README.md에 형식 설명)
+│   ├── sweeps/                       조합 탐색 결과 (<전략 id>/results.jsonl, trades/, requests/)
+│   ├── reports/                      검증 보고서 (<전략 id>/<이름>/report.md, table.csv. README.md에 형식 설명)
 │   └── tests/                        백엔드 테스트
 ├── frontend/                         React 화면 (TypeScript)
 │   ├── package.json, vite.config.ts  의존성·개발 서버·프록시
@@ -210,6 +279,9 @@ pioneer-1st-code-team07/
 | `NH_OVERSEAS_APP_SECRET` | 해외 종목 시 | 해외 API용 APP Secret Key |
 | `STRATEGIES_DIR` | 선택 | 전략 폴더 위치. 기본 `backend/strategies` |
 | `RUNS_DIR` | 선택 | 실행 기록 위치. 기본 `backend/runs` |
+| `SWEEPS_DIR` | 선택 | 조합 탐색 결과 위치. 기본 `backend/sweeps` |
+| `REPORTS_DIR` | 선택 | 검증 보고서 위치. 기본 `backend/reports` |
+| `MINUTE_CACHE_DIR` | 선택 | 조합 탐색이 저장하는 분봉 위치. 기본 `backend/data/minute_cache` |
 | `BACKTEST_FEE_RATE` | 선택 | 백테스트 수수료율. 기본 0.0085% |
 | `BACKTEST_SLIPPAGE_TICKS` | 선택 | 백테스트 슬리피지 틱 수. 기본 1 |
 
@@ -332,8 +404,13 @@ flowchart LR
     Browser["브라우저<br/>React"] -->|"REST /api · WebSocket /ws"| Backend["FastAPI"]
     Backend --> Strategy["전략<br/>strategies/"]
     Backend --> Runs[("실행 기록<br/>runs/")]
+    Backend --> Reports[("검증 보고서·조합 결과<br/>reports/ · sweeps/")]
     Backend -->|"시세·주문·계좌"| NH["NH선물 Open API"]
+    Codex["Codex 스킬<br/>sweep-run · sweep-report"] -->|"python -m app.sweep"| Sweep["조합 탐색<br/>app/sweep/"]
+    Sweep --> Reports
+    Sweep -->|"분봉(저장해 재사용)"| NH
 ```
 
 - 모의매매와 백테스트는 같은 전략 코드를 호출.
+- 조합 탐색은 서버 없이 같은 백테스트 엔진을 직접 호출하고, 백엔드는 쌓인 결과와 보고서를 읽기만 함.
 - 매매 실행은 백엔드가 관리. 프론트엔드는 조회·실행 요청만 수행.
