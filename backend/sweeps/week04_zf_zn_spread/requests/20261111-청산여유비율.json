@@ -1,0 +1,1 @@
+{"strategy_id":"week04_zf_zn_spread","initial_capital":100000,"periods": [{"start":"2026-08-11","end":"2026-11-10"},{"start":"2026-08-11","end":"2026-09-15"},{"start":"2026-09-16","end":"2026-10-13"},{"start":"2026-10-14","end":"2026-11-10"}],"grid":{"exit_buffer_ratio":[0,0.0005,0.001,0.003,0.01,0.03]}}
