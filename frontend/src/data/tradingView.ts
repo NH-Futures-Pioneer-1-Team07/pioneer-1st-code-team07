@@ -27,6 +27,17 @@ export function instrumentLabel(name: string): string {
   return name;
 }
 
+/** 스프레드 계산식. 예: `3 × ZFZ26 − 2 × ZNZ26` */
+export function spreadFormula(legs: { code: string; ratio: number }[]): string {
+  return legs
+    .map((leg, index) => {
+      const sign = leg.ratio < 0 ? "−" : "+";
+      const term = `${Math.abs(leg.ratio)} × ${leg.code}`;
+      return index === 0 ? (leg.ratio < 0 ? `−${term}` : term) : ` ${sign} ${term}`;
+    })
+    .join("");
+}
+
 const MONTH_CODES = "FGHJKMNQUVXZ";
 
 /** CME 종목코드(`ZFZ26`)의 월물을 `2026년 12월물` 형식으로 읽는다. 읽을 수 없으면 `null`. */

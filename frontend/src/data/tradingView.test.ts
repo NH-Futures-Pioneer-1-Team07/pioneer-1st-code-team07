@@ -284,3 +284,9 @@ test("종목코드의 월물을 읽어 만기 안내 문구를 만든다", async
   assert.equal(expiryNote(["ZFZ26", "ZNH27"]), "ZFZ26 2026년 12월물, ZNH27 2027년 3월물입니다. 만기 전에 직접 운용을 종료하세요.");
   assert.equal(expiryNote(["A116B000"]), null);
 });
+
+test("스프레드 계산식을 종목과 비율로 만든다", async () => {
+  const { spreadFormula } = await import("./tradingView.ts");
+  assert.equal(spreadFormula([{ code: "ZFZ26", ratio: 3 }, { code: "ZNZ26", ratio: -2 }]), "3 × ZFZ26 − 2 × ZNZ26");
+  assert.equal(spreadFormula([{ code: "A", ratio: -1 }, { code: "B", ratio: 1 }]), "−1 × A + 1 × B");
+});

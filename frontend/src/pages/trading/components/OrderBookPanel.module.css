@@ -59,3 +59,24 @@
     min-height: 24px;
   }
 }
+.formula {
+  margin: 4px 0 14px;
+  padding: 10px 8px;
+  background: var(--bg-elevated);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  word-break: keep-all;
+}
+.notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: keep-all;
+}
