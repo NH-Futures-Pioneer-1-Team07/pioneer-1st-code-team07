@@ -274,3 +274,13 @@ test("경계선은 판단 기준 봉과 일봉 차트에만 그린다", () => {
   assert.equal(showsLevels("1", 5), false);
   assert.equal(showsLevels("5", null), false);
 });
+
+test("종목코드의 월물을 읽어 만기 안내 문구를 만든다", async () => {
+  const { contractMonth, expiryNote } = await import("./tradingView.ts");
+  assert.equal(contractMonth("ZFZ26"), "2026년 12월물");
+  assert.equal(contractMonth("ZNH27"), "2027년 3월물");
+  assert.equal(contractMonth("A116B000"), null);
+  assert.equal(expiryNote(["ZFZ26", "ZNZ26"]), "ZFZ26·ZNZ26은 2026년 12월물입니다. 만기 전에 직접 운용을 종료하세요.");
+  assert.equal(expiryNote(["ZFZ26", "ZNH27"]), "ZFZ26 2026년 12월물, ZNH27 2027년 3월물입니다. 만기 전에 직접 운용을 종료하세요.");
+  assert.equal(expiryNote(["A116B000"]), null);
+});

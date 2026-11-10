@@ -3,7 +3,7 @@ import Icon from "../../../components/common/Icon";
 import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
 import { currencyOf, currencyUnit, dash, formatMoney, formatNumber, moneyIn, pnlClass } from "../../../data/format";
-import { instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
+import { expiryNote, instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
 import { startTrading } from "../../../apis/trading";
 import styles from "./ControlPanel.module.css";
 
@@ -25,11 +25,9 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
     quote,
     pnl,
     paramInputs,
-    endAt,
-    setEndAt,
     act,
   } = ctl;
-  const needsEnd = !!instrument?.legs?.length;
+  const expiry = instrument?.legs ? expiryNote(instrument.legs.map((leg) => leg.code)) : null;
   const currency = currencyOf(instrument?.market);
   return (
     <section className={`panel ${styles.control}`} aria-labelledby="run-title">
@@ -103,22 +101,12 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
         </p>
       </div>
       {!running && <EditableParams inputs={paramInputs} idPrefix="trading-param" />}
-      {!running && needsEnd && (
-        <div className="field" style={{ marginBottom: 18 }}>
-          <label htmlFor="trading-end-at">운용 종료 일시 (한국 시간)</label>
-          <input
-            id="trading-end-at"
-            type="datetime-local"
-            value={endAt}
-            onChange={(event) => setEndAt(event.target.value)}
-          />
-        </div>
-      )}
+      {expiry && <p className={styles.expiryNote}>{expiry}</p>}
       {!running ? (
         <button
           className={`button primary ${styles.fullButton}`}
-          disabled={busy || !strategyId || clearing || !!paramInputs.problem || (needsEnd && !endAt)}
-          onClick={() => void act(() => startTrading(strategyId as string, paramInputs.body(), needsEnd ? endAt : undefined))}
+          disabled={busy || !strategyId || clearing || !!paramInputs.problem}
+          onClick={() => void act(() => startTrading(strategyId as string, paramInputs.body()))}
         >
           <Icon name="play" size={15} />
           운용 시작

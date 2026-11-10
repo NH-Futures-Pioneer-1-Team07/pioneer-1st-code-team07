@@ -27,6 +27,23 @@ export function instrumentLabel(name: string): string {
   return name;
 }
 
+const MONTH_CODES = "FGHJKMNQUVXZ";
+
+/** CME 종목코드(`ZFZ26`)의 월물을 `2026년 12월물` 형식으로 읽는다. 읽을 수 없으면 `null`. */
+export function contractMonth(code: string): string | null {
+  const match = /^[A-Z0-9]{1,3}([FGHJKMNQUVXZ])(\d{2})$/.exec(code);
+  return match ? `20${match[2]}년 ${MONTH_CODES.indexOf(match[1]) + 1}월물` : null;
+}
+
+/** 월물이 있는 종목들의 만기 안내 문구. 종료는 사람이 직접 한다. */
+export function expiryNote(codes: string[]): string | null {
+  const months = codes.map(contractMonth);
+  if (months.length === 0 || months.some((month) => month === null)) return null;
+  const same = months.every((month) => month === months[0]);
+  const subject = same ? `${codes.join("·")}은 ${months[0]}` : codes.map((code, i) => `${code} ${months[i]}`).join(", ");
+  return `${subject}입니다. 만기 전에 직접 운용을 종료하세요.`;
+}
+
 /** 상단바 장 상태 앞에 붙는 시장 이름. */
 export const marketNameLabel = (market: "domestic" | "overseas" | null | undefined): string =>
   market === "overseas" ? "해외장" : "국내장";

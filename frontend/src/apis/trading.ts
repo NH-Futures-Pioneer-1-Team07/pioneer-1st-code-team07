@@ -25,12 +25,11 @@ export const fetchStatus = () =>
 export const fetchAccount = (market: "domestic" | "overseas" = "domestic") =>
   http.get<AccountView>("/api/trading/account", { params: { market } }).then((r) => r.data);
 
-export const startTrading = (strategyId: string, params?: Record<string, number>, endAt?: string) =>
+export const startTrading = (strategyId: string, params?: Record<string, number>) =>
   http
     .post<RunRef>("/api/trading/start", {
       strategy_id: strategyId,
       ...(params && Object.keys(params).length ? { params } : {}),
-      ...(endAt ? { end_at: endAt } : {}),
     })
     .then((r) => r.data);
 
