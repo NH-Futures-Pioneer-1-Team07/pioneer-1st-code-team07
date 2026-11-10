@@ -23,7 +23,7 @@ export default function ReportTable({ table, periods, specs }: { table: Table; p
   );
   const [sort, setSort] = useState<{ index: number; direction: "asc" | "desc" } | null>(null);
 
-  const shown = visibleColumns(table.columns, metrics);
+  const shown = visibleColumns(table.columns, metrics, periods);
   const rows = useMemo(
     () => (sort ? sortRows(table.rows, sort.index, sort.direction) : table.rows),
     [table.rows, sort],

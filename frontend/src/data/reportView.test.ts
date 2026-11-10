@@ -114,3 +114,14 @@ test("전략 명세가 있으면 파라미터를 한글 이름과 단위로 보�
   assert.equal(formatCell("window_days", 60, specs), "60");
   assert.equal(formatCell("entry_pct", 0.02), "0.02");
 });
+
+test("기간별 열은 머리말의 기간 순서로 놓고 파라미터·요약 열은 앞에 둔다", () => {
+  const columns = ["a", "net_pnl[2026-08-11~2026-09-15]", "net_pnl[2026-08-11~2026-11-10]", "positive_periods", "net_pnl[2026-09-16~2026-10-13]", "net_pnl[x~y]"];
+  const periods = [
+    { label: "전체", start: "2026-08-11", end: "2026-11-10", kind: "full" as const },
+    { label: "구간1", start: "2026-08-11", end: "2026-09-15", kind: "split" as const },
+    { label: "구간2", start: "2026-09-16", end: "2026-10-13", kind: "split" as const },
+  ];
+  assert.deepEqual(visibleColumns(columns, new Set(["net_pnl"]), periods), [0, 3, 2, 1, 4, 5]);
+  assert.deepEqual(visibleColumns(columns, new Set(["net_pnl"])), [0, 3, 1, 2, 4, 5]);
+});

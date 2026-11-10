@@ -90,13 +90,23 @@ export function metricsIn(columns: string[]): string[] {
 }
 
 /** 파라미터·요약 열은 항상, 기간별 지표 열은 고른 지표만 보인다. 보일 열의 위치를 돌려준다. */
-export function visibleColumns(columns: string[], metrics: ReadonlySet<string>): number[] {
+export function visibleColumns(columns: string[], metrics: ReadonlySet<string>, periods: ReportPeriod[] = []): number[] {
   const shown: number[] = [];
   columns.forEach((name, index) => {
     const column = parseColumn(name);
     if (column.kind !== "metric" || metrics.has(column.metric)) shown.push(index);
   });
-  return shown;
+  // 기간별 열은 머리말의 기간 순서(전체, 구간1, …)로 놓는다. 파라미터·요약 열이 앞이고, 모르는 기간은 뒤다.
+  const rank = (index: number) => {
+    const column = parseColumn(columns[index]);
+    if (column.kind !== "metric") return -1;
+    const found = periods.findIndex((period) => `${period.start}~${period.end}` === column.period);
+    return found < 0 ? periods.length : found;
+  };
+  return shown
+    .map((index, order) => ({ index, order }))
+    .sort((a, b) => rank(a.index) - rank(b.index) || a.order - b.order)
+    .map((item) => item.index);
 }
 
 /** 열 하나로 정렬한 새 배열. 빈 칸은 방향과 관계없이 맨 아래에 둔다. */
