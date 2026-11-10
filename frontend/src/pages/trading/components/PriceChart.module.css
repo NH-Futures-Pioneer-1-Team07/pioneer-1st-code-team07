@@ -54,8 +54,8 @@
 }
 .frame {
   position: relative;
-  flex: 1;
-  min-height: 220px;
+  height: 340px;
+  flex: none;
 }
 .svg {
   position: absolute;
