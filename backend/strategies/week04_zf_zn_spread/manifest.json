@@ -11,8 +11,14 @@
       "margin": 8251,
       "tick_size": 0.0546875,
       "legs": [
-        {"code": "ZFZ26", "ratio": 3},
-        {"code": "ZNZ26", "ratio": -2}
+        {
+          "code": "ZFZ26",
+          "ratio": 3
+        },
+        {
+          "code": "ZNZ26",
+          "ratio": -2
+        }
       ]
     }
   ],
@@ -52,6 +58,14 @@
       "unit": "percent",
       "min": 0,
       "max": 0.1
+    },
+    "entry_confirm_seconds": {
+      "default": 30,
+      "description": "모의매매에서 진입 주문을 낸 뒤 두 종목이 모두 체결됐는지 확인하는 제한 시간(초). 넘으면 미체결 주문을 취소하고 체결된 종목을 반대 매매해 원상복구",
+      "editable": true,
+      "label": "진입 체결 확인 제한 시간(초)",
+      "min": 5,
+      "max": 600
     }
   }
 }

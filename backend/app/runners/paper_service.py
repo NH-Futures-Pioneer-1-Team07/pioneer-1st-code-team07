@@ -9,6 +9,7 @@ from datetime import datetime, time
 from typing import Any, Protocol
 
 from app.config import Settings
+from app.nh.auth import KST
 from app.data.vix import load as load_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
@@ -28,10 +29,16 @@ from app.runners.inputs import ExtraInputs
 from app.runners.overseas import has_keys, key_names, overseas_instrument_ready
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
 from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
+from app.runners.spread import spread_daily_fetcher
+from app.runners.spread_broker import SpreadBroker, SpreadPriceMux
 from strategy_base.manifest import Instrument, Manifest
 from strategy_base.registry import StrategyRegistry
 
 logger = logging.getLogger(__name__)
+
+
+# 스프레드 전략의 일봉 계열을 받을 때 두 종목 각각 조회하는 일봉 개수(파라미터 `window_days`의 최대값보다 크게)
+SPREAD_DAILY_BARS = 200
 
 
 class TradingRejected(Exception):
@@ -76,6 +83,17 @@ def overseas_components(settings: Settings) -> OverseasComponentsFactory:
 
     def build(instrument: Instrument, minutes: int) -> tuple[Broker, RealtimeFactory]:
         client = NHClient(settings, market="overseas")
+        if instrument.legs:
+            legs = instrument.legs
+            broker = SpreadBroker(
+                [OverseasNHBroker(client, instrument.exchange or "", leg.code, minutes) for leg in legs],
+                legs,
+                instrument.code or "",
+                name=instrument.name,
+            )
+            return broker, lambda on_event, on_state: RealtimeConnection(
+                client, on_event=SpreadPriceMux(instrument.code or "", legs, on_event), on_state=on_state
+            )
         broker = OverseasNHBroker(client, instrument.exchange or "", instrument.code or "", minutes)
         return broker, lambda on_event, on_state: RealtimeConnection(client, on_event=on_event, on_state=on_state)
 
@@ -125,7 +143,9 @@ class PaperService:
 
     # ---- API ----
 
-    def start(self, strategy_id: str, params: dict[str, Any] | None = None) -> dict[str, str]:
+    def start(
+        self, strategy_id: str, params: dict[str, Any] | None = None, end_at: str | None = None
+    ) -> dict[str, str]:
         registered = self._registry.get(strategy_id)
         if registered is None:
             raise TradingRejected(404, "전략을 찾을 수 없습니다")
@@ -138,6 +158,7 @@ class PaperService:
         if self._settings.trading_env != "mock":
             raise TradingRejected(422, "모의매매는 모의 환경(TRADING_ENV=mock)에서만 운용할 수 있습니다")
         merged = self._merge_params(manifest, params)
+        end = self._parse_end_at(end_at, required=bool(instrument.legs))
         if instrument.market == "overseas":
             problem = overseas_instrument_ready(instrument)
             if problem:
@@ -152,7 +173,12 @@ class PaperService:
                 broker, make_realtime = self._overseas_components(instrument, manifest.bar.size)
             else:
                 broker, make_realtime = self._components(instrument.code, manifest.bar.size)
-            deposit, last_trading_day = self._check_account(broker, instrument.code)
+            if isinstance(broker, SpreadBroker) and "entry_confirm_seconds" in merged:
+                broker.entry_confirm_seconds = float(merged["entry_confirm_seconds"])
+            deposit, last_trading_day = self._check_account(
+                broker, instrument.code, [leg.code for leg in instrument.legs or []]
+            )
+            fee_price = self._fee_price(broker)
             started_at = self._clock()
             config = dataclasses.replace(
                 PaperConfig(
@@ -163,6 +189,8 @@ class PaperService:
                     fee_rate=self._settings.backtest_fee_rate,
                     history_bars=manifest.history_bars,
                     market=instrument.market,
+                    end_at=end,
+                    fee_price=fee_price,
                     **({"session_anchor": time(0, 0)} if instrument.market == "overseas" else {}),
                 ),
                 **self._overrides,
@@ -192,7 +220,9 @@ class PaperService:
             self._run = {"strategy_id": strategy_id, "mode": "paper", "run_id": recorder.run_id}
             # 국내는 체결과 주문/체결 알림을, 해외는 체결만 받는다(해외 주문 상태는 계좌 조회로 맞춘다).
             feeds = (
-                [Feed("FA", config.code)]
+                [Feed("FA", leg.code) for leg in instrument.legs]
+                if instrument.legs
+                else [Feed("FA", config.code)]
                 if instrument.market == "overseas"
                 else [Feed("KA", config.code), Feed("O1")]
             )
@@ -284,7 +314,7 @@ class PaperService:
         loader = None
         if manifest.series:
             def loader(day):  # noqa: ANN001 - 날짜가 바뀔 때마다 일봉을 다시 받는다
-                bars = self._daily_fetcher(instrument, DAILY_MARGIN)
+                bars = spread_daily_fetcher(self._daily_fetcher)(instrument, SPREAD_DAILY_BARS if instrument.legs else DAILY_MARGIN)
                 return {name: bars for name in manifest.series}
 
         return ExtraInputs(vix=load_vix(), margin=instrument.margin, loader=loader)
@@ -295,11 +325,39 @@ class PaperService:
             raise TradingRejected(422, problem)
         return {**manifest.default_params(), **(overrides or {})}
 
-    def _check_account(self, broker: Broker, code: str) -> tuple[dict[str, Any], Any]:
-        """운용을 시작하기 전에 계좌를 조회한다. 그 종목에 기존 포지션이나 미체결이 있으면 거부한다."""
+    def _parse_end_at(self, end_at: str | None, *, required: bool) -> datetime | None:
+        """운용 종료 일시(한국 시간)를 읽는다. 스프레드 전략은 필수이고 지금보다 뒤여야 한다."""
+        if not end_at:
+            if required:
+                raise TradingRejected(422, "운용 종료 일시(end_at)가 필요합니다")
+            return None
         try:
-            positions = [p for p in broker.positions() if p.code == code and (p.quantity or 0) != 0]
-            orders = [o for o in broker.open_orders() if o.code == code]
+            parsed = datetime.fromisoformat(end_at)
+        except ValueError as error:
+            raise TradingRejected(422, "운용 종료 일시는 2026-11-20T18:00 형식이어야 합니다") from error
+        parsed = parsed.replace(tzinfo=None) if parsed.tzinfo is None else parsed.astimezone(KST).replace(tzinfo=None)
+        if parsed <= self._clock():
+            raise TradingRejected(422, "운용 종료 일시는 지금보다 뒤여야 합니다")
+        return parsed
+
+    @staticmethod
+    def _fee_price(broker: Broker) -> float | None:
+        """스프레드 종목의 수수료 어림 가격(두 종목 체결대금의 합). 일반 종목이나 조회 실패면 `None`."""
+        if not isinstance(broker, SpreadBroker):
+            return None
+        try:
+            return broker.notional_price()
+        except NHError:
+            return None
+
+    def _check_account(
+        self, broker: Broker, code: str, leg_codes: list[str] | None = None
+    ) -> tuple[dict[str, Any], Any]:
+        """운용을 시작하기 전에 계좌를 조회한다. 그 종목(스프레드면 두 종목 모두)에 기존 포지션이나 미체결이 있으면 거부한다."""
+        codes = {code, *(leg_codes or [])}
+        try:
+            positions = [p for p in broker.positions() if p.code in codes and (p.quantity or 0) != 0]
+            orders = [o for o in broker.open_orders() if o.code in codes]
             deposit = broker.deposit()
             quote = broker.fetch_quote()
         except NHError as error:

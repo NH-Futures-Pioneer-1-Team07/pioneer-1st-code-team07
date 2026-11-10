@@ -13,6 +13,7 @@ MarketParam = Annotated[Literal["domestic", "overseas"], Query(description="계�
 class StartRequest(BaseModel):
     strategy_id: str
     params: dict[str, Any] | None = None
+    end_at: str | None = None
 
 
 def _service(request: Request) -> PaperService:
@@ -23,7 +24,7 @@ def _service(request: Request) -> PaperService:
 def start(body: StartRequest, request: Request) -> dict[str, str]:
     """모의매매를 시작하고 실행 식별자를 돌려준다."""
     try:
-        return _service(request).start(body.strategy_id, body.params)
+        return _service(request).start(body.strategy_id, body.params, body.end_at)
     except TradingRejected as rejected:
         raise HTTPException(status_code=rejected.status_code, detail=rejected.message) from rejected
 
