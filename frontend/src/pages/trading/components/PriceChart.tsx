@@ -69,6 +69,9 @@ export default function PriceChart({
   }, [interval]);
 
   const axisX = size.w - AXIS_WIDTH + 16;
+  // 가격 폭이 좁은 종목(스프레드 등)은 눈금에 소수를 보여 준다.
+  const tickStep = layout.ticks.length > 1 ? Math.abs(layout.ticks[0].value - layout.ticks[1].value) : 1;
+  const tickDigits = tickStep >= 1 ? 0 : tickStep >= 0.1 ? 1 : tickStep >= 0.01 ? 2 : 3;
   return (
     <div className={styles.chart}>
       <div className={styles.toolbar}>
@@ -99,7 +102,7 @@ export default function PriceChart({
             <li key={line.spec.label} tabIndex={0} aria-describedby={`line-tip-${line.spec.label}`}>
               <i
                 style={{ background: line.color }}
-                className={line.spec.kind === "previous_close" ? styles.dashed : undefined}
+                className={line.spec.kind !== "sma" ? styles.dashed : undefined}
               />
               {line.spec.label}
               <strong>{line.latest === null ? "—" : formatNumber(Number(line.latest.toFixed(4)))}</strong>
@@ -128,7 +131,7 @@ export default function PriceChart({
                 strokeDasharray="3 5"
               />
               <text x={axisX} y={tick.y + 4} fill="var(--text-tertiary)" fontSize="11">
-                {formatNumber(Math.round(tick.value))}
+                {formatNumber(Number(tick.value.toFixed(tickDigits)))}
               </text>
             </g>
           ))}
@@ -154,7 +157,7 @@ export default function PriceChart({
                 fill="none"
                 stroke={line.color}
                 strokeWidth="1.5"
-                strokeDasharray={line.spec.kind === "previous_close" ? "5 4" : undefined}
+                strokeDasharray={line.spec.kind !== "sma" ? "5 4" : undefined}
                 opacity=".9"
               />
             ) : null;

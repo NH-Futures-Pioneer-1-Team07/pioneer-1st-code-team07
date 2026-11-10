@@ -1,4 +1,4 @@
-import type { ChartLineSpec, Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
+import type { ChartLineSpec, Candle, JournalLine, JudgmentLevel, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -277,6 +277,22 @@ export function resolveLines(specs: ChartLineSpec[], candles: Candle[], today: s
     return { spec, color, values, latest: values.length ? values[values.length - 1] : null };
   });
 }
+
+const LEVEL_COLORS = ["#f87171", "#fbbf24", "#e5e7eb", "#34d399", "#60a5fa"];
+
+/** 전략이 내려준 경계를 차트 전체에 걸친 수평선으로 만든다. */
+export function levelLines(levels: JudgmentLevel[], candles: Candle[]): ResolvedLine[] {
+  return levels.map((level, index) => ({
+    spec: { series: "bar", kind: "level", period: null, label: level.label, description: level.description },
+    color: LEVEL_COLORS[index % LEVEL_COLORS.length],
+    values: candles.map(() => level.value),
+    latest: level.value,
+  }));
+}
+
+/** 경계선을 그릴 차트 주기. 판단 기준 봉과 같은 분봉이거나 일봉이다. */
+export const showsLevels = (interval: string, barMinutes: number | null): boolean =>
+  interval === "day" || (barMinutes !== null && interval === String(barMinutes));
 
 /** 가로축에 보여 줄 시각 눈금 네 개. */
 export function timeTicks(candles: Candle[], daily: boolean): { index: number; label: string }[] {

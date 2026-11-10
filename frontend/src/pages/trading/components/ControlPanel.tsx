@@ -25,8 +25,11 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
     quote,
     pnl,
     paramInputs,
+    endAt,
+    setEndAt,
     act,
   } = ctl;
+  const needsEnd = !!instrument?.legs?.length;
   const currency = currencyOf(instrument?.market);
   return (
     <section className={`panel ${styles.control}`} aria-labelledby="run-title">
@@ -100,11 +103,22 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
         </p>
       </div>
       {!running && <EditableParams inputs={paramInputs} idPrefix="trading-param" />}
+      {!running && needsEnd && (
+        <div className="field" style={{ marginBottom: 18 }}>
+          <label htmlFor="trading-end-at">운용 종료 일시 (한국 시간)</label>
+          <input
+            id="trading-end-at"
+            type="datetime-local"
+            value={endAt}
+            onChange={(event) => setEndAt(event.target.value)}
+          />
+        </div>
+      )}
       {!running ? (
         <button
           className={`button primary ${styles.fullButton}`}
-          disabled={busy || !strategyId || clearing || !!paramInputs.problem}
-          onClick={() => void act(() => startTrading(strategyId as string, paramInputs.body()))}
+          disabled={busy || !strategyId || clearing || !!paramInputs.problem || (needsEnd && !endAt)}
+          onClick={() => void act(() => startTrading(strategyId as string, paramInputs.body(), needsEnd ? endAt : undefined))}
         >
           <Icon name="play" size={15} />
           운용 시작

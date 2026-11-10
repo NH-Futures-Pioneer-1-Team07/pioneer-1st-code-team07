@@ -1,7 +1,7 @@
 import type { TradingController } from "../useTradingPage";
 import PriceChart from "./PriceChart";
 import { dash, pnlClass, won } from "../../../data/format";
-import { instrumentLabel, linesForInterval, resolveLines } from "../../../data/tradingView";
+import { instrumentLabel, levelLines, linesForInterval, resolveLines, showsLevels } from "../../../data/tradingView";
 import styles from "./MarketPanel.module.css";
 
 export default function MarketPanel({ ctl }: { ctl: TradingController }) {
@@ -19,14 +19,17 @@ export default function MarketPanel({ ctl }: { ctl: TradingController }) {
     askShare,
     receivedAt,
     detail,
+    running,
+    status,
+    instrument: spreadInstrument,
   } = ctl;
   const barMinutes = detail.data?.bar.unit === "minute" ? detail.data.bar.size : null;
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-  const lines = resolveLines(
-    linesForInterval(detail.data?.chart_lines ?? [], interval, barMinutes),
-    candles.data ?? [],
-    today,
-  );
+  const levels = running && showsLevels(interval, barMinutes) ? (status.data?.judgment?.levels ?? []) : [];
+  const lines = [
+    ...resolveLines(linesForInterval(detail.data?.chart_lines ?? [], interval, barMinutes), candles.data ?? [], today),
+    ...levelLines(levels, candles.data ?? []),
+  ];
   return (
     <section className={`panel ${styles.market}`} aria-labelledby="market-title">
       <div className={styles.marketHeader}>
@@ -68,6 +71,7 @@ export default function MarketPanel({ ctl }: { ctl: TradingController }) {
         error={candles.error}
         lines={lines}
       />
+      {!spreadInstrument?.legs && (
       <div className={styles.bookSummary}>
         <div className={styles.bookLegend}>
           <span>
@@ -82,6 +86,7 @@ export default function MarketPanel({ ctl }: { ctl: TradingController }) {
           <b />
         </div>
       </div>
+      )}
     </section>
   );
 }

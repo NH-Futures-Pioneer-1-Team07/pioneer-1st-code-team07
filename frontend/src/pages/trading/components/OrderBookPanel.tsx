@@ -8,7 +8,25 @@ export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
     livePrice,
     levels,
     maxQuantity,
+    instrument,
   } = ctl;
+  if (instrument?.legs) {
+    return (
+      <section className={`panel ${styles.orderbook}`} aria-label="스프레드 구성">
+        <div className="section-head">
+          <h2>스프레드 구성</h2>
+        </div>
+        <p className="empty">스프레드에는 호가가 없습니다. 두 종목의 현재가로 계산한 값입니다.</p>
+        <ul>
+          {instrument.legs.map((leg) => (
+            <li key={leg.code}>
+              {leg.code} × {leg.ratio > 0 ? `+${leg.ratio}` : leg.ratio}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
   return (
     <section className={`panel ${styles.orderbook}`} aria-label="호가">
       <div className="section-head">

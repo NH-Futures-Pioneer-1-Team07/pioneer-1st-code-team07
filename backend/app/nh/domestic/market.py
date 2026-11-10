@@ -323,3 +323,75 @@ class MarketService:
                 for level in book.levels
             ],
         }
+
+    # ---- 스프레드 종목 ----
+
+    def spread_quote(self, code: str, legs: list[tuple[str, int]], exchange: str | None) -> dict[str, Any]:
+        """두 종목 현재가를 비율대로 합친 스프레드 현재가. 월물·만기·가격 제한·거래승수는 `null`이다."""
+        quotes = [self.quote(leg_code, "overseas", exchange) for leg_code, _ in legs]
+
+        def combine(key: str) -> float | None:
+            values = [quote[key] for quote in quotes]
+            return None if None in values else sum(ratio * value for (_, ratio), value in zip(legs, values))
+
+        price, prev = combine("price"), combine("prev_close")
+        change = None if price is None or prev is None else price - prev
+        volumes = [quote["volume"] for quote in quotes if quote["volume"] is not None]
+        return {
+            "code": code,
+            "name": code,
+            "contract": None,
+            "expiry": None,
+            "price": price,
+            "change": change,
+            "change_rate": None if change is None or not prev else change / abs(prev) * 100,
+            "volume": min(volumes) if volumes else None,
+            "open": combine("open"),
+            "high": None,
+            "low": None,
+            "prev_close": prev,
+            "upper_limit": None,
+            "lower_limit": None,
+            "multiplier": None,
+            "remaining_days": None,
+            "market_session": quotes[0]["market_session"],
+        }
+
+    def spread_candles(
+        self, legs: list[tuple[str, int]], interval: str, quantity: int, exchange: str | None
+    ) -> list[dict[str, Any]]:
+        """두 종목 봉을 같은 시각끼리 짝지은 스프레드 봉. 고가·저가는 알 수 없어 시가·종가의 최댓값·최솟값으로 둔다."""
+        first, second = (self.candles(leg_code, interval, quantity, "overseas", exchange) for leg_code, _ in legs)
+        others = {row["time"]: row for row in second}
+        (_, one), (_, two) = legs
+        result = []
+        for row in first:
+            other = others.get(row["time"])
+            if other is None or not (row["close"] and other["close"] and row["volume"] and other["volume"]):
+                continue
+            close = one * row["close"] + two * other["close"]
+            open_ = one * row["open"] + two * other["open"] if row["open"] is not None and other["open"] is not None else close
+            result.append(
+                {
+                    "time": row["time"],
+                    "open": open_,
+                    "high": max(open_, close),
+                    "low": min(open_, close),
+                    "close": close,
+                    "volume": min(row["volume"], other["volume"]),
+                }
+            )
+        return result
+
+    @staticmethod
+    def spread_orderbook(code: str) -> dict[str, Any]:
+        """스프레드에는 호가가 없다."""
+        return {
+            "code": code,
+            "time": "",
+            "price": None,
+            "change_rate": None,
+            "total_ask_quantity": None,
+            "total_bid_quantity": None,
+            "levels": [],
+        }

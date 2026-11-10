@@ -25,9 +25,13 @@ export const fetchStatus = () =>
 export const fetchAccount = (market: "domestic" | "overseas" = "domestic") =>
   http.get<AccountView>("/api/trading/account", { params: { market } }).then((r) => r.data);
 
-export const startTrading = (strategyId: string, params?: Record<string, number>) =>
+export const startTrading = (strategyId: string, params?: Record<string, number>, endAt?: string) =>
   http
-    .post<RunRef>("/api/trading/start", { strategy_id: strategyId, ...(params && Object.keys(params).length ? { params } : {}) })
+    .post<RunRef>("/api/trading/start", {
+      strategy_id: strategyId,
+      ...(params && Object.keys(params).length ? { params } : {}),
+      ...(endAt ? { end_at: endAt } : {}),
+    })
     .then((r) => r.data);
 
 export const stopTrading = () =>
@@ -40,10 +44,18 @@ export const clearAccount = (market: "domestic" | "overseas" = "domestic") =>
 export interface MarketTarget {
   market: "domestic" | "overseas";
   exchange?: string | null;
+  /** 스프레드 종목이면 구성 종목과 비율. 서버가 두 종목을 합성해 돌려준다. */
+  legs?: { code: string; ratio: number }[] | null;
 }
 
 const marketParams = (target?: MarketTarget) =>
-  target ? { market: target.market, ...(target.exchange ? { exchange: target.exchange } : {}) } : {};
+  target
+    ? {
+        market: target.market,
+        ...(target.exchange ? { exchange: target.exchange } : {}),
+        ...(target.legs?.length ? { legs: target.legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",") } : {}),
+      }
+    : {};
 
 export const fetchQuote = (code: string, target?: MarketTarget) =>
   http.get<Quote>(`/api/market/${code}/quote`, { params: marketParams(target) }).then((r) => r.data);

@@ -184,3 +184,12 @@ def test_describe_has_band_and_position():
     assert sections[1]["headline"] == "진입 상단 위"
     short = strategy.describe(ctx(strategy, minute_bars([102.0, 104.0]), DAILY[:10]))["sections"][0]
     assert short["rows"][0][0] == "상태"
+
+
+def test_describe가_차트에_그릴_경계를_돌려준다():
+    strategy, _ = load()
+    levels = strategy.describe(ctx(strategy, minute_bars([102.0, 104.0])))["levels"]
+    assert [level["label"] for level in levels] == ["진입 상단", "청산 상단", "중앙값", "청산 하단", "진입 하단"]
+    assert levels[0]["value"] == pytest.approx(103.9) and levels[4]["value"] == pytest.approx(100.0)
+    assert all(level["description"] for level in levels)
+    assert strategy.describe(ctx(strategy, minute_bars([102.0, 104.0]), DAILY[:10]))["levels"] == []
