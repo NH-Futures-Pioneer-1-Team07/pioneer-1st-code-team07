@@ -52,6 +52,7 @@ uv run pytest
 | `app/runners/` | 백테스트·모의매매 실행, 전략 입력 준비, 포지션·손익 계산, 계좌 정리 |
 | `app/data/` | VIX 일 종가 읽기·갱신. 데이터 파일은 `data/vixcls.csv` |
 | `app/records/` | 실행 기록의 저장·조회·변경 알림과 비밀정보 제거 |
+| `app/reports/` | 검증 보고서 읽기(`report.md`의 JSON 머리말과 `table.csv`) |
 | `app/sweep/` | 조합 탐색. 파라미터·기간 조합을 여러 개 백테스트하고 결과 요약을 쌓는다 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
 | `sweeps/` | 조합 탐색 결과. 구조는 [조합 탐색](#조합-탐색) |
@@ -354,6 +355,19 @@ sweeps/<전략 id>/trades/<id>.jsonl   조합의 거래와 체결
 ### 소요 시간
 
 ZN 5분봉으로 확인했다(2026-11-10, 73일, 16,342봉). 분봉을 처음 받는 실행은 전체 약 7초였고, 조합 하나의 계산은 0.7~1.2초다. 저장된 분봉을 쓰면 조합 수에 비례해 늘어난다.
+
+## 검증 보고서
+
+`app/reports/`가 `reports/<전략 id>/<보고서 이름>/`의 `report.md`와 `table.csv`를 읽어 대시보드의 검증 리포트 탭에 준다. 보고서는 `sweep-report` 스킬이 파일로 쓰고, 형식은 [reports/README.md](reports/README.md)에 있다. API는 읽기만 한다.
+
+| 요청 | 내용 |
+| --- | --- |
+| `GET /api/reports` | 보고서 목록. 갱신일이 최근인 순서. 항목은 `strategy_id`, `name`, `title`, `question`, `updated`, `author`, `result_count`, `recommended`(추천·대안 조합 이름), `error` |
+| `GET /api/reports/<전략 id>/<이름>` | `meta`(머리말), `body`(마크다운 본문), `table`(`{columns, rows}`, 빈 칸은 `null`, 숫자는 실수. `table.csv`가 없으면 `null`) |
+
+- 머리말이 없거나 JSON이 아니거나 필수 필드(`strategy_id`, `name`, `title`, `question`, `updated`, `author`, `result_count`, `periods`, `recommended`)가 빠진 보고서는 목록에서 `error`에 사유가 담기고 나머지 필드는 비어 있다. 상세 요청은 `422`다.
+- 없는 보고서와 전략 id 형식에 맞지 않거나 `/`, `\`, 숨김(`.`으로 시작) 이름은 `404`다.
+- 보고서 폴더가 없으면 목록은 빈 배열이다.
 
 ## 모의매매
 
