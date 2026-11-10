@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { usePolling } from "../../apis/polling";
+import { latestWeek } from "../../data/defaultStrategy";
 import { fetchReport, fetchReports } from "../../apis/reports";
 import type { ReportSummary } from "../../apis/types";
 
@@ -13,13 +14,15 @@ export function useReportsPage(active: boolean) {
   const [chosenKey, setChosenKey] = useState<string | null>(null);
 
   const items = list.data ?? [];
-  // 고른 보고서가 목록에 없으면 읽을 수 있는 첫 보고서를 보여 준다.
-  const selected = useMemo(
-    () =>
+  // 고른 보고서가 목록에 없으면 가장 최근 주차 전략의 읽을 수 있는 첫 보고서를 보여 준다.
+  const selected = useMemo(() => {
+    const readable = items.filter((item) => item.error === null);
+    const latest = latestWeek(readable, (item) => item.strategy_id);
+    return (
       items.find((item) => reportKey(item) === chosenKey) ??
-      items.find((item) => item.error === null),
-    [items, chosenKey],
-  );
+      readable.find((item) => item.strategy_id === latest?.strategy_id)
+    );
+  }, [items, chosenKey]);
   const detail = usePolling(
     () => fetchReport(selected!.strategy_id, selected!.name),
     POLL_MS,
