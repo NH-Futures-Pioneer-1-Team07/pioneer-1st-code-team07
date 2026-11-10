@@ -11,6 +11,8 @@ export interface StrategyInstrument {
   exchange: string | null;
   multiplier: number | null;
   margin: number | null;
+  /** 스프레드 종목이면 구성 종목과 계약 비율(비율이 음수인 종목은 스프레드 가격에서 뺀다) */
+  legs?: { code: string; ratio: number }[] | null;
 }
 
 /** 전략 파라미터 명세. `editable`이면 시작 전에 화면에서 바꿀 수 있고 `percent`는 0.2를 20%로 보여 준다. */
@@ -27,7 +29,7 @@ export interface ParameterSpec {
 /** 모의매매 차트에 그릴 전략의 판단용 선. `bar`는 판단 기준 봉 차트, `daily`는 일봉 차트에 그린다. */
 export interface ChartLineSpec {
   series: "bar" | "daily";
-  kind: "sma" | "previous_close";
+  kind: "sma" | "previous_close" | "level";
   period: number | null;
   label: string;
   description: string;
@@ -126,8 +128,16 @@ export interface JudgmentSection {
   rows: [string, string][];
 }
 
+/** 전략이 차트에 수평선으로 그리라고 내려주는 경계(스프레드 밴드 등) */
+export interface JudgmentLevel {
+  label: string;
+  value: number;
+  description: string;
+}
+
 export interface Judgment {
   sections: JudgmentSection[];
+  levels?: JudgmentLevel[];
 }
 
 export interface TradingStatus {

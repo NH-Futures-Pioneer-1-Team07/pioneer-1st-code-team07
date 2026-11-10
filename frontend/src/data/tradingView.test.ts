@@ -7,7 +7,9 @@ import {
   linesForInterval,
   lineValues,
   movingAverage,
+  levelLines,
   resolveLines,
+  showsLevels,
   formatDateTime,
   instrumentLabel,
   mapDecisions,
@@ -241,4 +243,34 @@ test("차트 주기에 맞는 선만 고르고 이동평균 선에는 색을 돌
   assert.equal(resolved[0].latest, 3.5);
   assert.equal(resolved[1].latest, 3);
   assert.notEqual(resolved[0].color, resolved[1].color);
+});
+
+test("전략이 내려준 경계는 차트 전체에 걸친 수평선이 된다", () => {
+  const candles = [1, 2, 3].map((close, index) => ({
+    time: `2026-11-11T09:0${index}:00`,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1,
+  }));
+  const lines = levelLines(
+    [
+      { label: "진입 상단", value: 103.9, description: "상단" },
+      { label: "진입 하단", value: 100, description: "하단" },
+    ],
+    candles,
+  );
+  assert.deepEqual(lines.map((line) => line.spec.label), ["진입 상단", "진입 하단"]);
+  assert.deepEqual(lines[0].values, [103.9, 103.9, 103.9]);
+  assert.equal(lines[0].latest, 103.9);
+  assert.equal(lines[0].spec.kind, "level");
+  assert.notEqual(lines[0].color, lines[1].color);
+});
+
+test("경계선은 판단 기준 봉과 일봉 차트에만 그린다", () => {
+  assert.equal(showsLevels("5", 5), true);
+  assert.equal(showsLevels("day", 5), true);
+  assert.equal(showsLevels("1", 5), false);
+  assert.equal(showsLevels("5", null), false);
 });

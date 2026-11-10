@@ -85,7 +85,7 @@ uv run pytest
 
 - 전략은 `Context`를 읽고 `StrategyOutput`을 돌려준다. 형식은 `strategy_base/models.py`에 있다.
 - 봉이 마감될 때 `on_bar(ctx)`가 호출된다. 장중 가격 갱신에 반응해야 하면 `on_price(ctx)`도 구현한다.
-- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다.
+- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다. 결과에 `levels`(`[{"label", "value", "description"}]`)를 더하면 모의매매 차트가 운용 중 그 값을 수평선으로 그린다(스프레드 전략의 진입·청산 경계).
 - 판단의 근거 수치는 `Decision.detail`에 담는다. 판단 기록(`decision`)의 `detail`로 모의매매·백테스트 기록에 남는다. 주문 사유(`OrderIntent.reason`)는 체결 기록(`fill`)에 그대로 남으므로 판단 요약을 사유에 포함하면 체결 기록에서도 볼 수 있다.
 - 입력 `ctx`: 완성된 봉(`bars`, 마지막이 판단 대상), 현재 시각, 종목 최종거래일, 진입분별 포지션(`lots`), 미체결 주문(`open_orders`), 파라미터, 직전 호출의 상태(`state`)
 - 추가 입력 `ctx`: 추가 봉 계열(`series`, 일봉은 오늘 이전 날짜만), 직전 거래일 종가 VIX(`vix`), 계약당 기준 증거금(`margin`), 보유분 전체의 평가손익(`unrealized_pnl`, 수수료 제외). 값을 알 수 없으면 `None`이다.
@@ -561,6 +561,8 @@ ZN 5분봉으로 확인했다(2026-11-10, 73일, 16,342봉). 분봉을 처음 �
 | `GET /api/market/<종목코드>/quote?market=&exchange=` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
 | `GET /api/market/<종목코드>/candles?interval=&count=&market=&exchange=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
 | `GET /api/market/<종목코드>/orderbook?market=&exchange=` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
+
+시세 세 API는 `legs=종목코드:비율,종목코드:비율`(예 `ZFZ26:3,ZNZ26:-2`)을 함께 받으면 두 종목을 합성한 스프레드를 돌려준다. 해외 종목(`market=overseas`, `exchange` 필요)에만 쓸 수 있고 종목코드는 `ZFZ26-ZNZ26`처럼 `-`를 허용한다(`422`). 현재가는 두 종목 현재가·전일 종가의 `Σ 비율 × 가격`, 거래량은 두 종목 중 작은 값이고, 월물·만기·가격 제한·거래승수는 `null`이다. 차트는 두 종목 봉을 시각별로 짝지은 스프레드 봉이며 고가·저가는 합친 시가·종가의 최댓값·최솟값이다. 호가는 `levels`가 빈 목록이다.
 
 - 전일대비와 등락률은 NH의 부호 구분(`chg_sign`)이 `-`이면 음수로 돌려준다.
 - 종목명은 NH 응답의 연속 공백을 하나로 줄인다(`삼성전자 F 202611 ( 10)`).

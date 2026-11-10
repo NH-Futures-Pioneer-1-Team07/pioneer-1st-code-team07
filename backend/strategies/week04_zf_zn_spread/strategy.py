@@ -178,6 +178,7 @@ class Strategy(BaseStrategy):
             position, tone = _position(spread, band)
         net = facts["net"]
         return {
+            "levels": self._levels(band),
             "sections": [
                 band_section,
                 {
@@ -197,6 +198,19 @@ class Strategy(BaseStrategy):
                 },
             ]
         }
+
+    @staticmethod
+    def _levels(band: dict[str, float] | None) -> list[dict[str, Any]]:
+        """차트에 수평선으로 그릴 경계. 화면은 `label`·`value`·`description`을 그대로 그린다."""
+        if band is None:
+            return []
+        return [
+            {"label": "진입 상단", "value": band["entry_upper"], "description": "5분봉 스프레드가 안에서 밖으로 넘어가면 스프레드 매도 진입"},
+            {"label": "청산 상단", "value": band["exit_upper"], "description": "스프레드 매도를 보유 중 이 값 이하로 내려오면 청산"},
+            {"label": "중앙값", "value": band["median"], "description": "일봉 스프레드의 중앙값. 청산 경계의 기준"},
+            {"label": "청산 하단", "value": band["exit_lower"], "description": "스프레드 매수를 보유 중 이 값 이상으로 올라오면 청산"},
+            {"label": "진입 하단", "value": band["entry_lower"], "description": "5분봉 스프레드가 안에서 밖으로 넘어가면 스프레드 매수 진입"},
+        ]
 
     # ---- 기록 ----
 

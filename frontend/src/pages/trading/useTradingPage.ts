@@ -25,6 +25,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const [confirm, setConfirm] = useState<"stop" | "all" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [endAt, setEndAt] = useState("");
 
   const strategies = usePolling(fetchStrategies, 60000);
   const status = usePolling(fetchStatus, 2000);
@@ -53,7 +54,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const code = instrument?.code ?? null;
 
   const target: MarketTarget | undefined = instrument
-    ? { market: instrument.market, exchange: instrument.exchange }
+    ? { market: instrument.market, exchange: instrument.exchange, legs: instrument.legs }
     : undefined;
   const quote = usePolling(() => fetchQuote(code as string, target), 3000, [code], !!code);
   const candles = usePolling(
@@ -63,7 +64,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     !!code,
   );
   const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
-  const stream = useMarketStream(code, market);
+  // 스프레드는 종목 하나의 실시간 체결이 없어 시세 조회 주기로 갱신한다.
+  const stream = useMarketStream(instrument?.legs?.length ? null : code, market);
   const streamState = stream.state;
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;
@@ -107,7 +109,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   };
 
   return {
-    selected, setSelected, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, market, currency, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
+    selected, setSelected, endAt, setEndAt, interval, setInterval, confirm, setConfirm, actionError, busy, strategies, status, account, runStream, phase, items, activeId, strategyId, running, pending, clearing, detail, paramInputs, instrument, market, currency, code, quote, candles, book, stream, livePrice, prevClose, changeRate, levels, totalAsk, totalBid, askShare, maxQuantity, deposit, positions, openOrders, pnl, session, receivedAt, act,
   };
 }
 
