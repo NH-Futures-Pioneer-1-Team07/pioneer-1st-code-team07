@@ -29,7 +29,7 @@ uv run uvicorn app.main:create_app --factory --reload
 ```
 
 - `TRADING_ENV`는 필수다. `mock`(모의) 또는 `real`(실전)을 쓴다. 없으면 서버가 시작되지 않고 없는 변수 이름을 알려 준다.
-- `STRATEGIES_DIR`, `RUNS_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`를 쓴다.
+- `STRATEGIES_DIR`, `RUNS_DIR`, `SWEEPS_DIR`, `REPORTS_DIR`, `MINUTE_CACHE_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`, `backend/sweeps`, `backend/reports`, `backend/data/minute_cache`를 쓴다.
 - `NH_OVERSEAS_APP_KEY`, `NH_OVERSEAS_APP_SECRET`는 해외 API(`/trade/v1/overseas/*`)용 키다. 국내 키로는 해외 API가 `EGW016`(호출 권한 없음)으로 거절된다. 해외 전략을 쓸 때만 필요하다.
 - `NH_APP_KEY`, `NH_APP_SECRET`는 NH선물 API를 부를 때만 필요하다. `TRADING_ENV`가 고른 환경(모의 또는 실전)의 키를 넣는다. 없으면 서버는 시작하지만 NH를 부르는 순간 필요한 변수 이름을 알려 주는 오류가 난다.
 - `.env`에는 비밀정보가 들어갈 수 있으므로 커밋하지 않는다.
@@ -52,7 +52,10 @@ uv run pytest
 | `app/runners/` | 백테스트·모의매매 실행, 전략 입력 준비, 포지션·손익 계산, 계좌 정리 |
 | `app/data/` | VIX 일 종가 읽기·갱신. 데이터 파일은 `data/vixcls.csv` |
 | `app/records/` | 실행 기록의 저장·조회·변경 알림과 비밀정보 제거 |
+| `app/sweep/` | 조합 탐색. 파라미터·기간 조합을 여러 개 백테스트하고 결과 요약을 쌓는다 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
+| `sweeps/` | 조합 탐색 결과. 구조는 [조합 탐색](#조합-탐색) |
+| `reports/` | 조합 탐색 비교표와 보고서 |
 | `tests/` | 테스트 |
 
 ## 전략 추가 방법
@@ -239,6 +242,7 @@ await connection.stop()
 - `start`는 `end`에서 주 단위로 거슬러 올라가며 분봉이 있는 주를 찾고(주마다 그 주의 한 날과 그 전 영업일을 본다), 연속 3주가 비면 멈춘다. 마지막으로 찾은 주 앞의 6일을 하루씩 확인해 가장 이른 날을 정한다. 월물 중간에 이어지는 연휴는 3주보다 짧으면 건너뛰고, 3주를 넘게 비면 그 앞의 데이터는 다른 월물로 보고 포함하지 않는다.
 - 조회 호출은 20번 안팎이고, 같은 종목의 결과는 하루 동안 서버 메모리에 보관한다. 서버를 다시 시작하면 다시 조회한다.
 - 모의환경 확인(2026-10-28): `A116B000`은 `2026-08-14`(1봉)부터 `2026-10-27`까지다. 20번의 호출로 찾았다.
+- 모의환경 확인(2026-11-10): 해외 `ZNZ26`(5분봉)은 `2026-03-30`부터 `2026-11-09`까지다(약 7개월). `2026-08-10` 이전 72일은 하루 봉 수가 18~79개로 정상(약 276개)의 절반에 못 미치는 봉이 적은 날이고, `2026-08-11`부터 온전하다. 온전한 구간에서만 시험하려면 시작일을 `2026-08-11` 이후로 둔다.
 
 ### 시뮬레이션 규칙
 
@@ -261,6 +265,95 @@ await connection.stop()
 | 호가 단위 | 기간의 봉 가격 차이의 최대공약수 | 삼성전자선물은 500원으로 추정된다 |
 
 수수료율은 NH선물 수수료 부과 기준(2026-09-07 개정)의 개별주식선물 온라인 매매 표준수수료다. API 주문을 온라인으로 보았고, 협의수수료와 거래소 수수료는 반영하지 않았다. 실행마다 쓴 가정은 `meta.json`의 `assumptions`에 기록한다.
+
+## 조합 탐색
+
+`app/sweep/`는 전략의 파라미터·기간 조합을 여러 개 백테스트하고 결과를 계속 쌓는다. 서버 없이 명령줄에서 엔진을 직접 부르며, `runs/` 기록은 남기지 않는다. 최종으로 고른 조합은 기존 백테스트 화면에서 한 번 더 실행해 전체 기록을 남긴다.
+
+```bash
+uv run python -m app.sweep run 요청.json
+uv run python -m app.sweep run 요청.json --dry-run
+uv run python -m app.sweep table <전략 id> --name <보고서 이름>
+uv run python -m app.sweep range <전략 id>
+```
+
+| 명령 | 내용 |
+| --- | --- |
+| `run <요청.json>` | 요청 파일의 조합을 백테스트해 `sweeps/`에 쌓는다. 이미 있는 조합은 건너뛴다. `--dry-run`은 데이터를 받지 않고 실행·건너뛸 조합 수만 보여 준다. 조합 하나가 실패해도 나머지는 계속하고, 실패가 있으면 종료 코드가 1이다 |
+| `table <전략 id>` | 쌓인 결과로 비교표를 `reports/<전략 id>/<이름>/table.csv`에 쓴다(`--name`, 기본 `default`). `--out`으로 경로를 직접 정한다 |
+| `range <전략 id>` | 전략 종목의 백테스트 가능 기간과 봉이 적은 날을 조회한다. NH를 호출한다 |
+
+### 요청 파일
+
+```json
+{
+  "strategy_id": "week03_zn_treasury_futures",
+  "initial_capital": 100000,
+  "slippage_ticks": 1,
+  "periods": [{"start": "2026-08-11", "end": "2026-09-30"}, {"start": "2026-10-01", "end": "2026-11-03"}],
+  "params": [{"short_bars": 3}, {"short_bars": 8, "long_bars": 30}],
+  "grid": {"profit_loss_rate": [0.1, 0.2, 0.3]}
+}
+```
+
+| 필드 | 내용 |
+| --- | --- |
+| `strategy_id`, `initial_capital`, `periods` | 필수. `periods`는 `{start, end}` 목록이다 |
+| `slippage_ticks` | 선택. 생략하면 환경변수 `BACKTEST_SLIPPAGE_TICKS` 값 |
+| `params` | 선택. 기본 파라미터를 덮어쓰는 조합 목록. 적은 것만 바뀐다 |
+| `grid` | 선택. 파라미터별 값 목록의 모든 곱을 조합으로 더한다 |
+
+- 조합은 `params`(와 `grid`로 만든 조합) × `periods`다. 둘 다 없으면 기본 파라미터 하나만 실행한다.
+- 파라미터는 전략 `manifest.json`의 `min`/`max` 검증을 따른다. 어긋나면 데이터를 받기 전에 멈춘다.
+- 종료일은 오늘보다 이전이어야 한다. 기간 길이 상한(366일)은 적용하지 않는다.
+- 같은 조합인지는 전략, 전체 파라미터(기본값 포함), 기간, 슬리피지, 초기자금, 수수료율로 정한 `id`가 같은지로 본다. 기본값과 같은 값을 적어도 같은 조합이다.
+
+### 분봉 재사용
+
+- 한 번 실행에서 모든 조합이 쓰는 분봉은 가장 이른 시작일부터 가장 늦은 종료일까지 한 번만 받는다.
+- 받은 분봉은 `data/minute_cache/`에 저장해 다음 실행에서 쓴다. 요청한 기간 중 저장되지 않은 구간만 NH에서 받는다. 이 폴더는 Git에 올리지 않는다.
+- NH가 오래된 분봉을 지워도 이미 받은 기간은 남는다. 오늘 이후 날짜는 완성되지 않아 저장하지 않는다.
+
+### 저장 형식
+
+```
+sweeps/<전략 id>/results.jsonl       조합 하나당 한 줄
+sweeps/<전략 id>/trades/<id>.jsonl   조합의 거래와 체결
+```
+
+`results.jsonl`의 한 줄:
+
+| 필드 | 내용 |
+| --- | --- |
+| `id` | 조합의 정의로 만든 해시 16자 |
+| `strategy_id`, `params`, `start`, `end`, `slippage_ticks`, `initial_capital`, `fee_rate` | 조합의 정의. `params`는 기본값을 포함한 전체 값이다 |
+| `summary` | `net_pnl`, `gross_pnl`, `fee`, `return_rate`, `final_equity`, `max_drawdown`, `max_drawdown_rate`, `trade_count`, `win_count`, `loss_count`, `days`, `bars`. `runs/`의 `result.json`과 같은 값이다 |
+| `daily_equity` | 자산 곡선 `{time, equity}` |
+| `created_at`, `elapsed_seconds` | 저장 시각, 계산에 걸린 초 |
+
+`trades/<id>.jsonl`의 한 줄(`kind`로 구분):
+
+| `kind` | 필드 |
+| --- | --- |
+| `trade` | `entry_id`, `side`, `quantity`, `opened_at`, `closed_at`, `entry_price`, `exit_price`, `gross_pnl`, `fee`, `net_pnl`, `entry_reason`, `exit_reason` |
+| `fill` | `time`, `side`, `quantity`, `price`(슬리피지 반영), `raw_price`(슬리피지 전), `fee`, `intent`(`entry`/`exit`), `entry_id`, `source` |
+
+- 봉마다 남는 판단(`decision`)과 주문(`order`)은 저장하지 않는다. 백테스트 기록 용량의 대부분이 판단이고, 시장가 주문은 모두 체결되어 체결과 같은 내용이다.
+- `trade`의 `entry_reason`·`exit_reason`은 같은 `entry_id`의 체결에서 읽은 이유다. 거래 수는 `summary.trade_count`와 같다.
+- 용량: ZN 5분봉 73일 기준 조합 하나가 `results.jsonl` 약 5KB, 거래 파일 약 160~190KB다.
+
+### 비교표
+
+`table`이 만드는 `table.csv`는 조합이 행이고, 기간마다 지표 열이 붙는다.
+
+- 앞쪽 열은 조합 사이에 값이 다른 파라미터다. 모든 조합에서 같은 값은 열로 만들지 않는다.
+- `period_count`, `positive_periods`(순손익이 양수인 기간 수), `worst_net_pnl`, `total_net_pnl` 열이 있고, 합산 순손익이 큰 조합이 위에 온다.
+- 기간마다 `net_pnl`, `return_rate`, `max_drawdown_rate`, `trade_count`, `win_rate`, `fee_ratio`(총손익 대비 수수료, 총손익이 0 이하면 빈칸), `sharpe`(일별 자산 변화율의 평균/표준편차 × √252, 계산할 수 없으면 빈칸) 열이 `지표[시작일~종료일]` 이름으로 붙는다.
+- 승률, 수수료 비중, 샤프는 저장하지 않고 표를 만들 때 계산한다.
+
+### 소요 시간
+
+ZN 5분봉으로 확인했다(2026-11-10, 73일, 16,342봉). 분봉을 처음 받는 실행은 전체 약 7초였고, 조합 하나의 계산은 0.7~1.2초다. 저장된 분봉을 쓰면 조합 수에 비례해 늘어난다.
 
 ## 모의매매
 
