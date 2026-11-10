@@ -14,6 +14,7 @@ import {
   type MarketTarget,
 } from "../../apis/trading";
 import { useParamInputs } from "../../components/common/EditableParams";
+import { latestWeek } from "../../data/defaultStrategy";
 import { currencyOf } from "../../data/format";
 import { formatClock } from "../../data/tradingView";
 import type { MarketStatus } from "../../data/tradingView";
@@ -34,7 +35,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const phase = status.data?.phase ?? "idle";
   const items = strategies.data ?? [];
   const activeId = status.data?.run?.strategy_id ?? null;
-  const strategyId = activeId ?? selected ?? items[0]?.id ?? null;
+  const strategyId = activeId ?? selected ?? latestWeek(items, (item) => item.id)?.id ?? null;
   const running = phase !== "idle";
   const pending = phase === "stopping" || phase === "clearing";
   const clearing = status.data?.clear?.state === "running";
