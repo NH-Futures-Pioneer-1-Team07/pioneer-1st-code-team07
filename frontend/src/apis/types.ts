@@ -350,3 +350,59 @@ export interface ReportDetail {
   body: string;
   table: ReportTable | null;
 }
+
+/** 조합 탐색 결과 한 줄(조합 하나 × 기간 하나). */
+export interface SweepResult {
+  id: string;
+  strategy_id: string;
+  params: Record<string, unknown>;
+  start: string;
+  end: string;
+  slippage_ticks: number;
+  initial_capital: number;
+  summary: {
+    net_pnl: number;
+    gross_pnl: number;
+    fee: number;
+    return_rate: number;
+    max_drawdown_rate: number;
+    trade_count: number;
+    win_count: number;
+    loss_count: number;
+  };
+  daily_equity: { time: string; equity: number }[];
+}
+
+export interface SweepTrade {
+  kind: "trade";
+  entry_id: string;
+  side: "buy" | "sell";
+  quantity: number;
+  opened_at: string | null;
+  closed_at: string | null;
+  entry_price: number;
+  exit_price: number;
+  gross_pnl: number;
+  fee: number;
+  net_pnl: number;
+  entry_reason: string | null;
+  exit_reason: string | null;
+}
+
+export interface SweepFill {
+  kind: "fill";
+  time: string | null;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  raw_price: number;
+  fee: number;
+  intent: "entry" | "exit";
+  entry_id: string;
+  source: string | null;
+}
+
+export interface SweepTrades {
+  trades: SweepTrade[];
+  fills: SweepFill[];
+}
