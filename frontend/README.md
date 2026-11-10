@@ -17,7 +17,7 @@ npm run dev
 | 명령 | 확인할 내용 |
 | --- | --- |
 | `npm run typecheck` | TypeScript 타입 검사 |
-| `npm test` | 화면 변환(차트 배치·상태 문장·종목 이름·진행률·입력 검증·자산 곡선과 체결 묶기·이력 비교 조건과 지표 계산, 보고서 마크다운 변환과 비교표 서식·정렬) 검증 |
+| `npm test` | 화면 변환(차트 배치·상태 문장·종목 이름·진행률·입력 검증·자산 곡선과 체결 묶기·이력 비교 조건과 지표 계산, 보고서 마크다운 변환, 비교표 서식·정렬, 그래프용 데이터 변환·청산 이유 요약) 검증 |
 | `npm run build` | 타입 검사와 배포용 정적 파일 생성 |
 | `npm run preview` | 빌드한 `dist/` 로컬 미리보기 |
 
@@ -69,6 +69,7 @@ src/
 │   ├── paramView.ts
 │   ├── markdown.ts
 │   ├── reportView.ts
+│   ├── reportCharts.ts
 │   └── *.test.ts
 ├── apis/
 │   ├── client.ts

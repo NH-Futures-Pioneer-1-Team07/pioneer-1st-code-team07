@@ -122,6 +122,7 @@ pioneer-1st-code-team07/
 │   │   │   ├── backtests.py          백테스트 실행·가능 기간
 │   │   │   ├── runs.py               실행 기록 조회
 │   │   │   ├── reports.py            검증 보고서 조회
+│   │   │   ├── sweeps.py             조합 결과·거래 조회
 │   │   │   ├── market.py             시세·종목 조회
 │   │   │   └── stream.py             실시간 시세 WebSocket
 │   │   ├── nh/                       NH선물 API 연동
@@ -266,11 +267,21 @@ pioneer-1st-code-team07/
 
 - 조합 탐색 결과로 쓴 검증 보고서의 목록과 상세를 확인
 - 추천·대안 조합 카드, 본문(요약·근거·위험과 한계), 다음 탐색 요청(복사 버튼) 표시
+- 파라미터별 성과(바꾼 파라미터를 가로축으로 기간별 선), 기간별 순손익 막대, 추천·대안 조합의 수익률 곡선
+- 추천·대안 조합과 기간을 골라 청산 이유별 손익 요약과 거래 목록(진입·청산 시각·가격·손익·이유) 확인
 - 비교표에서 보고 싶은 지표를 고르고 열 제목을 눌러 정렬
 - 보고서는 `backend/reports/<전략 id>/<이름>/report.md`이며, 파일이 바뀌면 15초 안에 화면이 갱신됨
 - 조합 탐색 실행과 보고서 작성은 Codex 스킬(`sweep-run`, `sweep-report`)이 맡고 사용법은 [backend/README.md](backend/README.md)의 조합 탐색에 있음
 
 ![검증 리포트 화면](docs/images/reports.jpg)
+
+![파라미터별 성과와 기간별 순손익](docs/images/reports-charts.jpg)
+
+바꾼 파라미터 값에 따른 기간별 성과와 추천·대안 조합의 기간별 순손익.
+
+![거래 패널](docs/images/reports-trades.jpg)
+
+청산 이유별 손익 요약과 거래 목록.
 
 ### 공통
 
