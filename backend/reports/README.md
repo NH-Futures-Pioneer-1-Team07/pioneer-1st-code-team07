@@ -38,8 +38,8 @@ reports/<전략 id>/<보고서 이름>/
 | `updated` | 마지막 갱신일 `YYYY-MM-DD` |
 | `author` | 작성한 도구와 모델. 예: `Codex (gpt-5)` |
 | `result_count` | 보고서가 근거로 쓴 `results.jsonl` 줄 수 |
-| `periods` | 비교한 기간 목록. 각 항목은 `{label, start, end, kind}`이고 `kind`는 `full`(전체) 또는 `split`(구간) |
-| `recommended` | 추천·대안 조합 목록. 각 항목은 `{id, role, label}`이고 `role`은 `recommended` 또는 `alternative`다. `id`는 `results.jsonl`의 `id`다 |
+| `periods` | 비교한 기간 목록. 각 항목은 `{label, start, end, kind}`이고 `kind`는 `full`(전체) 또는 `split`(구간)이다. `label`은 `전체`, `구간1`처럼 짧게 쓴다 |
+| `recommended` | 추천·대안 조합 목록. 각 항목은 `{label, role, params, ids}`다. `role`은 `recommended` 또는 `alternative`, `params`는 탐색에서 바꾼 파라미터만 담은 객체, `ids`는 `periods`의 `label` → `results.jsonl`의 `id` 객체다. 조합 하나는 기간마다 결과 줄이 따로 있기 때문이다 |
 
 ### 본문 섹션
 

@@ -34,12 +34,12 @@ description: backend/sweeps/에 쌓인 조합 탐색 결과로 비교표를 만�
    - 필요하면 거래 파일(`sweeps/<전략 id>/trades/<id>.jsonl`)에서 청산 이유별 건수·손익을 계산한다.
 4. **보고서를 쓴다.**
    - 머리말(JSON)과 고정 섹션을 `backend/reports/README.md` 형식대로 채운다.
-   - `recommended`의 `id`는 `results.jsonl`에 있는 값이어야 한다.
+   - `recommended`의 `ids`는 모두 `results.jsonl`에 있는 `id`여야 한다. 조합 하나는 기간마다 `id`가 따로 있다.
    - `## 다음 탐색 제안`에 이유와 `sweep-request` 블록을 쓴다. 이미 해 본 조합은 넣지 않는다.
 5. **갱신이면** 달라진 결론을 `## 요약`·`## 추천 조합`·`## 근거`에 반영하고 `## 변경 이력`에 한 줄을 더한다. `updated`와 `result_count`를 고친다.
 6. **검증한다.**
    - 본문에 쓴 수치를 `table.csv` 값과 대조한다.
-   - 머리말의 `id`가 모두 `results.jsonl`에 있는지 확인한다.
+   - 머리말 `recommended`의 `ids`가 모두 `results.jsonl`에 있는지 확인한다.
 7. **보고한다.** 추천 조합, 신뢰 수준, 다음 탐색 제안을 짧게 알린다.
 
 ## 하지 않는 일
