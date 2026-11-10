@@ -77,7 +77,7 @@ uv run python -m app.sweep table <전략 id> --name <보고서 이름>
 
 ## NH선물 Open API 신청
 
-- 이 프로젝트는 **국내·해외 선물 모의투자 API**를 사용. 해외 종목(예: ZN 국채선물)을 쓸 때만 해외 키 필요.
+- 이 프로젝트는 **국내·해외 선물 모의투자 API**를 사용. 해외 종목(예: ZN 국채선물, ZF·ZN 스프레드)을 쓸 때만 해외 키 필요.
 - 필요한 키: 국내 모의투자 APP Key·APP Secret Key, 해외 전략을 쓰면 해외 모의투자 APP Key·APP Secret Key 추가.
 
 1. NH선물 모의투자 계좌 개설
@@ -217,6 +217,8 @@ pioneer-1st-code-team07/
 │   │   │   ├── inputs.py             전략 입력(추가 봉·VIX·증거금) 준비
 │   │   │   ├── series.py             전략이 선언한 일봉 불러오기
 │   │   │   ├── overseas.py           해외 종목 실행용 NH 호출 묶음
+│   │   │   ├── spread.py             두 종목 봉을 짝지어 스프레드 봉으로 합성
+│   │   │   ├── spread_broker.py      스프레드 모의매매용 두 다리 주문·원상복구·실시간 가격 합성
 │   │   │   ├── availability.py       백테스트 가능 기간 계산
 │   │   │   ├── paper.py              모의매매 세션 (NH 모의계좌 운용)
 │   │   │   ├── paper_service.py      모의매매 실행 서비스
@@ -238,7 +240,8 @@ pioneer-1st-code-team07/
 │   │   └── testing.py                테스트 도우미
 │   ├── strategies/                   전략 폴더 (폴더 하나가 전략 하나)
 │   │   ├── _template/                새 전략용 템플릿
-│   │   └── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
+│   │   ├── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
+│   │   └── week04_zf_zn_spread/      ZF·ZN 국채선물 스프레드 전략
 │   ├── data/vixcls.csv               VIX 일 종가 데이터
 │   ├── data/minute_cache/            조합 탐색이 받아 둔 분봉 (Git에 올리지 않음)
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
@@ -294,6 +297,7 @@ pioneer-1st-code-team07/
 - 전략 선택, 운용 시작·종료, 익절·손절 기준 입력
 - 국내·해외 종목 시세·차트·호가 조회와 실시간 체결·호가 수신(WebSocket)
 - 전략 판단 선과 판단 내용(설명 툴팁, 판단 패널) 표시
+- 스프레드 전략(ZF·ZN): 두 종목을 합성한 스프레드 현재가·차트, 운용 중 진입·청산 밴드 선, 운용 종료 일시 입력, 한쪽만 체결된 진입의 원상복구
 - 국내·해외 모의계좌의 예탁자산·보유 포지션·미체결 주문·손익 확인
 - 계좌 전체 정리(미체결 취소·전체 포지션 청산)
 
