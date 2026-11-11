@@ -96,14 +96,20 @@ def spread_loader(base, legs: Sequence[SpreadLeg]):
 
 
 def spread_daily_fetcher(base: DailyFetcher) -> DailyFetcher:
-    """종목 하나의 일봉 조회를 감싼다. `legs`가 있는 종목이면 두 종목의 일봉을 짝지어 돌려주고, 아니면 그대로 조회한다."""
+    """종목 하나의 일봉 조회를 감싼다. `legs`가 있는 종목이면 두 종목의 일봉을 짝지어 돌려주고, 아니면 그대로 조회한다.
+
+    한 종목이라도 NH 일봉이 비어 있고 `base`에 `from_minutes`(5분봉 합성)가 있으면 두 종목 모두 5분봉으로 합성한 일봉을 쓴다.
+    NH 일봉은 정산가 기준이라 합성한 일봉(마지막 체결가)과 섞으면 스프레드가 어긋나기 때문이다.
+    """
 
     def fetch(instrument: Instrument, quantity: int) -> list[Bar]:
         if not instrument.legs:
             return base(instrument, quantity)
-        bars = [
-            base(instrument.model_copy(update={"code": leg.code, "legs": None}), quantity) for leg in instrument.legs
-        ]
+        singles = [instrument.model_copy(update={"code": leg.code, "legs": None}) for leg in instrument.legs]
+        bars = [base(single, quantity) for single in singles]
+        from_minutes = getattr(base, "from_minutes", None)
+        if from_minutes is not None and not all(bars):
+            bars = [from_minutes(single, quantity) for single in singles]
         return pair_bars(bars[0], bars[1], _ratios(instrument.legs), daily=True)[-quantity:]
 
     return fetch
