@@ -309,7 +309,7 @@ export function resolveLines(specs: ChartLineSpec[], candles: Candle[], today: s
   });
 }
 
-const LEVEL_COLORS = ["#f87171", "#fbbf24", "#e5e7eb", "#34d399", "#60a5fa"];
+const LEVEL_COLORS = ["#f87171", "#c084fc", "#e5e7eb", "#34d399", "#60a5fa"];
 
 /** 전략이 내려준 경계를 차트 전체에 걸친 수평선으로 만든다. */
 export function levelLines(levels: JudgmentLevel[], candles: Candle[]): ResolvedLine[] {
