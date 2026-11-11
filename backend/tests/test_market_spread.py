@@ -121,7 +121,30 @@ def test_일봉이_비어_있으면_5분_스프레드를_영업일별로_합성�
 
     service.candles = fake
     service._cache = TtlCache()
+    service._spread_cache = TtlCache()
     rows = service.spread_candles([("ZFZ26", 1), ("ZNZ26", -1)], "day", 10, "FCME")
     assert [r["time"] for r in rows] == ["2026-11-09", "2026-11-10"]
     assert [r["close"] for r in rows] == [102 - 51, 103 - 51]
     assert rows[0]["open"] == 100 - 50 and rows[0]["volume"] == 20
+
+
+def test_합성_일봉을_만드는_동안_시세_캐시를_써도_교착하지_않는다(service):
+    """합성 일봉은 `candles`(시세 캐시)를 부르므로 같은 캐시의 잠금을 겹쳐 잡으면 멈춘다."""
+    import threading
+
+    service._cache = TtlCache()
+    service._spread_cache = TtlCache()
+    minute = [candle("2026-11-09T09:00:00", 100, 101, 10)]
+
+    def through_cache(code, interval, quantity, market, exchange):
+        if interval == "day":
+            return []
+        return service._cache.get(("candles", code, interval), 2.0, lambda: minute)
+
+    service.candles = through_cache
+    result = []
+    worker = threading.Thread(target=lambda: result.append(service.spread_candles([("ZFZ26", 1), ("ZNZ26", -1)], "day", 5, "FCME")), daemon=True)
+    worker.start()
+    worker.join(timeout=5)
+    assert not worker.is_alive(), "합성 일봉 만들기가 잠금에서 멈췄다"
+    assert len(result[0]) == 1

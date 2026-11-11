@@ -204,6 +204,8 @@ class MarketService:
         self._client = client
         self._overseas_client: NHClient | None = None
         self._cache = TtlCache(clock)
+        # 합성 일봉은 만드는 동안 `self.candles`(위 캐시)를 부르므로 캐시를 따로 둔다. 같은 캐시를 쓰면 잠금이 겹쳐 교착한다.
+        self._spread_cache = TtlCache(clock)
 
     def _nh(self, market: str = "domestic") -> NHClient:
         if market == "overseas":
@@ -376,7 +378,7 @@ class MarketService:
             if rows:
                 return rows[-quantity:]
             # 5분봉을 많이 받아 합성하므로 무거워 일봉 차트의 짧은 갱신 주기마다 다시 만들지 않는다.
-            return self._cache.get(
+            return self._spread_cache.get(
                 ("spread-daily", tuple(legs), exchange, quantity),
                 self.SPREAD_DAILY_TTL,
                 lambda: self._spread_daily_from_minutes(legs, quantity, exchange),
