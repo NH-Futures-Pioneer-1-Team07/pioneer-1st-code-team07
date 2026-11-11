@@ -16,7 +16,11 @@ export interface MarketStream {
 const RETRY_MS = [1000, 2000, 5000];
 
 /** 스프레드 종목의 구성. 서버가 두 종목의 체결을 합성해 보낸다. */
-export type SpreadLegs = { code: string; ratio: number }[] | null | undefined;
+export type SpreadLegs = { code: string; ratio: number; weight?: number | null }[] | null | undefined;
+
+/** 서버에 보내는 스프레드 구성 `종목코드:가격 가중치,…`. 가중치가 없으면 계약 비율이 가중치다. */
+export const legsParam = (legs: NonNullable<SpreadLegs>) =>
+  legs.map((leg) => `${leg.code}:${leg.weight ?? leg.ratio}`).join(",");
 
 export const streamUrl = (
   code: string,
@@ -25,7 +29,7 @@ export const streamUrl = (
   legs?: SpreadLegs,
 ) =>
   `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/market?code=${code}&market=${market}` +
-  (legs?.length ? `&legs=${legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",")}` : "");
+  (legs?.length ? `&legs=${legsParam(legs)}` : "");
 
 /** 종목의 실시간 체결·호가를 받는다. 끊기면 다시 연결한다. */
 export function useMarketStream(
@@ -33,7 +37,7 @@ export function useMarketStream(
   market: "domestic" | "overseas" = "domestic",
   legs?: SpreadLegs,
 ): MarketStream {
-  const legsKey = legs?.length ? legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",") : "";
+  const legsKey = legs?.length ? legsParam(legs) : "";
   const [stream, setStream] = useState<MarketStream>({
     state: "connecting",
     lastTrade: null,

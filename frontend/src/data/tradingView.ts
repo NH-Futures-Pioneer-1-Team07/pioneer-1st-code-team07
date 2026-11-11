@@ -27,16 +27,21 @@ export function instrumentLabel(name: string): string {
   return name;
 }
 
-/** 스프레드 계산식. 예: `3 × ZFZ26 − 2 × ZNZ26` */
-export function spreadFormula(legs: { code: string; ratio: number }[]): string {
+/** 스프레드 계산식. 가격 가중치(없으면 계약 비율)를 쓴다. 예: `3 × ZFZ26 − 2 × ZNZ26` */
+export function spreadFormula(legs: { code: string; ratio: number; weight?: number | null }[]): string {
   return legs
     .map((leg, index) => {
-      const sign = leg.ratio < 0 ? "−" : "+";
-      const term = `${Math.abs(leg.ratio)} × ${leg.code}`;
-      return index === 0 ? (leg.ratio < 0 ? `−${term}` : term) : ` ${sign} ${term}`;
+      const weight = leg.weight ?? leg.ratio;
+      const sign = weight < 0 ? "−" : "+";
+      const term = `${Math.abs(weight)} × ${leg.code}`;
+      return index === 0 ? (weight < 0 ? `−${term}` : term) : ` ${sign} ${term}`;
     })
     .join("");
 }
+
+/** 한 세트의 계약 구성 문구. 예: `ZFZ26 3계약 · ZNZ26 2계약` */
+export const spreadContracts = (legs: { code: string; ratio: number }[]): string =>
+  legs.map((leg) => `${leg.code} ${Math.abs(leg.ratio)}계약`).join(" · ");
 
 const MONTH_CODES = "FGHJKMNQUVXZ";
 

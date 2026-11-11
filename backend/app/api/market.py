@@ -38,8 +38,8 @@ def _code(code: str, market: str, exchange: str | None, spread: bool = False) ->
     return code
 
 
-def _legs(legs: str | None, market: str, exchange: str | None) -> list[tuple[str, int]] | None:
-    """스프레드 구성 문자열을 (종목코드, 비율) 두 개로 바꾼다. 없으면 `None`."""
+def _legs(legs: str | None, market: str, exchange: str | None) -> list[tuple[str, float]] | None:
+    """스프레드 구성 문자열을 (종목코드, 가격 가중치) 두 개로 바꾼다. 없으면 `None`."""
     if not legs:
         return None
     if market != "overseas" or not (exchange and EXCHANGE_PATTERN.match(exchange)):
@@ -47,9 +47,9 @@ def _legs(legs: str | None, market: str, exchange: str | None) -> list[tuple[str
     parsed = []
     for part in legs.split(","):
         code, _, ratio = part.partition(":")
-        if not CODE_PATTERNS["overseas"].match(code) or not re.fullmatch(r"-?[1-9][0-9]{0,2}", ratio):
+        if not CODE_PATTERNS["overseas"].match(code) or not re.fullmatch(r"-?[1-9][0-9]{0,2}(\.[0-9]{1,4})?", ratio):
             raise HTTPException(status_code=422, detail="스프레드 구성 형식이 올바르지 않습니다")
-        parsed.append((code, int(ratio)))
+        parsed.append((code, float(ratio)))
     if len(parsed) != 2 or parsed[0][0] == parsed[1][0]:
         raise HTTPException(status_code=422, detail="스프레드 구성은 서로 다른 종목 2개여야 합니다")
     return parsed

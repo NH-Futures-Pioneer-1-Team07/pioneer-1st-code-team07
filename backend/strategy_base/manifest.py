@@ -8,12 +8,27 @@ SERIES_NAME_PATTERN = STRATEGY_ID_PATTERN
 
 
 class SpreadLeg(BaseModel):
-    """스프레드를 이루는 한 종목. `ratio`가 양수이면 스프레드 값에 더하고 음수이면 뺀다. 절댓값이 한 세트의 계약 수다."""
+    """스프레드를 이루는 한 종목. `ratio`가 양수이면 매수 방향이고 음수이면 반대 방향이다. 절댓값이 한 세트의 계약 수다.
+
+    `weight`는 스프레드 가격에 이 종목 가격을 더하는 가중치다. 없으면 `ratio`와 같다.
+    두 종목의 거래승수가 다르면 `weight = ratio × 종목 승수 ÷ 스프레드 승수`로 적는다.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(min_length=1)
     ratio: int
+    weight: float | None = None
+
+    @property
+    def price_weight(self) -> float:
+        return float(self.ratio) if self.weight is None else self.weight
+
+    @model_validator(mode="after")
+    def _weight_follows_ratio(self) -> "SpreadLeg":
+        if self.weight is not None and (self.weight == 0 or (self.weight > 0) != (self.ratio > 0)):
+            raise ValueError("스프레드 구성의 가격 가중치(weight)는 0이 아니고 계약 비율(ratio)과 부호가 같아야 합니다")
+        return self
 
     @field_validator("ratio")
     @classmethod
@@ -26,7 +41,7 @@ class SpreadLeg(BaseModel):
 class Instrument(BaseModel):
     """전략이 매매하는 종목. `legs`가 있으면 두 종목의 가격을 비율대로 합친 스프레드 종목이다.
 
-    스프레드 종목의 가격은 `sum(비율 × 각 종목 가격)`이고 한 세트가 수량 1이다.
+    스프레드 종목의 가격은 `sum(가중치 × 각 종목 가격)`이고 한 세트가 수량 1이다.
     `multiplier`·`margin`·`tick_size`는 스프레드 한 세트 기준으로 적는다. 두 종목은 같은 `market`·`exchange`에서 거래한다.
     """
 
