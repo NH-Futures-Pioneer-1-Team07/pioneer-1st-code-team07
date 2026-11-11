@@ -354,13 +354,49 @@ class MarketService:
             "lower_limit": None,
             "multiplier": None,
             "remaining_days": None,
-            "market_session": quotes[0]["market_session"],
+            # 한 종목의 장 정보를 모를 수 있어(예: 3년물) 알 수 있는 값을 쓴다.
+            "market_session": next((q["market_session"] for q in quotes if q["market_session"] != "unknown"), "unknown"),
         }
+
+    # 스프레드 봉은 종목마다 최근 봉을 받아 같은 시각끼리 짝짓는다. 한 종목의 봉이 오래전에 끊기면 겹치지 않으므로 넉넉히 받는다.
+    SPREAD_FETCH_FACTOR = 4
+    SPREAD_MAX_BARS = 4000
+    SPREAD_DAILY_SYNTH_BARS = 20000
+    SPREAD_DAILY_TTL = 300.0
 
     def spread_candles(
         self, legs: list[tuple[str, float]], interval: str, quantity: int, exchange: str | None
     ) -> list[dict[str, Any]]:
-        """두 종목 봉을 같은 시각끼리 짝지은 스프레드 봉. 고가·저가는 알 수 없어 시가·종가의 최댓값·최솟값으로 둔다."""
+        """두 종목 봉을 같은 시각끼리 짝지은 스프레드 봉. 고가·저가는 알 수 없어 시가·종가의 최댓값·최솟값으로 둔다.
+
+        일봉은 한 종목이라도 NH 일봉이 비어 있으면 5분봉 스프레드를 영업일별로 합성해 돌려준다.
+        """
+        if interval == "day":
+            rows = self._spread_pairs(legs, "day", quantity, exchange)
+            if rows:
+                return rows[-quantity:]
+            # 5분봉을 많이 받아 합성하므로 무거워 일봉 차트의 짧은 갱신 주기마다 다시 만들지 않는다.
+            return self._cache.get(
+                ("spread-daily", tuple(legs), exchange, quantity),
+                self.SPREAD_DAILY_TTL,
+                lambda: self._spread_daily_from_minutes(legs, quantity, exchange),
+            )
+        return self._spread_pairs(legs, interval, min(quantity * self.SPREAD_FETCH_FACTOR, self.SPREAD_MAX_BARS), exchange)[-quantity:]
+
+    def _spread_daily_from_minutes(self, legs: list[tuple[str, float]], quantity: int, exchange: str | None) -> list[dict[str, Any]]:
+        from datetime import datetime
+
+        from app.runners.series import daily_from_minutes
+        from strategy_base.models import Bar
+
+        rows = self._spread_pairs(legs, "5", self.SPREAD_DAILY_SYNTH_BARS, exchange)
+        bars = [Bar(datetime.fromisoformat(r["time"]), r["high"], r["low"], r["close"], r["volume"], r["open"]) for r in rows]
+        return [
+            {"time": b.time.date().isoformat(), "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume}
+            for b in daily_from_minutes(bars)
+        ][-quantity:]
+
+    def _spread_pairs(self, legs: list[tuple[str, float]], interval: str, quantity: int, exchange: str | None) -> list[dict[str, Any]]:
         first, second = (self.candles(leg_code, interval, quantity, "overseas", exchange) for leg_code, _ in legs)
         others = {row["time"]: row for row in second}
         (_, one), (_, two) = legs

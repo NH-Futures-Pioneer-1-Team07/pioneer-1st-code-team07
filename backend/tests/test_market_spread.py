@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.nh.domestic.market import MarketService
+from app.nh.domestic.market import MarketService, TtlCache
 
 LEGS = [("ZFZ26", 3), ("ZNZ26", -2)]
 
@@ -87,3 +87,41 @@ def test_api가_잘못된_스프레드_구성을_거절한다(client, legs):
 def test_스프레드는_해외_종목에만_쓸_수_있다(client):
     response = client.get("/api/market/ZFZ26-ZNZ26/quote", params={"market": "domestic", "legs": "ZFZ26:3,ZNZ26:-2"})
     assert response.status_code == 422
+
+
+# ---- 한 종목의 장 정보·봉이 비어 있을 때(예: 3년물) ----
+
+
+def test_한_종목의_장_정보를_모르면_알_수_있는_값을_쓴다(service):
+    quotes = {"ZFZ26": quote("ZFZ26", 104.0, 103.5, 500, market_session="unknown"), "ZNZ26": quote("ZNZ26", 106.0, 105.0, 800)}
+    service.quote = lambda code, market, exchange: quotes[code]
+    assert service.spread_quote("ZFZ26-ZNZ26", LEGS, "FCME")["market_session"] == "regular"
+    quotes["ZNZ26"] = quote("ZNZ26", 106.0, 105.0, 800, market_session="unknown")
+    assert service.spread_quote("ZFZ26-ZNZ26", LEGS, "FCME")["market_session"] == "unknown"
+
+
+def test_분봉은_종목마다_넉넉히_받아_짝지은_뒤_최근_봉만_돌려준다(service):
+    asked = []
+    original = service.candles
+    service.candles = lambda code, interval, quantity, market, exchange: (asked.append(quantity), original(code, interval, quantity, market, exchange))[1]
+    rows = service.spread_candles(LEGS, "5", 100, "FCME")
+    assert asked == [400, 400] and len(rows) == 1
+    assert service.spread_candles(LEGS, "5", 1, "FCME") == rows[-1:]
+
+
+def test_일봉이_비어_있으면_5분_스프레드를_영업일별로_합성한다(service):
+    day = lambda d, h, m, o, c: candle(f"2026-11-{d:02d}T{h:02d}:{m:02d}:00", o, c, 10)  # noqa: E731
+    candles = {
+        "ZFZ26": [day(9, 9, 0, 100, 101), day(9, 9, 5, 101, 102), day(10, 9, 0, 102, 103)],
+        "ZNZ26": [day(9, 9, 0, 50, 50), day(9, 9, 5, 50, 51), day(10, 9, 0, 51, 51)],
+    }
+
+    def fake(code, interval, quantity, market, exchange):
+        return [] if interval == "day" else candles[code]
+
+    service.candles = fake
+    service._cache = TtlCache()
+    rows = service.spread_candles([("ZFZ26", 1), ("ZNZ26", -1)], "day", 10, "FCME")
+    assert [r["time"] for r in rows] == ["2026-11-09", "2026-11-10"]
+    assert [r["close"] for r in rows] == [102 - 51, 103 - 51]
+    assert rows[0]["open"] == 100 - 50 and rows[0]["volume"] == 20
