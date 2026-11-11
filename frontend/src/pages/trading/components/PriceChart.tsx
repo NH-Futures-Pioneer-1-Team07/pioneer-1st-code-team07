@@ -111,7 +111,7 @@ export default function PriceChart({
           {lines.map((line) => (
             <li key={line.spec.label} tabIndex={0} aria-describedby={`line-tip-${line.spec.label}`}>
               <i
-                style={{ background: line.color }}
+                style={{ background: line.color, color: line.color }}
                 className={line.spec.kind !== "sma" ? styles.dashed : undefined}
               />
               {line.spec.label}

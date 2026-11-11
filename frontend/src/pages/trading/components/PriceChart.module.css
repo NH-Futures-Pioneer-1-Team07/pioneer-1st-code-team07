@@ -89,7 +89,6 @@
 }
 .legend i.dashed {
   background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important;
-  color: #e5e7eb;
 }
 .legend strong {
   color: var(--text-primary);
