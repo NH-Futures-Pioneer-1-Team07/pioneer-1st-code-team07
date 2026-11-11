@@ -35,7 +35,7 @@
   },
   "parameters": {
     "window_days": {
-      "default": 40,
+      "default": 25,
       "description": "밴드를 계산하는 일봉 스프레드 개수(직전 거래일까지의 유효한 일봉 쌍)",
       "editable": true,
       "label": "일봉 쌍 개수",

@@ -33,7 +33,11 @@ def test_파라미터는_기존_전략과_같다():
     registry = registered()
     old = registry.get("week04_zf_zn_spread").manifest
     new = registry.get("week04_z3n_zn_spread").manifest
-    assert new.default_params() == old.default_params()
+    # 3년물 일봉 쌍이 61개뿐이고 파라미터 탐색에서 40은 거래가 없어 일봉 쌍 개수 기본값만 25다.
+    assert new.default_params() == {**old.default_params(), "window_days": 25}
+    assert old.default_params()["window_days"] == 40
+    assert new.parameters["window_days"].min == old.parameters["window_days"].min
+    assert new.parameters["window_days"].max == old.parameters["window_days"].max
     assert new.bar == old.bar
     assert "entry_confirm_seconds" not in new.default_params()
 
