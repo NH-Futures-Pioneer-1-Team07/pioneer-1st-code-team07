@@ -23,13 +23,14 @@ CLOSE_BAD_MODE = 4422
 
 
 def _parse_legs(text: str) -> list[SpreadLeg] | None:
-    """`종목코드:비율,종목코드:비율`을 읽는다. 서로 다른 종목 2개가 아니거나 형식이 틀리면 `None`."""
+    """`종목코드:가중치,종목코드:가중치`를 읽는다(가중치는 소수도 가능). 서로 다른 종목 2개가 아니거나 형식이 틀리면 `None`."""
     parsed = []
     for part in text.split(","):
         leg_code, _, ratio = part.partition(":")
-        if not OVERSEAS_CODE_PATTERN.match(leg_code) or not re.fullmatch(r"-?[1-9][0-9]{0,2}", ratio):
+        if not OVERSEAS_CODE_PATTERN.match(leg_code) or not re.fullmatch(r"-?[1-9][0-9]{0,2}(\.[0-9]{1,4})?", ratio):
             return None
-        parsed.append(SpreadLeg(code=leg_code, ratio=int(ratio)))
+        weight = float(ratio)
+        parsed.append(SpreadLeg(code=leg_code, ratio=int(weight) or (1 if weight > 0 else -1), weight=weight))
     if len(parsed) != 2 or parsed[0].code == parsed[1].code:
         return None
     return parsed
@@ -39,7 +40,7 @@ def _parse_legs(text: str) -> list[SpreadLeg] | None:
 async def market_stream(websocket: WebSocket, code: str = "", market: str = "domestic", legs: str = "") -> None:
     """종목의 실시간 체결·호가를 JSON 메시지로 보낸다. `market`은 `domestic`(기본) 또는 `overseas`다. 메시지 형식은 `backend/README.md`를 본다.
 
-    `legs=종목코드:비율,종목코드:비율`(해외만)을 함께 보내면 두 종목의 체결을 합성한 스프레드 체결을 보낸다(호가는 없다).
+    `legs=종목코드:가중치,종목코드:가중치`(해외만)을 함께 보내면 두 종목의 체결을 합성한 스프레드 체결을 보낸다(호가는 없다).
     """
     hub: MarketHub = websocket.app.state.hub
     await websocket.accept()

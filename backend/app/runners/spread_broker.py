@@ -101,20 +101,20 @@ class SpreadBroker:
 
     def fetch_bars(self, day) -> list[Bar]:
         first, second = (broker.fetch_bars(day) for broker in self.brokers)
-        return pair_bars(first, second, (self.legs[0].ratio, self.legs[1].ratio))
+        return pair_bars(first, second, (self.legs[0].price_weight, self.legs[1].price_weight))
 
     def fetch_quote(self) -> Quote:
         quotes = [broker.fetch_quote() for broker in self.brokers]
         prices = [quote.last_price for quote in quotes]
-        price = None if None in prices else sum(leg.ratio * p for leg, p in zip(self.legs, prices))
+        price = None if None in prices else sum(leg.price_weight * p for leg, p in zip(self.legs, prices))
         return Quote(self.code, price, None)
 
     def notional_price(self) -> float | None:
-        """두 종목 현재가 × |비율|의 합. 수수료를 어림하는 데 쓴다."""
+        """두 종목 현재가 × |가중치|의 합. 수수료를 어림하는 데 쓴다."""
         prices = [broker.fetch_quote().last_price for broker in self.brokers]
         if None in prices:
             return None
-        return sum(abs(leg.ratio) * p for leg, p in zip(self.legs, prices))
+        return sum(abs(leg.price_weight) * p for leg, p in zip(self.legs, prices))
 
     # ---- 계좌 ----
 
@@ -155,8 +155,8 @@ class SpreadBroker:
                     side=Side.BUY if sets > 0 else Side.SELL,
                     quantity=abs(sets),
                     closable_quantity=abs(sets),
-                    avg_price=None if None in avg else sum(leg.ratio * a for leg, a in zip(self.legs, avg)),
-                    last_price=None if None in last else sum(leg.ratio * p for leg, p in zip(self.legs, last)),
+                    avg_price=None if None in avg else sum(leg.price_weight * a for leg, a in zip(self.legs, avg)),
+                    last_price=None if None in last else sum(leg.price_weight * p for leg, p in zip(self.legs, last)),
                     pnl=None if None in pnl else sum(pnl),
                     pnl_rate=None,
                 )
@@ -275,7 +275,7 @@ class SpreadBroker:
         fills = [self._leg_fill(leg, records) for leg in order.legs]
         price = None
         if filled and len(fills) == len(self.legs) and all(p is not None for _, p in fills):
-            price = sum(spec.ratio * p for spec, (_, p) in zip(self.legs, fills))
+            price = sum(spec.price_weight * p for spec, (_, p) in zip(self.legs, fills))
         open_now = self._any_open(order, records)
         if filled >= order.quantity:
             status = OrderStatus.FILLED
@@ -376,7 +376,7 @@ class SpreadPriceMux:
             if event.is_trade and event.price is not None:
                 self.last[event.code] = event.price
                 if len(self.last) == len(self.legs):
-                    price = sum(leg.ratio * self.last[leg.code] for leg in self.legs)
+                    price = sum(leg.price_weight * self.last[leg.code] for leg in self.legs)
                     self.post(
                         Trade(
                             code=self.code,

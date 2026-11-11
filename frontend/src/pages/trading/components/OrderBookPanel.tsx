@@ -1,6 +1,6 @@
 import type { TradingController } from "../useTradingPage";
 import { formatNumber, won } from "../../../data/format";
-import { spreadFormula } from "../../../data/tradingView";
+import { spreadContracts, spreadFormula } from "../../../data/tradingView";
 import styles from "./OrderBookPanel.module.css";
 
 export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
@@ -19,6 +19,7 @@ export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
         </div>
         <p className={styles.formula}>{spreadFormula(instrument.legs)}</p>
         <ul className={styles.notes}>
+          <li>1세트: {spreadContracts(instrument.legs)}</li>
           <li>봉: 같은 시각의 두 종목 봉을 위 식으로 합친 값</li>
           <li>현재가: 두 종목의 현재가로 계산한 값</li>
           <li>

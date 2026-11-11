@@ -1,3 +1,4 @@
+import { legsParam } from "./marketStream";
 import { http } from "./client";
 import type {
   AccountView,
@@ -44,7 +45,7 @@ export interface MarketTarget {
   market: "domestic" | "overseas";
   exchange?: string | null;
   /** 스프레드 종목이면 구성 종목과 비율. 서버가 두 종목을 합성해 돌려준다. */
-  legs?: { code: string; ratio: number }[] | null;
+  legs?: { code: string; ratio: number; weight?: number | null }[] | null;
 }
 
 const marketParams = (target?: MarketTarget) =>
@@ -52,7 +53,7 @@ const marketParams = (target?: MarketTarget) =>
     ? {
         market: target.market,
         ...(target.exchange ? { exchange: target.exchange } : {}),
-        ...(target.legs?.length ? { legs: target.legs.map((leg) => `${leg.code}:${leg.ratio}`).join(",") } : {}),
+        ...(target.legs?.length ? { legs: legsParam(target.legs) } : {}),
       }
     : {};
 

@@ -18,7 +18,7 @@ def is_valid(bar: Bar) -> bool:
     return math.isfinite(bar.close) and bar.close > 0 and bar.volume > 0
 
 
-def combine(first: Bar, second: Bar, ratios: tuple[int, int]) -> Bar:
+def combine(first: Bar, second: Bar, ratios: tuple[float, float]) -> Bar:
     """같은 시각의 두 봉을 한 스프레드 봉으로 합친다.
 
     시가·종가는 비율대로 합치고, 고가·저가는 두 종목이 동시에 그 값을 찍었는지 알 수 없어서
@@ -38,7 +38,7 @@ def combine(first: Bar, second: Bar, ratios: tuple[int, int]) -> Bar:
     )
 
 
-def pair_bars(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, int], *, daily: bool = False) -> list[Bar]:
+def pair_bars(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[float, float], *, daily: bool = False) -> list[Bar]:
     """같은 시각의 유효한 봉끼리 짝지어 스프레드 봉을 오래된 순서로 돌려준다.
 
     5분봉은 봉 시작 시각이 같은 쌍, 일봉(`daily=True`)은 기준일이 같은 쌍만 짝짓는다.
@@ -54,8 +54,8 @@ def pair_bars(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, in
     return paired
 
 
-def _notional(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, int]) -> list[float]:
-    """같은 시각 유효한 쌍의 두 종목 종가 × |비율|의 합. 수수료 계산 가격으로 쓴다."""
+def _notional(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[float, float]) -> list[float]:
+    """같은 시각 유효한 쌍의 두 종목 종가 × |가중치|의 합. 수수료 계산 가격으로 쓴다."""
     others = {bar.time: bar for bar in second if is_valid(bar)}
     return [
         abs(ratios[0]) * bar.close + abs(ratios[1]) * others[bar.time].close
@@ -64,8 +64,9 @@ def _notional(first: Sequence[Bar], second: Sequence[Bar], ratios: tuple[int, in
     ]
 
 
-def _ratios(legs: Sequence[SpreadLeg]) -> tuple[int, int]:
-    return legs[0].ratio, legs[1].ratio
+def _ratios(legs: Sequence[SpreadLeg]) -> tuple[float, float]:
+    """스프레드 가격에 곱하는 가중치 두 개(`weight`가 없으면 `ratio`)."""
+    return legs[0].price_weight, legs[1].price_weight
 
 
 def spread_loader(base, legs: Sequence[SpreadLeg]):

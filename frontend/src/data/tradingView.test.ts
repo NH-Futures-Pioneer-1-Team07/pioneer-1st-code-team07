@@ -306,3 +306,11 @@ test("마우스 위치에서 봉과 가격, 시각을 읽는다", async () => {
   assert.ok(Math.abs((layout.price(layout.y(100)) ?? 0) - 100) < 1e-9);
   assert.equal(layout.price(199), null);
 });
+
+test("가격 가중치가 있으면 계산식에 가중치를 쓰고 계약 구성은 비율로 보여 준다", async () => {
+  const { spreadContracts, spreadFormula } = await import("./tradingView.ts");
+  const legs = [{ code: "Z3NZ26", ratio: 1, weight: 2 }, { code: "ZNZ26", ratio: -1 }];
+  assert.equal(spreadFormula(legs), "2 × Z3NZ26 − 1 × ZNZ26");
+  assert.equal(spreadContracts(legs), "Z3NZ26 1계약 · ZNZ26 1계약");
+  assert.equal(spreadFormula([{ code: "ZFZ26", ratio: 3 }, { code: "ZNZ26", ratio: -2 }]), "3 × ZFZ26 − 2 × ZNZ26");
+});

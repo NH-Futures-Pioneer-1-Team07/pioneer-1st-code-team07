@@ -326,8 +326,8 @@ class MarketService:
 
     # ---- 스프레드 종목 ----
 
-    def spread_quote(self, code: str, legs: list[tuple[str, int]], exchange: str | None) -> dict[str, Any]:
-        """두 종목 현재가를 비율대로 합친 스프레드 현재가. 월물·만기·가격 제한·거래승수는 `null`이다."""
+    def spread_quote(self, code: str, legs: list[tuple[str, float]], exchange: str | None) -> dict[str, Any]:
+        """두 종목 현재가를 가중치대로 합친 스프레드 현재가. 월물·만기·가격 제한·거래승수는 `null`이다."""
         quotes = [self.quote(leg_code, "overseas", exchange) for leg_code, _ in legs]
 
         def combine(key: str) -> float | None:
@@ -358,7 +358,7 @@ class MarketService:
         }
 
     def spread_candles(
-        self, legs: list[tuple[str, int]], interval: str, quantity: int, exchange: str | None
+        self, legs: list[tuple[str, float]], interval: str, quantity: int, exchange: str | None
     ) -> list[dict[str, Any]]:
         """두 종목 봉을 같은 시각끼리 짝지은 스프레드 봉. 고가·저가는 알 수 없어 시가·종가의 최댓값·최솟값으로 둔다."""
         first, second = (self.candles(leg_code, interval, quantity, "overseas", exchange) for leg_code, _ in legs)
