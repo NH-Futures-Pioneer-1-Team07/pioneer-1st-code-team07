@@ -241,8 +241,8 @@ pioneer-1st-code-team07/
 │   ├── strategies/                   전략 폴더 (폴더 하나가 전략 하나)
 │   │   ├── _template/                새 전략용 템플릿
 │   │   ├── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
-│   │   ├── week04_z3n_zn_spread/     Z3N·ZN(3년물·10년물) 국채선물 스프레드 전략 (기본 선택)
-│   │   └── week04_zf_zn_spread/      ZF·ZN(5년물·10년물) 국채선물 스프레드 전략
+│   │   ├── week04_z3n_zn_spread/     Z3N·ZN(3년물·10년물) 국채선물 스프레드 전략
+│   │   └── week04_zf_zn_spread/      ZF·ZN(5년물·10년물) 국채선물 스프레드 전략 (기본 선택)
 │   ├── data/vixcls.csv               VIX 일 종가 데이터
 │   ├── data/minute_cache/            조합 탐색이 받아 둔 분봉 (Git에 올리지 않음)
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
