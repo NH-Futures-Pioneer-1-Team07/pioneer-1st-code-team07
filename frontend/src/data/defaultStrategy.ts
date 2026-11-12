@@ -4,11 +4,11 @@ export function weekOf(strategyId: string): number {
   return match ? Number(match[1]) : 0;
 }
 
-/** 목록에서 가장 최근 주차의 항목을 고른다. 주차가 같으면 id가 사전순으로 앞선 항목이 이긴다(`week04_z3n_…`이 `week04_zf_…`보다 앞). */
+/** 목록에서 가장 최근 주차의 항목을 고른다. 주차가 같으면 id가 사전순으로 뒤선 항목이 이긴다(`week04_zf_…`가 `week04_z3n_…`보다 뒤). */
 export function latestWeek<T>(items: readonly T[], idOf: (item: T) => string): T | undefined {
   return items.reduce<T | undefined>((best, item) => {
     if (best === undefined) return item;
     const gap = weekOf(idOf(item)) - weekOf(idOf(best));
-    return gap > 0 || (gap === 0 && idOf(item) < idOf(best)) ? item : best;
+    return gap > 0 || (gap === 0 && idOf(item) > idOf(best)) ? item : best;
   }, undefined);
 }

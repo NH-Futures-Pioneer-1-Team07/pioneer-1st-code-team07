@@ -15,9 +15,9 @@ test("가장 최근 주차 전략을 고른다", () => {
   assert.equal(latestWeek(items, id)?.id, "week04_b");
 });
 
-test("주차가 같거나 접두사가 없으면 id가 앞선 항목을 고른다", () => {
-  assert.equal(latestWeek([{ id: "y" }, { id: "x" }], id)?.id, "x");
-  assert.equal(latestWeek([{ id: "week04_zf_zn_spread" }, { id: "week04_z3n_zn_spread" }], id)?.id, "week04_z3n_zn_spread");
-  assert.equal(latestWeek([{ id: "week03_a" }, { id: "week03_b" }], id)?.id, "week03_a");
+test("주차가 같거나 접두사가 없으면 id가 뒤선 항목을 고른다", () => {
+  assert.equal(latestWeek([{ id: "x" }, { id: "y" }], id)?.id, "y");
+  assert.equal(latestWeek([{ id: "week04_zf_zn_spread" }, { id: "week04_z3n_zn_spread" }], id)?.id, "week04_zf_zn_spread");
+  assert.equal(latestWeek([{ id: "week03_a" }, { id: "week03_b" }], id)?.id, "week03_b");
   assert.equal(latestWeek([], id), undefined);
 });
