@@ -48,7 +48,7 @@ def ctx(strategy, series, *, lots=(), open_orders=(), state=None, pnl=None, last
 
 def test_manifest_and_defaults():
     _, manifest = load()
-    assert manifest.default_params() == {"window_bars": 60, "entry_z": 2.0, "exit_return_pct": 10}
+    assert manifest.default_params() == {"window_bars": 60, "entry_z": 1.5, "exit_return_pct": 10}
     assert manifest.instruments[0].index_code == "KRD020020016"
     assert manifest.override_problem({"window_bars": 5}) is not None
     assert manifest.override_problem({"entry_z": 0}) is not None

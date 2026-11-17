@@ -1,0 +1,2 @@
+{"run_id": "20261118_030605", "strategy_id": "week05_kospi200_basis_zscore", "mode": "backtest", "seq": 1, "time": "2026-11-18T03:06:05.028306+09:00", "kind": "event", "text": "백테스트 시작", "start": "2026-08-31", "end": "2026-11-17"}
+{"run_id": "20261118_030605", "strategy_id": "week05_kospi200_basis_zscore", "mode": "backtest", "seq": 4705, "time": "2026-11-18T03:06:27.582106+09:00", "kind": "event", "text": "백테스트 완료", "net_pnl": 30054193.75000184, "trades": 76}
