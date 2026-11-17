@@ -1,0 +1,20 @@
+{
+  "run_id": "20261111_161507",
+  "strategy_id": "week04_z3n_zn_spread",
+  "strategy_name": "Z3N·ZN 미국 국채선물 스프레드 전략",
+  "mode": "paper",
+  "instrument": {
+    "name": "Z3N·ZN 스프레드 2026년 12월물 (Z3N 1 : ZN 1)",
+    "market": "overseas",
+    "code": "Z3NZ26-ZNZ26",
+    "multiplier": 1000
+  },
+  "params": {
+    "window_days": 25,
+    "entry_pct": 0.1,
+    "exit_buffer_ratio": 0.001
+  },
+  "started_at": "2026-11-11T16:15:07.301621+09:00",
+  "ended_at": "2026-11-11T17:20:51.555195+09:00",
+  "status": "completed"
+}
