@@ -27,7 +27,7 @@
       "max": 200
     },
     "entry_z": {
-      "default": 2.0,
+      "default": 1.5,
       "description": "베이시스 z-score의 절댓값이 이 값 이상이면 진입. 양수면 선물 매도, 음수면 선물 매수",
       "editable": true,
       "label": "진입 z-score",
