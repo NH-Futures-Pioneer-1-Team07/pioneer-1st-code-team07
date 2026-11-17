@@ -1,0 +1,48 @@
+{
+  "run_id": "20261112_124806",
+  "strategy_id": "week04_z3n_zn_spread",
+  "strategy_name": "Z3N·ZN 미국 국채선물 스프레드 전략",
+  "mode": "backtest",
+  "instrument": {
+    "name": "Z3N·ZN 스프레드 2026년 12월물 (Z3N 1 : ZN 1)",
+    "market": "overseas",
+    "code": "Z3NZ26-ZNZ26",
+    "multiplier": 1000
+  },
+  "params": {
+    "window_days": 25,
+    "entry_pct": 0,
+    "exit_buffer_ratio": 0.001
+  },
+  "started_at": "2026-11-12T12:48:06.469945+09:00",
+  "ended_at": "2026-11-12T12:48:13.365660+09:00",
+  "status": "completed",
+  "period": {
+    "start": "2026-09-09",
+    "end": "2026-11-11"
+  },
+  "initial_capital": 100000.0,
+  "assumptions": {
+    "fee": {
+      "rate": 8.5e-05,
+      "basis": "두 종목 체결대금의 합(기간 평균 311.4706 × 거래승수 × 수량)",
+      "source": "NH선물 수수료 부과 기준(2026-09-07 개정) 개별주식선물 온라인 매매 표준수수료 0.0085%"
+    },
+    "slippage": {
+      "ticks": 1,
+      "tick_size": 0.0234375,
+      "direction": "시장가 체결마다 두 종목 모두 1호가씩 불리한 방향(스프레드 1틱)"
+    },
+    "fill": {
+      "on_bar": "봉 마감 판단의 시장가 주문은 다음 봉 시가에 전량 체결(그날 마지막 봉이면 그 봉 종가)",
+      "on_price": "장중 가격 판단의 시장가 주문은 그 가격에 전량 체결",
+      "intrabar_path": "봉마다 시가 → 불리한 극단 → 유리한 극단 → 종가 순으로 호가 단위씩 이동"
+    },
+    "margin": "증거금과 주문가능수량을 제한하지 않음"
+  },
+  "progress": {
+    "stage": "done",
+    "done": 55,
+    "total": 55
+  }
+}
