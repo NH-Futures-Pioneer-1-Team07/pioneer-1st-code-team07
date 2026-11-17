@@ -43,6 +43,8 @@ class Bar:
     close: float
     volume: int
     open: float | None = None
+    # 같은 시각 기초자산(지수) 봉의 종가. 종목에 `index_code`가 있을 때 러너가 채우고, 짝이 없으면 `None`이다.
+    reference: float | None = None
 
 
 @dataclass(frozen=True)

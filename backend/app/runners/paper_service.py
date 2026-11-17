@@ -27,6 +27,7 @@ from app.runners.clearing import (
 from app.runners.inputs import ExtraInputs
 from app.runners.overseas import has_keys, key_names, overseas_instrument_ready
 from app.runners.paper import PaperConfig, PaperSession, StateChange, kst_now
+from app.runners.basis import wrap_broker
 from app.runners.series import DAILY_MARGIN, DailyFetcher, nh_daily_fetcher
 from app.runners.spread import spread_daily_fetcher
 from app.runners.spread_broker import SpreadBroker, SpreadPriceMux
@@ -169,6 +170,8 @@ class PaperService:
                 broker, make_realtime = self._overseas_components(instrument, manifest.bar.size)
             else:
                 broker, make_realtime = self._components(instrument.code, manifest.bar.size)
+                if instrument.index_code:
+                    broker = wrap_broker(broker, instrument, NHClient(self._settings), manifest.bar.size)
             deposit, last_trading_day = self._check_account(
                 broker, instrument.code, [leg.code for leg in instrument.legs or []]
             )

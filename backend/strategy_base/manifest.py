@@ -55,6 +55,14 @@ class Instrument(BaseModel):
     margin: float | None = Field(default=None, gt=0)
     tick_size: float | None = Field(default=None, gt=0)
     legs: list[SpreadLeg] | None = None
+    # 기초자산 지수 종목코드(국내 종목만). 있으면 같은 시각의 지수 봉 종가가 `Bar.reference`로 들어온다.
+    index_code: str | None = None
+
+    @model_validator(mode="after")
+    def _check_index(self) -> "Instrument":
+        if self.index_code is not None and (self.market != "domestic" or self.legs):
+            raise ValueError("기초자산 지수 코드(index_code)는 스프레드가 아닌 국내 종목에만 쓸 수 있습니다")
+        return self
 
     @model_validator(mode="after")
     def _check_legs(self) -> "Instrument":
