@@ -204,6 +204,8 @@ class MarketService:
         self._client = client
         self._overseas_client: NHClient | None = None
         self._cache = TtlCache(clock)
+        # 합성 일봉은 만드는 동안 `self.candles`(위 캐시)를 부르므로 캐시를 따로 둔다. 같은 캐시를 쓰면 잠금이 겹쳐 교착한다.
+        self._spread_cache = TtlCache(clock)
 
     def _nh(self, market: str = "domestic") -> NHClient:
         if market == "overseas":
@@ -322,4 +324,112 @@ class MarketService:
                 }
                 for level in book.levels
             ],
+        }
+
+    # ---- 스프레드 종목 ----
+
+    def spread_quote(self, code: str, legs: list[tuple[str, float]], exchange: str | None) -> dict[str, Any]:
+        """두 종목 현재가를 가중치대로 합친 스프레드 현재가. 월물·만기·가격 제한·거래승수는 `null`이다."""
+        quotes = [self.quote(leg_code, "overseas", exchange) for leg_code, _ in legs]
+
+        def combine(key: str) -> float | None:
+            values = [quote[key] for quote in quotes]
+            return None if None in values else sum(ratio * value for (_, ratio), value in zip(legs, values))
+
+        price, prev = combine("price"), combine("prev_close")
+        change = None if price is None or prev is None else price - prev
+        volumes = [quote["volume"] for quote in quotes if quote["volume"] is not None]
+        return {
+            "code": code,
+            "name": code,
+            "contract": None,
+            "expiry": None,
+            "price": price,
+            "change": change,
+            "change_rate": None if change is None or not prev else change / abs(prev) * 100,
+            "volume": min(volumes) if volumes else None,
+            "open": combine("open"),
+            "high": None,
+            "low": None,
+            "prev_close": prev,
+            "upper_limit": None,
+            "lower_limit": None,
+            "multiplier": None,
+            "remaining_days": None,
+            # 한 종목의 장 정보를 모를 수 있어(예: 3년물) 알 수 있는 값을 쓴다.
+            "market_session": next((q["market_session"] for q in quotes if q["market_session"] != "unknown"), "unknown"),
+        }
+
+    # 스프레드 봉은 종목마다 최근 봉을 받아 같은 시각끼리 짝짓는다. 한 종목의 봉이 오래전에 끊기면 겹치지 않으므로 넉넉히 받는다.
+    SPREAD_FETCH_FACTOR = 4
+    SPREAD_MAX_BARS = 4000
+    SPREAD_DAILY_SYNTH_BARS = 20000
+    SPREAD_DAILY_TTL = 300.0
+
+    def spread_candles(
+        self, legs: list[tuple[str, float]], interval: str, quantity: int, exchange: str | None
+    ) -> list[dict[str, Any]]:
+        """두 종목 봉을 같은 시각끼리 짝지은 스프레드 봉. 고가·저가는 알 수 없어 시가·종가의 최댓값·최솟값으로 둔다.
+
+        일봉은 한 종목이라도 NH 일봉이 비어 있으면 5분봉 스프레드를 영업일별로 합성해 돌려준다.
+        """
+        if interval == "day":
+            rows = self._spread_pairs(legs, "day", quantity, exchange)
+            if rows:
+                return rows[-quantity:]
+            # 5분봉을 많이 받아 합성하므로 무거워 일봉 차트의 짧은 갱신 주기마다 다시 만들지 않는다.
+            return self._spread_cache.get(
+                ("spread-daily", tuple(legs), exchange, quantity),
+                self.SPREAD_DAILY_TTL,
+                lambda: self._spread_daily_from_minutes(legs, quantity, exchange),
+            )
+        return self._spread_pairs(legs, interval, min(quantity * self.SPREAD_FETCH_FACTOR, self.SPREAD_MAX_BARS), exchange)[-quantity:]
+
+    def _spread_daily_from_minutes(self, legs: list[tuple[str, float]], quantity: int, exchange: str | None) -> list[dict[str, Any]]:
+        from datetime import datetime
+
+        from app.runners.series import daily_from_minutes
+        from strategy_base.models import Bar
+
+        rows = self._spread_pairs(legs, "5", self.SPREAD_DAILY_SYNTH_BARS, exchange)
+        bars = [Bar(datetime.fromisoformat(r["time"]), r["high"], r["low"], r["close"], r["volume"], r["open"]) for r in rows]
+        return [
+            {"time": b.time.date().isoformat(), "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume}
+            for b in daily_from_minutes(bars)
+        ][-quantity:]
+
+    def _spread_pairs(self, legs: list[tuple[str, float]], interval: str, quantity: int, exchange: str | None) -> list[dict[str, Any]]:
+        first, second = (self.candles(leg_code, interval, quantity, "overseas", exchange) for leg_code, _ in legs)
+        others = {row["time"]: row for row in second}
+        (_, one), (_, two) = legs
+        result = []
+        for row in first:
+            other = others.get(row["time"])
+            if other is None or not (row["close"] and other["close"] and row["volume"] and other["volume"]):
+                continue
+            close = one * row["close"] + two * other["close"]
+            open_ = one * row["open"] + two * other["open"] if row["open"] is not None and other["open"] is not None else close
+            result.append(
+                {
+                    "time": row["time"],
+                    "open": open_,
+                    "high": max(open_, close),
+                    "low": min(open_, close),
+                    "close": close,
+                    "volume": min(row["volume"], other["volume"]),
+                }
+            )
+        return result
+
+    @staticmethod
+    def spread_orderbook(code: str) -> dict[str, Any]:
+        """스프레드에는 호가가 없다."""
+        return {
+            "code": code,
+            "time": "",
+            "price": None,
+            "change_rate": None,
+            "total_ask_quantity": None,
+            "total_bid_quantity": None,
+            "levels": [],
         }

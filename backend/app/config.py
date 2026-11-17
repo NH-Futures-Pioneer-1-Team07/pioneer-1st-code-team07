@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     trading_env: Literal["mock", "real"]
     strategies_dir: Path = BACKEND_DIR / "strategies"
     runs_dir: Path = BACKEND_DIR / "runs"
+    sweeps_dir: Path = BACKEND_DIR / "sweeps"
+    reports_dir: Path = BACKEND_DIR / "reports"
+    minute_cache_dir: Path = BACKEND_DIR / "data" / "minute_cache"
     nh_app_key: SecretStr | None = None
     nh_app_secret: SecretStr | None = None
     nh_overseas_app_key: SecretStr | None = None

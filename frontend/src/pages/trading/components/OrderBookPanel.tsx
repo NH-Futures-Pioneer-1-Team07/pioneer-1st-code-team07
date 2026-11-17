@@ -1,5 +1,6 @@
 import type { TradingController } from "../useTradingPage";
-import { won } from "../../../data/format";
+import { formatNumber, won } from "../../../data/format";
+import { spreadContracts, spreadFormula } from "../../../data/tradingView";
 import styles from "./OrderBookPanel.module.css";
 
 export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
@@ -8,7 +9,26 @@ export default function OrderBookPanel({ ctl }: { ctl: TradingController }) {
     livePrice,
     levels,
     maxQuantity,
+    instrument,
   } = ctl;
+  if (instrument?.legs) {
+    return (
+      <section className={`panel ${styles.orderbook}`} aria-label="스프레드 구성">
+        <div className="section-head">
+          <h2>스프레드 구성</h2>
+        </div>
+        <p className={styles.formula}>{spreadFormula(instrument.legs)}</p>
+        <ul className={styles.notes}>
+          <li>1세트: {spreadContracts(instrument.legs)}</li>
+          <li>봉: 같은 시각의 두 종목 봉을 위 식으로 합친 값</li>
+          <li>현재가: 두 종목의 현재가로 계산한 값</li>
+          <li>
+            가격 1.0 = {instrument.multiplier ? `${formatNumber(instrument.multiplier)}달러` : "거래승수만큼의 금액"} (1세트)
+          </li>
+        </ul>
+      </section>
+    );
+  }
   return (
     <section className={`panel ${styles.orderbook}`} aria-label="호가">
       <div className="section-head">

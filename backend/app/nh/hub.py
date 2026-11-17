@@ -15,6 +15,8 @@ from app.nh.client import NHClient
 from app.nh.errors import NHConfigError, NHError
 from app.nh.realtime import RealtimeConnection, State
 from app.nh.realtime_data import Feed, OrderBook, Reconnected, SubscriptionFailed, Trade
+from app.runners.spread_broker import SpreadPriceMux
+from strategy_base.manifest import SpreadLeg
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,8 @@ class MarketHub:
         }
         self._connections: dict[str, Any] = {}
         self._subscribers: dict[tuple[str, str], set[Subscriber]] = {}
+        # 스프레드 종목 -> 두 종목의 체결을 합치는 변환기. 스프레드 종목은 NH에 구독하지 않고 두 종목의 체결(FA)을 쓴다.
+        self._spreads: dict[tuple[str, str], SpreadPriceMux] = {}
         self._states = {market: "connecting" for market in MARKETS}
         self._lock = asyncio.Lock()
 
@@ -130,15 +134,28 @@ class MarketHub:
     def codes(self) -> frozenset[str]:
         return frozenset(code for market, code in self._subscribers if market == "domestic")
 
-    async def join(self, code: str, market: str = "domestic") -> Subscriber:
-        """종목을 보는 화면을 등록한다. 시장마다 서로 다른 종목이 `MAX_CODES`개를 넘으면 `HubFull`이다."""
+    def _nh_codes(self, market: str) -> set[str]:
+        """그 시장에서 NH에 구독 중인(또는 구독해야 하는) 종목. 스프레드는 두 종목으로 센다."""
+        codes: set[str] = set()
+        for item_market, code in self._subscribers:
+            if item_market != market:
+                continue
+            mux = self._spreads.get((market, code))
+            codes.update(leg.code for leg in mux.legs) if mux else codes.add(code)
+        return codes
+
+    async def join(self, code: str, market: str = "domestic", legs: list[SpreadLeg] | None = None) -> Subscriber:
+        """종목을 보는 화면을 등록한다. 시장마다 NH에 구독하는 서로 다른 종목이 `MAX_CODES`개를 넘으면 `HubFull`이다.
+
+        `legs`가 있으면 스프레드 종목이다. 두 종목의 체결(`FA`)만 구독해 합성한 체결을 보내고 호가는 보내지 않는다."""
         if not self.has_credentials(market):
             names = "NH_OVERSEAS_APP_KEY, NH_OVERSEAS_APP_SECRET" if market == "overseas" else "NH_APP_KEY, NH_APP_SECRET"
             raise NHConfigError(f"{names} 환경변수를 설정하세요")
         async with self._lock:
             key = (market, code)
-            in_market = sum(1 for item in self._subscribers if item[0] == market)
-            if key not in self._subscribers and in_market >= MAX_CODES:
+            before = self._nh_codes(market)
+            wanted = {leg.code for leg in legs} if legs else {code}
+            if key not in self._subscribers and len(before | wanted) > MAX_CODES:
                 raise HubFull(f"시세는 서로 다른 종목 {MAX_CODES}개까지 볼 수 있습니다")
             connection = self._connections.get(market)
             if connection is None:
@@ -151,8 +168,18 @@ class MarketHub:
             subscriber = Subscriber(code, market)
             if key not in self._subscribers:
                 self._subscribers[key] = set()
-                for action_code in FEED_CODES[market]:
-                    await connection.subscribe(Feed(action_code, code))
+                if legs:
+                    self._spreads[key] = SpreadPriceMux(
+                        code, legs, lambda event, key=key: self._push_spread(key, event)
+                    )
+                    for leg in legs:
+                        if leg.code not in before:
+                            await connection.subscribe(Feed(FEED_CODES[market][0], leg.code))
+                else:
+                    for action_code in FEED_CODES[market]:
+                        # 스프레드가 체결만 구독하던 종목이면 나머지(호가)만 더한다.
+                        if not (action_code == FEED_CODES[market][0] and code in before):
+                            await connection.subscribe(Feed(action_code, code))
             self._subscribers[key].add(subscriber)
             subscriber.push({"type": "state", "state": self._states[market], "detail": ""})
             return subscriber
@@ -167,10 +194,21 @@ class MarketHub:
             if group:
                 return
             del self._subscribers[key]
+            mux = self._spreads.pop(key, None)
             connection = self._connections.get(subscriber.market)
-            if connection is not None:
-                for action_code in FEED_CODES[subscriber.market]:
-                    await connection.unsubscribe(Feed(action_code, subscriber.code))
+            if connection is None:
+                return
+            still = self._nh_codes(subscriber.market)
+            if mux is not None:
+                for leg in mux.legs:
+                    if leg.code not in still:
+                        await connection.unsubscribe(Feed(FEED_CODES[subscriber.market][0], leg.code))
+                return
+            for index, action_code in enumerate(FEED_CODES[subscriber.market]):
+                # 스프레드가 아직 이 종목의 체결을 쓰고 있으면 체결 구독은 남긴다.
+                if index == 0 and subscriber.code in still:
+                    continue
+                await connection.unsubscribe(Feed(action_code, subscriber.code))
 
     async def close(self) -> None:
         async with self._lock:
@@ -197,6 +235,17 @@ class MarketHub:
             self._broadcast(market, message)
             return
         for subscriber in list(self._subscribers.get((market, code), ())):
+            subscriber.push(message)
+        if isinstance(event, Trade):
+            for (spread_market, _), mux in list(self._spreads.items()):
+                if spread_market == market:
+                    mux(event)
+
+    def _push_spread(self, key: tuple[str, str], event: Any) -> None:
+        message = serialize(event)
+        if message is None:
+            return
+        for subscriber in list(self._subscribers.get(key, ())):
             subscriber.push(message)
 
     def _broadcast(self, market: str, message: dict[str, Any]) -> None:

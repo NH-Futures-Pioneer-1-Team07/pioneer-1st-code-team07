@@ -1,0 +1,64 @@
+{
+  "name": "Z3N·ZN 미국 국채선물 스프레드 전략",
+  "description": "Z3N 3년·ZN 10년 선물을 1:1로 묶은 스프레드가 최근 일봉 스프레드 분포의 밴드를 5분봉에서 벗어나면 평균회귀 방향으로 진입하고, 중앙값 근처로 돌아오면 청산합니다.",
+  "instruments": [
+    {
+      "name": "Z3N·ZN 스프레드 2026년 12월물 (Z3N 1 : ZN 1)",
+      "market": "overseas",
+      "exchange": "FCME",
+      "code": "Z3NZ26-ZNZ26",
+      "multiplier": 1000,
+      "margin": 4063,
+      "tick_size": 0.0234375,
+      "legs": [
+        {
+          "code": "Z3NZ26",
+          "ratio": 1,
+          "weight": 2
+        },
+        {
+          "code": "ZNZ26",
+          "ratio": -1
+        }
+      ]
+    }
+  ],
+  "bar": {
+    "unit": "minute",
+    "size": 5
+  },
+  "series": {
+    "daily": {
+      "unit": "day",
+      "size": 1
+    }
+  },
+  "parameters": {
+    "window_days": {
+      "default": 25,
+      "description": "밴드를 계산하는 일봉 스프레드 개수(직전 거래일까지의 유효한 일봉 쌍)",
+      "editable": true,
+      "label": "일봉 쌍 개수",
+      "min": 5,
+      "max": 120
+    },
+    "entry_pct": {
+      "default": 0,
+      "description": "진입 경계의 백분위. 0이면 일봉 스프레드의 최저값·최고값이 경계이고, 5%면 하위 5%·상위 5% 분위수(선형 보간)가 경계",
+      "editable": true,
+      "label": "진입 백분위",
+      "unit": "percent",
+      "min": 0,
+      "max": 0.49
+    },
+    "exit_buffer_ratio": {
+      "default": 0.001,
+      "description": "청산 경계가 중앙값에서 떨어진 정도. 중앙값의 절댓값에 이 비율을 곱한 만큼 위아래로 둠",
+      "editable": true,
+      "label": "청산 여유 비율",
+      "unit": "percent",
+      "min": 0,
+      "max": 0.1
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import type { ChartLineSpec, Candle, JournalLine, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
+import type { ChartLineSpec, Candle, JournalLine, JudgmentLevel, MarketSession, Phase, RunRef, RunSummary, TradingStatus } from "../apis/types.ts";
 
 export const sideLabel = (side: string | null | undefined) =>
   side === "buy" ? "매수" : side === "sell" ? "매도" : "";
@@ -25,6 +25,39 @@ export function instrumentLabel(name: string): string {
   const manifest = /^(.+?)\s*(\d{4})년\s*(\d{1,2})월물$/.exec(name.trim());
   if (manifest) return `${manifest[1].replace(/선물$/, " 선물")} · ${manifest[2]}.${manifest[3].padStart(2, "0")}`;
   return name;
+}
+
+/** 스프레드 계산식. 가격 가중치(없으면 계약 비율)를 쓴다. 예: `3 × ZFZ26 − 2 × ZNZ26` */
+export function spreadFormula(legs: { code: string; ratio: number; weight?: number | null }[]): string {
+  return legs
+    .map((leg, index) => {
+      const weight = leg.weight ?? leg.ratio;
+      const sign = weight < 0 ? "−" : "+";
+      const term = `${Math.abs(weight)} × ${leg.code}`;
+      return index === 0 ? (weight < 0 ? `−${term}` : term) : ` ${sign} ${term}`;
+    })
+    .join("");
+}
+
+/** 한 세트의 계약 구성 문구. 예: `ZFZ26 3계약 · ZNZ26 2계약` */
+export const spreadContracts = (legs: { code: string; ratio: number }[]): string =>
+  legs.map((leg) => `${leg.code} ${Math.abs(leg.ratio)}계약`).join(" · ");
+
+const MONTH_CODES = "FGHJKMNQUVXZ";
+
+/** CME 종목코드(`ZFZ26`)의 월물을 `2026년 12월물` 형식으로 읽는다. 읽을 수 없으면 `null`. */
+export function contractMonth(code: string): string | null {
+  const match = /^[A-Z0-9]{1,3}([FGHJKMNQUVXZ])(\d{2})$/.exec(code);
+  return match ? `20${match[2]}년 ${MONTH_CODES.indexOf(match[1]) + 1}월물` : null;
+}
+
+/** 월물이 있는 종목들의 만기 안내 문구. 종료는 사람이 직접 한다. */
+export function expiryNote(codes: string[]): string | null {
+  const months = codes.map(contractMonth);
+  if (months.length === 0 || months.some((month) => month === null)) return null;
+  const same = months.every((month) => month === months[0]);
+  const subject = same ? `${codes.join("·")}은 ${months[0]}` : codes.map((code, i) => `${code} ${months[i]}`).join(", ");
+  return `${subject}입니다. 만기 전에 직접 운용을 종료하세요.`;
 }
 
 /** 상단바 장 상태 앞에 붙는 시장 이름. */
@@ -184,6 +217,8 @@ export interface ChartLayout {
   max: number;
   /** 가격을 차트의 세로 위치로 바꾼다 */
   y: (price: number) => number;
+  /** 차트의 세로 위치를 가격으로 바꾼다. 가격 영역 밖(거래량 영역)이면 `null` */
+  price: (y: number) => number | null;
 }
 
 /** 캔들과 거래량을 `width × height` 안에 놓는다. 오른쪽 `axisWidth`는 가격 눈금 자리다. */
@@ -195,7 +230,7 @@ export function chartLayout(
   /** 캔들 밖에서 차트 안에 들어와야 하는 가격(선의 값). 세로 범위에 포함한다 */
   extraPrices: number[] = [],
 ): ChartLayout {
-  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0 };
+  const empty: ChartLayout = { shapes: [], ticks: [], lastY: null, min: 0, max: 0, y: () => 0, price: () => null };
   if (!candles.length || width <= axisWidth) return empty;
   const top = 12;
   const priceBottom = height * 0.76;
@@ -206,6 +241,7 @@ export function chartLayout(
   const max = Math.max(...highs);
   const span = max - min || Math.max(max * 0.001, 1);
   const y = (price: number) => top + ((max - price) / span) * (priceBottom - top);
+  const price = (at: number) => (at < top || at > priceBottom ? null : max - ((at - top) / (priceBottom - top)) * span);
   const maxVolume = Math.max(...candles.map((c) => c.volume), 1);
   const slot = (width - axisWidth) / candles.length;
   const bar = Math.max(1, Math.min(slot * 0.7, 14));
@@ -232,7 +268,7 @@ export function chartLayout(
     const value = max - (span * row) / 3;
     return { y: y(value), value };
   });
-  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y };
+  return { shapes, ticks, lastY: y(candles[candles.length - 1].close), min, max, y, price };
 }
 
 /** 종가의 단순이동평균. 봉이 `period`개 모이기 전 자리는 `null`이다. */
@@ -278,6 +314,22 @@ export function resolveLines(specs: ChartLineSpec[], candles: Candle[], today: s
   });
 }
 
+const LEVEL_COLORS = ["#f87171", "#c084fc", "#e5e7eb", "#34d399", "#60a5fa"];
+
+/** 전략이 내려준 경계를 차트 전체에 걸친 수평선으로 만든다. */
+export function levelLines(levels: JudgmentLevel[], candles: Candle[]): ResolvedLine[] {
+  return levels.map((level, index) => ({
+    spec: { series: "bar", kind: "level", period: null, label: level.label, description: level.description },
+    color: LEVEL_COLORS[index % LEVEL_COLORS.length],
+    values: candles.map(() => level.value),
+    latest: level.value,
+  }));
+}
+
+/** 경계선을 그릴 차트 주기. 판단 기준 봉과 같은 분봉이거나 일봉이다. */
+export const showsLevels = (interval: string, barMinutes: number | null): boolean =>
+  interval === "day" || (barMinutes !== null && interval === String(barMinutes));
+
 /** 가로축에 보여 줄 시각 눈금 네 개. */
 export function timeTicks(candles: Candle[], daily: boolean): { index: number; label: string }[] {
   if (!candles.length) return [];
@@ -286,6 +338,17 @@ export function timeTicks(candles: Candle[], daily: boolean): { index: number; l
     const time = candles[index].time;
     return { index, label: daily ? time.slice(5).replace("-", ".") : time.slice(11, 16) };
   });
+}
+
+/** 마우스 가로 위치 `x`에 있는 봉의 번호. 봉이 놓인 영역 밖이면 `null`. */
+export function candleIndexAt(x: number, slot: number, count: number): number | null {
+  if (slot <= 0 || count <= 0 || x < 0 || x >= slot * count) return null;
+  return Math.min(count - 1, Math.floor(x / slot));
+}
+
+/** 호버 툴팁에 보여 줄 봉 시각. 일봉은 날짜, 분봉은 날짜와 시각. */
+export function hoverTime(time: string, daily: boolean): string {
+  return daily ? time.slice(0, 10).replace(/-/g, ".") : `${time.slice(5, 10).replace("-", ".")} ${time.slice(11, 16)}`;
 }
 
 /** 실행 하나를 가리키는 키. 목록에서 선택·갱신할 때 쓴다. */

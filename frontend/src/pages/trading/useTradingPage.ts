@@ -14,6 +14,7 @@ import {
   type MarketTarget,
 } from "../../apis/trading";
 import { useParamInputs } from "../../components/common/EditableParams";
+import { latestWeek } from "../../data/defaultStrategy";
 import { currencyOf } from "../../data/format";
 import { formatClock } from "../../data/tradingView";
 import type { MarketStatus } from "../../data/tradingView";
@@ -33,7 +34,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const phase = status.data?.phase ?? "idle";
   const items = strategies.data ?? [];
   const activeId = status.data?.run?.strategy_id ?? null;
-  const strategyId = activeId ?? selected ?? items[0]?.id ?? null;
+  const strategyId = activeId ?? selected ?? latestWeek(items, (item) => item.id)?.id ?? null;
   const running = phase !== "idle";
   const pending = phase === "stopping" || phase === "clearing";
   const clearing = status.data?.clear?.state === "running";
@@ -53,7 +54,7 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
   const code = instrument?.code ?? null;
 
   const target: MarketTarget | undefined = instrument
-    ? { market: instrument.market, exchange: instrument.exchange }
+    ? { market: instrument.market, exchange: instrument.exchange, legs: instrument.legs }
     : undefined;
   const quote = usePolling(() => fetchQuote(code as string, target), 3000, [code], !!code);
   const candles = usePolling(
@@ -63,7 +64,8 @@ export function useTradingPage(onMarketStatus: (status: MarketStatus) => void) {
     !!code,
   );
   const book = usePolling(() => fetchOrderBook(code as string, target), 3000, [code], !!code);
-  const stream = useMarketStream(code, market);
+  // 스프레드는 서버가 두 종목의 실시간 체결을 합성해 보낸다(호가는 없다).
+  const stream = useMarketStream(code, market, instrument?.legs);
   const streamState = stream.state;
 
   const livePrice = stream.lastTrade?.price ?? quote.data?.price ?? null;

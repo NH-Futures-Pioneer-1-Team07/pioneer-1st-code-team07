@@ -4,10 +4,11 @@ import type { MarketStatus } from "./data/tradingView";
 import Icon from "./components/common/Icon";
 import TradingPage from "./pages/trading/TradingPage";
 import BacktestPage from "./pages/backtest/BacktestPage";
+import ReportsPage from "./pages/reports/ReportsPage";
 import styles from "./App.module.css";
 
 export default function App() {
-  const [page, setPage] = useState<"trading" | "backtest">("trading");
+  const [page, setPage] = useState<"trading" | "backtest" | "reports">("trading");
   const [market, setMarket] = useState<MarketStatus>({ session: null, stream: "connecting", failure: null });
 
   return (
@@ -56,7 +57,9 @@ export default function App() {
             <span>
               {page === "trading"
                 ? "NH 모의계좌 연동 · 운용 시작과 정리는 모의계좌에 실제로 주문을 전송합니다"
-                : "NH 모의환경의 과거 시세로 계산합니다 · 실제 주문 없음"}
+                : page === "backtest"
+                  ? "NH 모의환경의 과거 시세로 계산합니다 · 실제 주문 없음"
+                  : "저장된 조합 탐색 결과로 쓴 검증 보고서입니다 · 모의 백테스트 비교이며 투자 판단의 근거가 아닙니다"}
             </span>
           </div>
           <div hidden={page !== "trading"}>
@@ -64,6 +67,9 @@ export default function App() {
           </div>
           <div hidden={page !== "backtest"}>
             <BacktestPage />
+          </div>
+          <div hidden={page !== "reports"}>
+            <ReportsPage active={page === "reports"} />
           </div>
         </main>
       </div>
@@ -87,6 +93,15 @@ export default function App() {
             onClick={() => setPage("backtest")}
           >
             <Icon name="flask" size={22} />
+          </button>
+          <button
+            className={page === "reports" ? styles.activeNav : ""}
+            aria-current={page === "reports" ? "page" : undefined}
+            aria-label="검증 리포트"
+            title="검증 리포트"
+            onClick={() => setPage("reports")}
+          >
+            <Icon name="document" size={22} />
           </button>
         </nav>
         <div className={styles.railFooter}>
@@ -117,6 +132,14 @@ export default function App() {
         >
           <Icon name="flask" size={22} />
           <span>백테스트</span>
+        </button>
+        <button
+          className={page === "reports" ? styles.activeNav : ""}
+          aria-current={page === "reports" ? "page" : undefined}
+          onClick={() => setPage("reports")}
+        >
+          <Icon name="document" size={22} />
+          <span>검증 리포트</span>
         </button>
       </nav>
     </div>

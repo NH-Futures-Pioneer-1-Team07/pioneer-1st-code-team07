@@ -32,3 +32,6 @@ coverage/
 
 # 개인 도구 설정
 .claude/
+
+# 조합 탐색이 받아 둔 분봉(다시 받을 수 있는 자료)
+/backend/data/minute_cache/

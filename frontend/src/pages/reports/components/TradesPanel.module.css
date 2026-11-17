@@ -1,0 +1,73 @@
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+.toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.toggle button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.toggle button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.panel h4 {
+  margin: 6px 0 -4px;
+  font-size: 13px;
+}
+.panel h4 small {
+  margin-left: 8px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.table {
+  min-width: 560px;
+}
+.table th,
+.table td {
+  text-align: right;
+}
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+  padding-left: 12px;
+}
+.summaryTable {
+  min-width: 0;
+}
+.reason {
+  white-space: normal;
+  text-align: left !important;
+}
+.reasonCell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left !important;
+  color: var(--text-secondary);
+}
+.scroll {
+  --table-height: 360px;
+}
+.note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.error {
+  color: var(--danger);
+  font-size: 12px;
+}

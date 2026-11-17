@@ -7,7 +7,9 @@ import {
   linesForInterval,
   lineValues,
   movingAverage,
+  levelLines,
   resolveLines,
+  showsLevels,
   formatDateTime,
   instrumentLabel,
   mapDecisions,
@@ -241,4 +243,74 @@ test("차트 주기에 맞는 선만 고르고 이동평균 선에는 색을 돌
   assert.equal(resolved[0].latest, 3.5);
   assert.equal(resolved[1].latest, 3);
   assert.notEqual(resolved[0].color, resolved[1].color);
+});
+
+test("전략이 내려준 경계는 차트 전체에 걸친 수평선이 된다", () => {
+  const candles = [1, 2, 3].map((close, index) => ({
+    time: `2026-11-11T09:0${index}:00`,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1,
+  }));
+  const lines = levelLines(
+    [
+      { label: "진입 상단", value: 103.9, description: "상단" },
+      { label: "진입 하단", value: 100, description: "하단" },
+    ],
+    candles,
+  );
+  assert.deepEqual(lines.map((line) => line.spec.label), ["진입 상단", "진입 하단"]);
+  assert.deepEqual(lines[0].values, [103.9, 103.9, 103.9]);
+  assert.equal(lines[0].latest, 103.9);
+  assert.equal(lines[0].spec.kind, "level");
+  assert.notEqual(lines[0].color, lines[1].color);
+});
+
+test("경계선은 판단 기준 봉과 일봉 차트에만 그린다", () => {
+  assert.equal(showsLevels("5", 5), true);
+  assert.equal(showsLevels("day", 5), true);
+  assert.equal(showsLevels("1", 5), false);
+  assert.equal(showsLevels("5", null), false);
+});
+
+test("종목코드의 월물을 읽어 만기 안내 문구를 만든다", async () => {
+  const { contractMonth, expiryNote } = await import("./tradingView.ts");
+  assert.equal(contractMonth("ZFZ26"), "2026년 12월물");
+  assert.equal(contractMonth("ZNH27"), "2027년 3월물");
+  assert.equal(contractMonth("A116B000"), null);
+  assert.equal(expiryNote(["ZFZ26", "ZNZ26"]), "ZFZ26·ZNZ26은 2026년 12월물입니다. 만기 전에 직접 운용을 종료하세요.");
+  assert.equal(expiryNote(["ZFZ26", "ZNH27"]), "ZFZ26 2026년 12월물, ZNH27 2027년 3월물입니다. 만기 전에 직접 운용을 종료하세요.");
+  assert.equal(expiryNote(["A116B000"]), null);
+});
+
+test("스프레드 계산식을 종목과 비율로 만든다", async () => {
+  const { spreadFormula } = await import("./tradingView.ts");
+  assert.equal(spreadFormula([{ code: "ZFZ26", ratio: 3 }, { code: "ZNZ26", ratio: -2 }]), "3 × ZFZ26 − 2 × ZNZ26");
+  assert.equal(spreadFormula([{ code: "A", ratio: -1 }, { code: "B", ratio: 1 }]), "−1 × A + 1 × B");
+});
+
+test("마우스 위치에서 봉과 가격, 시각을 읽는다", async () => {
+  const { candleIndexAt, chartLayout, hoverTime } = await import("./tradingView.ts");
+  assert.equal(candleIndexAt(25, 10, 5), 2);
+  assert.equal(candleIndexAt(0, 10, 5), 0);
+  assert.equal(candleIndexAt(49.9, 10, 5), 4);
+  assert.equal(candleIndexAt(50, 10, 5), null);
+  assert.equal(candleIndexAt(-1, 10, 5), null);
+  assert.equal(candleIndexAt(5, 10, 0), null);
+  assert.equal(hoverTime("2026-11-10T09:05:00+09:00", false), "11.10 09:05");
+  assert.equal(hoverTime("2026-11-10T00:00:00+09:00", true), "2026.11.10");
+  const candles = [{ time: "t", open: 100, high: 110, low: 90, close: 105, volume: 5 }];
+  const layout = chartLayout(candles, 300, 200, 76);
+  assert.ok(Math.abs((layout.price(layout.y(100)) ?? 0) - 100) < 1e-9);
+  assert.equal(layout.price(199), null);
+});
+
+test("가격 가중치가 있으면 계산식에 가중치를 쓰고 계약 구성은 비율로 보여 준다", async () => {
+  const { spreadContracts, spreadFormula } = await import("./tradingView.ts");
+  const legs = [{ code: "Z3NZ26", ratio: 1, weight: 2 }, { code: "ZNZ26", ratio: -1 }];
+  assert.equal(spreadFormula(legs), "2 × Z3NZ26 − 1 × ZNZ26");
+  assert.equal(spreadContracts(legs), "Z3NZ26 1계약 · ZNZ26 1계약");
+  assert.equal(spreadFormula([{ code: "ZFZ26", ratio: 3 }, { code: "ZNZ26", ratio: -2 }]), "3 × ZFZ26 − 2 × ZNZ26");
 });

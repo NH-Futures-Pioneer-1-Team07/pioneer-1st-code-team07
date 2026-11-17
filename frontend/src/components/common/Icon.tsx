@@ -8,7 +8,8 @@ type IconName =
   | "close"
   | "spinner"
   | "check"
-  | "info";
+  | "info"
+  | "document";
 
 const paths: Record<IconName, string> = {
   chart: "M3 3v18h18M7 14V9m4 8V6m4 7V3m4 14V9",
@@ -21,6 +22,7 @@ const paths: Record<IconName, string> = {
   spinner: "M21 12a9 9 0 1 1-6.2-8.55",
   check: "m5 12.5 4.5 4.5L19 7.5",
   info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v6m0-9.5v.01",
+  document: "M7 3h7l5 5v13H7ZM14 3v5h5M10 13h6M10 17h6",
 };
 
 const filled: IconName[] = ["play", "stop"];

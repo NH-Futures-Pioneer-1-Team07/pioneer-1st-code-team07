@@ -10,6 +10,7 @@ import {
 import { errorMessage } from "../../apis/client";
 import { usePolling } from "../../apis/polling";
 import { fetchRuns, fetchStrategies, fetchStrategy } from "../../apis/trading";
+import { latestWeek } from "../../data/defaultStrategy";
 import { useParamInputs } from "../../components/common/EditableParams";
 import type { RunRef, RunSummary } from "../../apis/types";
 import { CAPITAL, defaultPeriod, progressPercent, validateInput } from "../../data/backtestView";
@@ -34,7 +35,7 @@ export function useBacktestPage() {
 
   const strategies = usePolling(fetchStrategies, 60000);
   const items = strategies.data ?? [];
-  const strategy = items.find((item) => item.id === selectedStrategy) ?? items[0];
+  const strategy = items.find((item) => item.id === selectedStrategy) ?? latestWeek(items, (item) => item.id);
   const strategyId = strategy?.id ?? null;
 
   const detail = usePolling(() => fetchStrategy(strategyId as string), 600000, [strategyId], !!strategyId);

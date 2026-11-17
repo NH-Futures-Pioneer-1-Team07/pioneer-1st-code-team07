@@ -3,7 +3,7 @@ import Icon from "../../../components/common/Icon";
 import EditableParams from "../../../components/common/EditableParams";
 import StrategySelect from "../../../components/common/StrategySelect";
 import { currencyOf, currencyUnit, dash, formatMoney, formatNumber, moneyIn, pnlClass } from "../../../data/format";
-import { instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
+import { expiryNote, instrumentLabel, phaseLabel, signed } from "../../../data/tradingView";
 import { startTrading } from "../../../apis/trading";
 import styles from "./ControlPanel.module.css";
 
@@ -27,6 +27,7 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
     paramInputs,
     act,
   } = ctl;
+  const expiry = instrument?.legs ? expiryNote(instrument.legs.map((leg) => leg.code)) : null;
   const currency = currencyOf(instrument?.market);
   return (
     <section className={`panel ${styles.control}`} aria-labelledby="run-title">
@@ -100,6 +101,7 @@ export default function ControlPanel({ ctl }: { ctl: TradingController }) {
         </p>
       </div>
       {!running && <EditableParams inputs={paramInputs} idPrefix="trading-param" />}
+      {expiry && <p className={styles.expiryNote}>{expiry}</p>}
       {!running ? (
         <button
           className={`button primary ${styles.fullButton}`}

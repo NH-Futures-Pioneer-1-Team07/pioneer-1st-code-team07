@@ -30,6 +30,8 @@ class Assumptions:
     slippage_ticks: int
     multiplier: int
     tick_size: float
+    # 수수료를 체결가가 아닌 이 가격으로 계산한다(스프레드 종목). 없으면 체결가를 쓴다.
+    fee_price: float | None = None
 
 
 @dataclass
@@ -122,7 +124,10 @@ class BacktestEngine:
         self.minutes = minutes
         self.last_trading_day = last_trading_day
         self.ledger = Ledger(
-            multiplier=assumptions.multiplier, fee_rate=assumptions.fee_rate, initial_capital=initial_capital
+            multiplier=assumptions.multiplier,
+            fee_rate=assumptions.fee_rate,
+            initial_capital=initial_capital,
+            fee_price=assumptions.fee_price,
         )
         self.totals = _Totals(peak=initial_capital)
         self.state: dict[str, Any] = {}

@@ -11,6 +11,8 @@ export interface StrategyInstrument {
   exchange: string | null;
   multiplier: number | null;
   margin: number | null;
+  /** 스프레드 종목이면 구성 종목과 계약 비율과 가격 가중치(음수인 종목은 스프레드 가격에서 뺀다). 가중치가 없으면 계약 비율이다 */
+  legs?: { code: string; ratio: number; weight?: number | null }[] | null;
 }
 
 /** 전략 파라미터 명세. `editable`이면 시작 전에 화면에서 바꿀 수 있고 `percent`는 0.2를 20%로 보여 준다. */
@@ -27,7 +29,7 @@ export interface ParameterSpec {
 /** 모의매매 차트에 그릴 전략의 판단용 선. `bar`는 판단 기준 봉 차트, `daily`는 일봉 차트에 그린다. */
 export interface ChartLineSpec {
   series: "bar" | "daily";
-  kind: "sma" | "previous_close";
+  kind: "sma" | "previous_close" | "level";
   period: number | null;
   label: string;
   description: string;
@@ -126,8 +128,16 @@ export interface JudgmentSection {
   rows: [string, string][];
 }
 
+/** 전략이 차트에 수평선으로 그리라고 내려주는 경계(스프레드 밴드 등) */
+export interface JudgmentLevel {
+  label: string;
+  value: number;
+  description: string;
+}
+
 export interface Judgment {
   sections: JudgmentSection[];
+  levels?: JudgmentLevel[];
 }
 
 export interface TradingStatus {
@@ -295,4 +305,114 @@ export interface BacktestResult {
 export interface BacktestRun {
   meta: BacktestMeta;
   result: BacktestResult | null;
+}
+
+/** 검증 보고서 목록 항목. 머리말이 깨졌으면 `error`만 채워진다. */
+export interface ReportSummary {
+  strategy_id: string;
+  name: string;
+  title?: string;
+  question?: string;
+  updated?: string;
+  author?: string;
+  result_count?: number;
+  recommended?: (string | null)[];
+  error: string | null;
+}
+
+export interface ReportPeriod {
+  label: string;
+  start: string;
+  end: string;
+  kind: "full" | "split";
+}
+
+export interface ReportRecommendation {
+  label: string;
+  role: "recommended" | "alternative";
+  params: Record<string, unknown>;
+  ids: Record<string, string>;
+}
+
+export interface ReportMeta {
+  strategy_id: string;
+  name: string;
+  title: string;
+  question: string;
+  updated: string;
+  author: string;
+  result_count: number;
+  periods: ReportPeriod[];
+  recommended: ReportRecommendation[];
+}
+
+export type TableCell = number | string | null;
+
+export interface ReportTable {
+  columns: string[];
+  rows: TableCell[][];
+}
+
+export interface ReportDetail {
+  strategy_id: string;
+  name: string;
+  meta: ReportMeta;
+  body: string;
+  table: ReportTable | null;
+}
+
+/** 조합 탐색 결과 한 줄(조합 하나 × 기간 하나). */
+export interface SweepResult {
+  id: string;
+  strategy_id: string;
+  params: Record<string, unknown>;
+  start: string;
+  end: string;
+  slippage_ticks: number;
+  initial_capital: number;
+  summary: {
+    net_pnl: number;
+    gross_pnl: number;
+    fee: number;
+    return_rate: number;
+    max_drawdown_rate: number;
+    trade_count: number;
+    win_count: number;
+    loss_count: number;
+  };
+  daily_equity: { time: string; equity: number }[];
+}
+
+export interface SweepTrade {
+  kind: "trade";
+  entry_id: string;
+  side: "buy" | "sell";
+  quantity: number;
+  opened_at: string | null;
+  closed_at: string | null;
+  entry_price: number;
+  exit_price: number;
+  gross_pnl: number;
+  fee: number;
+  net_pnl: number;
+  entry_reason: string | null;
+  exit_reason: string | null;
+}
+
+export interface SweepFill {
+  kind: "fill";
+  time: string | null;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  raw_price: number;
+  fee: number;
+  intent: "entry" | "exit";
+  entry_id: string;
+  source: string | null;
+}
+
+export interface SweepTrades {
+  trades: SweepTrade[];
+  fills: SweepFill[];
 }

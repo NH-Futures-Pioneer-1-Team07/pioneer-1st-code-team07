@@ -29,7 +29,7 @@ uv run uvicorn app.main:create_app --factory --reload
 ```
 
 - `TRADING_ENV`는 필수다. `mock`(모의) 또는 `real`(실전)을 쓴다. 없으면 서버가 시작되지 않고 없는 변수 이름을 알려 준다.
-- `STRATEGIES_DIR`, `RUNS_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`를 쓴다.
+- `STRATEGIES_DIR`, `RUNS_DIR`, `SWEEPS_DIR`, `REPORTS_DIR`, `MINUTE_CACHE_DIR`는 선택이다. 생략하면 `backend/strategies`, `backend/runs`, `backend/sweeps`, `backend/reports`, `backend/data/minute_cache`를 쓴다.
 - `NH_OVERSEAS_APP_KEY`, `NH_OVERSEAS_APP_SECRET`는 해외 API(`/trade/v1/overseas/*`)용 키다. 국내 키로는 해외 API가 `EGW016`(호출 권한 없음)으로 거절된다. 해외 전략을 쓸 때만 필요하다.
 - `NH_APP_KEY`, `NH_APP_SECRET`는 NH선물 API를 부를 때만 필요하다. `TRADING_ENV`가 고른 환경(모의 또는 실전)의 키를 넣는다. 없으면 서버는 시작하지만 NH를 부르는 순간 필요한 변수 이름을 알려 주는 오류가 난다.
 - `.env`에는 비밀정보가 들어갈 수 있으므로 커밋하지 않는다.
@@ -52,7 +52,11 @@ uv run pytest
 | `app/runners/` | 백테스트·모의매매 실행, 전략 입력 준비, 포지션·손익 계산, 계좌 정리 |
 | `app/data/` | VIX 일 종가 읽기·갱신. 데이터 파일은 `data/vixcls.csv` |
 | `app/records/` | 실행 기록의 저장·조회·변경 알림과 비밀정보 제거 |
+| `app/reports/` | 검증 보고서 읽기(`report.md`의 JSON 머리말과 `table.csv`) |
+| `app/sweep/` | 조합 탐색. 파라미터·기간 조합을 여러 개 백테스트하고 결과 요약을 쌓는다 |
 | `runs/` | 실행 기록. 구조는 [runs/README.md](runs/README.md) |
+| `sweeps/` | 조합 탐색 결과. 구조는 [조합 탐색](#조합-탐색) |
+| `reports/` | 조합 탐색 비교표와 보고서 |
 | `tests/` | 테스트 |
 
 ## 전략 추가 방법
@@ -65,6 +69,8 @@ uv run pytest
    - `bar`: 판단 기준 봉 단위. 봉이 마감될 때마다 `on_bar`가 호출된다. 예: `{"unit": "minute", "size": 3}`
    - `instruments[].margin`(선택): 계약당 기준 증거금. `ctx.margin`으로 받는다.
    - `instruments[].tick_size`(선택): 호가 단위. 백테스트의 슬리피지와 가격 경로가 쓰며, 없으면 봉 가격 차이로 추정한다(소수 둘째 자리까지만 구별하므로 ZN처럼 1/64 단위인 종목은 적어야 한다).
+   - `instruments[].legs`(선택): 두 종목의 가격을 비율대로 합친 스프레드 종목을 선언한다. `[{"code": "ZFZ26", "ratio": 3}, {"code": "ZNZ26", "ratio": -2}]`처럼 종목 2개를 쓰며 스프레드 가격은 `3 × ZFZ26 − 2 × ZNZ26`이고 한 세트가 수량 1이다. 이때 `multiplier`·`margin`·`tick_size`는 한 세트 기준으로 적는다. 두 종목의 거래승수가 다르면 `weight`(가격 가중치, 없으면 `ratio`)를 쓴다: `ratio`는 계약 수와 주문 방향, `weight`는 스프레드 가격 합성·수수료 기준가·체결가 합성에 쓰며 `weight = ratio × 종목 승수 ÷ 스프레드 승수`다(예: 3년물 `Z3NZ26`(1포인트 2,000달러) 1계약과 10년물 `ZNZ26`(1,000달러) 1계약은 승수 1,000 기준 `weight` 2, -1이고 스프레드 가격은 `2 × Z3NZ26 − 1 × ZNZ26`). `weight`는 0이 아니고 `ratio`와 부호가 같아야 한다. `app/runners/spread.py`가 두 종목의 일봉(기준일)과 분봉(봉 시작 시각)을 짝지어 스프레드 봉을 만든다. 양쪽 종가가 양수이고 거래량이 0보다 큰 쌍만 쓰고, 고가·저가는 합친 시가와 종가의 최댓값·최솟값, 거래량은 두 종목 중 작은 값이다.
+   - 스프레드 종목의 백테스트: `BacktestService`와 조합 탐색이 `legs`가 있는 종목이면 두 종목의 분봉·일봉을 각각 받아 스프레드 봉으로 합친다. 가능 기간은 두 종목 중 봉이 적은 쪽 기준이다. NH 일봉이 한 종목이라도 비어 있으면(예: `Z3NZ26`) 두 종목 모두 5분봉에서 영업일(한국 시간 − 7시간)별로 합성한 일봉을 쓴다(`app/runners/series.py`의 `daily_from_minutes`). 수수료는 스프레드 가격이 아니라 두 종목 체결대금의 합(`Σ|비율| × 종목 종가`의 기간 평균 × 거래승수 × 수량)에 수수료율을 곱한다. 슬리피지 1틱은 `tick_size`만큼 불리한 체결이므로 스프레드 종목의 `tick_size`는 두 종목이 1호가씩 불리하게 체결되는 폭으로 적는다.
    - `series`(선택): 판단에 함께 쓰는 추가 봉 계열. 일봉만 지원한다. 예: `{"daily": {"unit": "day", "size": 1}}`. `ctx.series["daily"]`로 받는다.
    - `chart_lines`(선택): 모의매매 차트에 그릴 판단용 선. 항목은 `series`(`bar`는 판단 기준 봉 차트, `daily`는 일봉 차트), `kind`(`sma` 단순이동평균은 `period` 필요, `previous_close` 직전 거래일 종가선은 일봉만), `label`, 마우스를 올렸을 때 보이는 `description`이다. `label`을 `describe`의 항목 이름과 같게 쓰면 "현재 판단" 패널의 같은 항목에도 설명이 붙는다.
    - `history_bars`(선택, 기본 0): 장이 열린 첫 봉에서도 지표를 계산하도록 전날까지의 `bar` 봉을 이 개수만큼 앞에 이어 준다.
@@ -79,7 +85,7 @@ uv run pytest
 
 - 전략은 `Context`를 읽고 `StrategyOutput`을 돌려준다. 형식은 `strategy_base/models.py`에 있다.
 - 봉이 마감될 때 `on_bar(ctx)`가 호출된다. 장중 가격 갱신에 반응해야 하면 `on_price(ctx)`도 구현한다.
-- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다.
+- 지금의 판단을 화면에 보여 주려면 `describe(ctx)`를 구현한다. 주문은 내지 않고 `{"sections": [{"title", "headline", "tone", "rows": [[이름, 값], ...]}]}`를 돌려준다(`tone`은 `buy`·`sell`·`neutral`). 모의매매가 매 판단 뒤와 운용 시작 직후에 부르고, 실패해도 매매는 계속한다. 결과에 `levels`(`[{"label", "value", "description"}]`)를 더하면 모의매매 차트가 운용 중 그 값을 수평선으로 그린다(스프레드 전략의 진입·청산 경계).
 - 판단의 근거 수치는 `Decision.detail`에 담는다. 판단 기록(`decision`)의 `detail`로 모의매매·백테스트 기록에 남는다. 주문 사유(`OrderIntent.reason`)는 체결 기록(`fill`)에 그대로 남으므로 판단 요약을 사유에 포함하면 체결 기록에서도 볼 수 있다.
 - 입력 `ctx`: 완성된 봉(`bars`, 마지막이 판단 대상), 현재 시각, 종목 최종거래일, 진입분별 포지션(`lots`), 미체결 주문(`open_orders`), 파라미터, 직전 호출의 상태(`state`)
 - 추가 입력 `ctx`: 추가 봉 계열(`series`, 일봉은 오늘 이전 날짜만), 직전 거래일 종가 VIX(`vix`), 계약당 기준 증거금(`margin`), 보유분 전체의 평가손익(`unrealized_pnl`, 수수료 제외). 값을 알 수 없으면 `None`이다.
@@ -239,6 +245,22 @@ await connection.stop()
 - `start`는 `end`에서 주 단위로 거슬러 올라가며 분봉이 있는 주를 찾고(주마다 그 주의 한 날과 그 전 영업일을 본다), 연속 3주가 비면 멈춘다. 마지막으로 찾은 주 앞의 6일을 하루씩 확인해 가장 이른 날을 정한다. 월물 중간에 이어지는 연휴는 3주보다 짧으면 건너뛰고, 3주를 넘게 비면 그 앞의 데이터는 다른 월물로 보고 포함하지 않는다.
 - 조회 호출은 20번 안팎이고, 같은 종목의 결과는 하루 동안 서버 메모리에 보관한다. 서버를 다시 시작하면 다시 조회한다.
 - 모의환경 확인(2026-10-28): `A116B000`은 `2026-08-14`(1봉)부터 `2026-10-27`까지다. 20번의 호출로 찾았다.
+- 모의환경 확인(2026-11-10): 해외 `ZNZ26`(5분봉)은 `2026-03-30`부터 `2026-11-09`까지다(약 7개월). `2026-08-10` 이전 72일은 하루 봉 수가 18~79개로 정상(약 276개)의 절반에 못 미치는 봉이 적은 날이고, `2026-08-11`부터 온전하다. 온전한 구간에서만 시험하려면 시작일을 `2026-08-11` 이후로 둔다.
+- 모의환경 확인(2026-11-11): 해외 `ZFZ26`(5년)·`ZNZ26`(10년)의 일봉은 2026-11-10까지 받는다. 양쪽 종가가 양수이고 거래량이 0보다 큰 일봉 쌍은 126개(2026-05-05~11-10)이고 `ZFZ26`의 4월 일봉은 거래량이 0이다. 5분봉은 `ZFZ26`이 2026-05-06부터, `ZNZ26`이 2026-03-30부터이며 두 종목 모두 `2026-08-20`부터 온전하다(유효 쌍 250개 이상인 날 45일).
+- 모의환경 확인(2026-11-11): 해외 1계약 주문의 예약 증거금은 `ZFZ26` 1,375 USD, `ZNZ26` 2,063 USD다(예탁 조회의 `init_mrgn` 증가분).
+- 모의환경 확인(2026-11-11 한국시간 01시대): 해외 주문은 접수 응답(`confirmed`)만 오고 시장가·지정가 모두 체결되지 않았으며, 취소 요청은 주문번호를 받지만 원주문이 남았다. 취소 중인 주문에 다시 취소하면 `7047`, 매수 미체결이 있을 때 시장가·같거나 낮은 가격의 매도는 `7017`이다. 2026-11-04 한국시간 08:35~19:07에는 시장가 주문이 2~4초 안에 체결됐다.
+
+### 스프레드 모의매매
+
+`legs`가 있는 종목은 `app/runners/spread_broker.py`의 `SpreadBroker`가 두 종목의 `OverseasNHBroker`를 묶어 스프레드 종목 하나처럼 보이게 한다. 세션은 이를 일반 `Broker`로 쓴다.
+
+- 주문: 스프레드 시장가 주문 하나를 두 종목의 시장가 주문으로 낸다(예 매수 1세트는 `ZFZ26` 매수 3·`ZNZ26` 매도 2). 세션에는 `S000001` 같은 스프레드 주문번호를 돌려준다.
+- 체결: 두 종목이 모두 체결된 세트 수만 스프레드 체결로 센다. 체결가는 `Σ 비율 × 종목 체결가`다.
+- 포지션: 두 종목 포지션에서 완성된 세트를 스프레드 포지션으로, 세트를 이루지 못한 나머지는 종목 포지션 그대로 돌려준다. 시작 전 계좌 확인은 스프레드와 두 종목의 포지션·미체결을 모두 보고 있으면 `409`로 거부한다.
+- 한쪽만 체결된 진입: 진입 주문 뒤 30초(`SpreadBroker.entry_confirm_seconds`, 설정값 아님) 안에 두 종목이 모두 체결되지 않으면 미체결 주문을 취소하고, 체결된 종목을 시장가로 반대 매매해 원상복구한다. 별도 스레드가 없어 세션이 주문·포지션을 조회할 때(보통 10초 간격) 함께 진행한다. 청산 주문은 제한 시간으로 취소하지 않는다.
+- 실시간: 두 종목의 체결(`FA`)을 받아 `SpreadPriceMux`가 `Σ 비율 × 종목 현재가`로 바꿔 세션에 전달한다. 두 종목의 체결이 모두 들어온 뒤부터 전달한다.
+- 수수료 추정: 시작 시점 두 종목 현재가의 `Σ |비율| × 현재가`를 체결가 대신 써서 `거래승수 × 수량 × 수수료율`을 곱한다.
+- 확인 상태(2026-11-11): 가짜 NH 호출로 위 동작을 시험했다. 실제 모의 서버의 해외 주문 체결·취소는 한국시간 01시대에 처리되지 않아 낮 시간에 확인해야 한다.
 
 ### 시뮬레이션 규칙
 
@@ -261,6 +283,117 @@ await connection.stop()
 | 호가 단위 | 기간의 봉 가격 차이의 최대공약수 | 삼성전자선물은 500원으로 추정된다 |
 
 수수료율은 NH선물 수수료 부과 기준(2026-09-07 개정)의 개별주식선물 온라인 매매 표준수수료다. API 주문을 온라인으로 보았고, 협의수수료와 거래소 수수료는 반영하지 않았다. 실행마다 쓴 가정은 `meta.json`의 `assumptions`에 기록한다.
+
+## 조합 탐색
+
+`app/sweep/`는 전략의 파라미터·기간 조합을 여러 개 백테스트하고 결과를 계속 쌓는다. 서버 없이 명령줄에서 엔진을 직접 부르며, `runs/` 기록은 남기지 않는다. 최종으로 고른 조합은 기존 백테스트 화면에서 한 번 더 실행해 전체 기록을 남긴다.
+
+```bash
+uv run python -m app.sweep run 요청.json
+uv run python -m app.sweep run 요청.json --dry-run
+uv run python -m app.sweep table <전략 id> --name <보고서 이름>
+uv run python -m app.sweep range <전략 id>
+```
+
+| 명령 | 내용 |
+| --- | --- |
+| `run <요청.json>` | 요청 파일의 조합을 백테스트해 `sweeps/`에 쌓는다. 이미 있는 조합은 건너뛴다. `--dry-run`은 데이터를 받지 않고 실행·건너뛸 조합 수만 보여 준다. 조합 하나가 실패해도 나머지는 계속하고, 실패가 있으면 종료 코드가 1이다 |
+| `table <전략 id>` | 쌓인 결과로 비교표를 `reports/<전략 id>/<이름>/table.csv`에 쓴다(`--name`, 기본 `default`). `--out`으로 경로를 직접 정한다 |
+| `range <전략 id>` | 전략 종목의 백테스트 가능 기간과 봉이 적은 날을 조회한다. NH를 호출한다 |
+
+### 요청 파일
+
+```json
+{
+  "strategy_id": "week03_zn_treasury_futures",
+  "initial_capital": 100000,
+  "slippage_ticks": 1,
+  "periods": [{"start": "2026-08-11", "end": "2026-09-30"}, {"start": "2026-10-01", "end": "2026-11-03"}],
+  "params": [{"short_bars": 3}, {"short_bars": 8, "long_bars": 30}],
+  "grid": {"profit_loss_rate": [0.1, 0.2, 0.3]}
+}
+```
+
+| 필드 | 내용 |
+| --- | --- |
+| `strategy_id`, `initial_capital`, `periods` | 필수. `periods`는 `{start, end}` 목록이다 |
+| `slippage_ticks` | 선택. 생략하면 환경변수 `BACKTEST_SLIPPAGE_TICKS` 값 |
+| `params` | 선택. 기본 파라미터를 덮어쓰는 조합 목록. 적은 것만 바뀐다 |
+| `grid` | 선택. 파라미터별 값 목록의 모든 곱을 조합으로 더한다 |
+
+- 조합은 `params`(와 `grid`로 만든 조합) × `periods`다. 둘 다 없으면 기본 파라미터 하나만 실행한다.
+- 파라미터는 전략 `manifest.json`의 `min`/`max` 검증을 따른다. 어긋나면 데이터를 받기 전에 멈춘다.
+- 종료일은 오늘보다 이전이어야 한다. 기간 길이 상한(366일)은 적용하지 않는다.
+- 같은 조합인지는 전략, 전체 파라미터(기본값 포함), 기간, 슬리피지, 초기자금, 수수료율로 정한 `id`가 같은지로 본다. 기본값과 같은 값을 적어도 같은 조합이다.
+
+### 분봉 재사용
+
+- 한 번 실행에서 모든 조합이 쓰는 분봉은 가장 이른 시작일부터 가장 늦은 종료일까지 한 번만 받는다.
+- 받은 분봉은 `data/minute_cache/`에 저장해 다음 실행에서 쓴다. 요청한 기간 중 저장되지 않은 구간만 NH에서 받는다. 이 폴더는 Git에 올리지 않는다.
+- NH가 오래된 분봉을 지워도 이미 받은 기간은 남는다. 오늘 이후 날짜는 완성되지 않아 저장하지 않는다.
+
+### 저장 형식
+
+```
+sweeps/<전략 id>/results.jsonl       조합 하나당 한 줄
+sweeps/<전략 id>/trades/<id>.jsonl   조합의 거래와 체결
+```
+
+`results.jsonl`의 한 줄:
+
+| 필드 | 내용 |
+| --- | --- |
+| `id` | 조합의 정의로 만든 해시 16자 |
+| `strategy_id`, `params`, `start`, `end`, `slippage_ticks`, `initial_capital`, `fee_rate` | 조합의 정의. `params`는 기본값을 포함한 전체 값이다 |
+| `summary` | `net_pnl`, `gross_pnl`, `fee`, `return_rate`, `final_equity`, `max_drawdown`, `max_drawdown_rate`, `trade_count`, `win_count`, `loss_count`, `days`, `bars`. `runs/`의 `result.json`과 같은 값이다 |
+| `daily_equity` | 자산 곡선 `{time, equity}` |
+| `created_at`, `elapsed_seconds` | 저장 시각, 계산에 걸린 초 |
+
+`trades/<id>.jsonl`의 한 줄(`kind`로 구분):
+
+| `kind` | 필드 |
+| --- | --- |
+| `trade` | `entry_id`, `side`, `quantity`, `opened_at`, `closed_at`, `entry_price`, `exit_price`, `gross_pnl`, `fee`, `net_pnl`, `entry_reason`, `exit_reason` |
+| `fill` | `time`, `side`, `quantity`, `price`(슬리피지 반영), `raw_price`(슬리피지 전), `fee`, `intent`(`entry`/`exit`), `entry_id`, `source` |
+
+- 봉마다 남는 판단(`decision`)과 주문(`order`)은 저장하지 않는다. 백테스트 기록 용량의 대부분이 판단이고, 시장가 주문은 모두 체결되어 체결과 같은 내용이다.
+- `trade`의 `entry_reason`·`exit_reason`은 같은 `entry_id`의 체결에서 읽은 이유다. 거래 수는 `summary.trade_count`와 같다.
+- 용량: ZN 5분봉 73일 기준 조합 하나가 `results.jsonl` 약 5KB, 거래 파일 약 160~190KB다.
+
+### 비교표
+
+`table`이 만드는 `table.csv`는 조합이 행이고, 기간마다 지표 열이 붙는다.
+
+- 앞쪽 열은 조합 사이에 값이 다른 파라미터다. 모든 조합에서 같은 값은 열로 만들지 않는다.
+- `period_count`, `positive_periods`(순손익이 양수인 기간 수), `worst_net_pnl`, `total_net_pnl` 열이 있고, 합산 순손익이 큰 조합이 위에 온다.
+- 기간마다 `net_pnl`, `return_rate`, `max_drawdown_rate`, `trade_count`, `win_rate`, `fee_ratio`(총손익 대비 수수료, 총손익이 0 이하면 빈칸), `sharpe`(일별 자산 변화율의 평균/표준편차 × √252, 계산할 수 없으면 빈칸) 열이 `지표[시작일~종료일]` 이름으로 붙는다.
+- 승률, 수수료 비중, 샤프는 저장하지 않고 표를 만들 때 계산한다.
+
+### 소요 시간
+
+ZN 5분봉으로 확인했다(2026-11-10, 73일, 16,342봉). 분봉을 처음 받는 실행은 전체 약 7초였고, 조합 하나의 계산은 0.7~1.2초다. 저장된 분봉을 쓰면 조합 수에 비례해 늘어난다.
+
+## 검증 보고서
+
+`app/reports/`가 `reports/<전략 id>/<보고서 이름>/`의 `report.md`와 `table.csv`를 읽어 대시보드의 검증 리포트 탭에 준다. 보고서는 `sweep-report` 스킬이 파일로 쓰고, 형식은 [reports/README.md](reports/README.md)에 있다. API는 읽기만 한다.
+
+| 요청 | 내용 |
+| --- | --- |
+| `GET /api/reports` | 보고서 목록. 갱신일이 최근인 순서. 항목은 `strategy_id`, `name`, `title`, `question`, `updated`, `author`, `result_count`, `recommended`(추천·대안 조합 이름), `error` |
+| `GET /api/reports/<전략 id>/<이름>` | `meta`(머리말), `body`(마크다운 본문), `table`(`{columns, rows}`, 빈 칸은 `null`, 숫자는 실수. `table.csv`가 없으면 `null`) |
+
+- 머리말이 없거나 JSON이 아니거나 필수 필드(`strategy_id`, `name`, `title`, `question`, `updated`, `author`, `result_count`, `periods`, `recommended`)가 빠진 보고서는 목록에서 `error`에 사유가 담기고 나머지 필드는 비어 있다. 상세 요청은 `422`다.
+- 없는 보고서와 전략 id 형식에 맞지 않거나 `/`, `\`, 숨김(`.`으로 시작) 이름은 `404`다.
+- 보고서 폴더가 없으면 목록은 빈 배열이다.
+
+보고서의 그래프와 거래 패널은 아래 API로 조합 탐색 결과를 읽는다.
+
+| 요청 | 내용 |
+| --- | --- |
+| `GET /api/sweeps/<전략 id>/results?ids=` | 쉼표로 구분한 결과 `id`(1~60개)의 조합 결과(정의, 요약, 일별 자산). 요청한 순서로 돌려주고 없는 `id`는 뺀다. `id` 형식이 틀리거나 개수가 맞지 않으면 `422` |
+| `GET /api/sweeps/<전략 id>/trades/<id>` | 조합의 거래(`trades`)와 체결(`fills`). 기록이 없거나 `id` 형식이 틀리면 `404` |
+
+- 조회는 `sweeps/<전략 id>/results.jsonl`을 매번 읽는다. 결과가 수만 줄로 늘면 색인이 필요하다.
 
 ## 모의매매
 
@@ -360,7 +493,7 @@ await connection.stop()
 
 ## 실시간 시세 웹소켓
 
-`/ws/market?code=<종목코드>&market=<domestic|overseas>`가 한 종목의 실시간 체결·호가를 화면에 보낸다. `market`을 생략하면 `domestic`이다. `app/nh/hub.py`의 `MarketHub`가 시장마다 NH 실시간 연결 하나(국내 키, 해외 키)를 여러 화면이 나눠 쓰게 한다. 모의매매 운용의 실시간 연결(체결·주문 알림)과는 별개다.
+`/ws/market?code=<종목코드>&market=<domestic|overseas>`가 한 종목의 실시간 체결·호가를 화면에 보낸다. 해외는 `legs=ZFZ26:3,ZNZ26:-2`를 함께 보내면 두 종목의 체결(`FA`)만 구독해 `Σ 가중치 × 체결가`로 합성한 체결을 보낸다(호가 없음, 두 종목의 체결이 모두 들어온 뒤부터, 잘못된 구성은 `4422`). 구독 한도는 두 종목으로 세고, 같은 종목을 직접 보는 화면과 구독을 함께 쓴다. `market`을 생략하면 `domestic`이다. `app/nh/hub.py`의 `MarketHub`가 시장마다 NH 실시간 연결 하나(국내 키, 해외 키)를 여러 화면이 나눠 쓰게 한다. 모의매매 운용의 실시간 연결(체결·주문 알림)과는 별개다.
 
 ### 메시지
 
@@ -428,6 +561,8 @@ await connection.stop()
 | `GET /api/market/<종목코드>/quote?market=&exchange=` | 종목명(`name`), 월물(`contract`, 최종거래일의 연·월, 예: `2026.11`), 만기(`expiry`), 현재가(`price`), 전일대비(`change`), 등락률(`change_rate`), 거래량(`volume`), 시가·고가·저가, 전일 종가(`prev_close`), 상·하한가, 거래승수(`multiplier`), 잔존일수, 장 종류(`market_session`: `before_open`·`auction`·`regular`·`closed`·`holiday`·`unknown`). 장 시간표는 `app/nh/domestic/market_hours.py`의 `SCHEDULES`에서 종목별로 정의한다 |
 | `GET /api/market/<종목코드>/candles?interval=&count=&market=&exchange=` | 주간 분봉 또는 일봉을 오래된 순서로 돌려준다. `interval`은 `1`, `3`, `5`, `10`, `15`, `30`, `60`(분) 또는 `day`, `count`는 1~1000(기본 200). 항목은 `time`, `open`, `high`, `low`, `close`, `volume`이다 |
 | `GET /api/market/<종목코드>/orderbook?market=&exchange=` | 호가 시각(`time`), 현재가, 등락률, 총매도·총매수 잔량, 10단계 `levels`(`ask_price`, `ask_quantity`, `bid_price`, `bid_quantity`) |
+
+시세 세 API는 `legs=종목코드:가중치,종목코드:가중치`(예 `ZFZ26:3,ZNZ26:-2`, 가중치는 소수 가능, 보통 `ratio`와 같고 승수가 다른 종목은 `weight`)를 함께 받으면 두 종목을 합성한 스프레드를 돌려준다. 해외 종목(`market=overseas`, `exchange` 필요)에만 쓸 수 있고 종목코드는 `ZFZ26-ZNZ26`처럼 `-`를 허용한다(`422`). 현재가는 두 종목 현재가·전일 종가의 `Σ 비율 × 가격`, 거래량은 두 종목 중 작은 값이고, 월물·만기·가격 제한·거래승수는 `null`이다. 차트는 두 종목 봉을 시각별로 짝지은 스프레드 봉이며 고가·저가는 합친 시가·종가의 최댓값·최솟값이다. 호가는 `levels`가 빈 목록이다.
 
 - 전일대비와 등락률은 NH의 부호 구분(`chg_sign`)이 `-`이면 음수로 돌려준다.
 - 종목명은 NH 응답의 연속 공백을 하나로 줄인다(`삼성전자 F 202611 ( 10)`).

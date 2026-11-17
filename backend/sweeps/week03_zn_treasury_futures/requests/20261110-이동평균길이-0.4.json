@@ -1,0 +1,12 @@
+{
+  "strategy_id": "week03_zn_treasury_futures",
+  "initial_capital": 100000,
+  "periods": [
+    {"start": "2026-08-11", "end": "2026-11-09"},
+    {"start": "2026-08-11", "end": "2026-09-15"},
+    {"start": "2026-09-16", "end": "2026-10-13"},
+    {"start": "2026-10-14", "end": "2026-11-09"}
+  ],
+  "params": [{"profit_loss_rate": 0.4}],
+  "grid": {"profit_loss_rate": [0.4], "short_bars": [3, 5, 8], "long_bars": [15, 20, 30]}
+}

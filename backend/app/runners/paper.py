@@ -65,6 +65,9 @@ class PaperConfig:
     history_bars: int = 0
     history_days: int = 10
     market: str = "domestic"
+    # 이 시각이 되면 운용을 종료한다(신규 판단을 멈추고 미체결 취소·보유 청산). 없으면 직접 종료할 때까지 운용한다.
+    # 수수료를 체결가가 아닌 이 가격으로 어림한다(스프레드 종목).
+    fee_price: float | None = None
 
 
 @dataclass(frozen=True)
@@ -149,7 +152,7 @@ class PaperSession:
         self.extras = extras or ExtraInputs()
         self._history_loaded = config.history_bars == 0
 
-        self.ledger = Ledger(multiplier=config.multiplier, fee_rate=config.fee_rate)
+        self.ledger = Ledger(multiplier=config.multiplier, fee_rate=config.fee_rate, fee_price=config.fee_price)
         self.state: dict[str, Any] = {}
         self.judgment: dict[str, Any] | None = None
         self.bars: list[Bar] = []

@@ -1,7 +1,8 @@
+import type React from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Candle } from "../../../apis/types";
 import { formatNumber } from "../../../data/format";
-import { chartLayout, timeTicks } from "../../../data/tradingView";
+import { candleIndexAt, chartLayout, hoverTime, timeTicks } from "../../../data/tradingView";
 import type { ResolvedLine } from "../../../data/tradingView";
 import styles from "./PriceChart.module.css";
 
@@ -34,6 +35,7 @@ export default function PriceChart({
   const frameRef = useRef<HTMLDivElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   const [size, setSize] = useState({ w: BASE_WIDTH, h: BASE_HEIGHT });
   const daily = interval === "day";
   const lineValues = lines.flatMap((line) => line.values.filter((value): value is number => value !== null));
@@ -68,7 +70,18 @@ export default function PriceChart({
     pill.style.transform = `translateX(${selected.offsetLeft}px)`;
   }, [interval]);
 
+  const hoverIndex = hover ? candleIndexAt(hover.x, slot, candles?.length ?? 0) : null;
+  const hovered = hoverIndex !== null ? (candles as Candle[])[hoverIndex] : null;
+  const hoverX = hoverIndex !== null ? hoverIndex * slot + slot / 2 : 0;
+  const hoverPrice = hover && hovered ? layout.price(hover.y) : null;
+  const onMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setHover({ x: event.clientX - box.left, y: event.clientY - box.top });
+  };
   const axisX = size.w - AXIS_WIDTH + 16;
+  // 가격 폭이 좁은 종목(스프레드 등)은 눈금에 소수를 보여 준다.
+  const tickStep = layout.ticks.length > 1 ? Math.abs(layout.ticks[0].value - layout.ticks[1].value) : 1;
+  const tickDigits = tickStep >= 1 ? 0 : tickStep >= 0.1 ? 1 : tickStep >= 0.01 ? 2 : 3;
   return (
     <div className={styles.chart}>
       <div className={styles.toolbar}>
@@ -98,8 +111,8 @@ export default function PriceChart({
           {lines.map((line) => (
             <li key={line.spec.label} tabIndex={0} aria-describedby={`line-tip-${line.spec.label}`}>
               <i
-                style={{ background: line.color }}
-                className={line.spec.kind === "previous_close" ? styles.dashed : undefined}
+                style={{ background: line.color, color: line.color }}
+                className={line.spec.kind !== "sma" ? styles.dashed : undefined}
               />
               {line.spec.label}
               <strong>{line.latest === null ? "—" : formatNumber(Number(line.latest.toFixed(4)))}</strong>
@@ -110,7 +123,7 @@ export default function PriceChart({
           ))}
         </ul>
       )}
-      <div ref={frameRef} className={styles.frame}>
+      <div ref={frameRef} className={styles.frame} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
         <svg
           viewBox={`0 0 ${size.w} ${size.h}`}
           role="img"
@@ -128,7 +141,7 @@ export default function PriceChart({
                 strokeDasharray="3 5"
               />
               <text x={axisX} y={tick.y + 4} fill="var(--text-tertiary)" fontSize="11">
-                {formatNumber(Math.round(tick.value))}
+                {formatNumber(Number(tick.value.toFixed(tickDigits)))}
               </text>
             </g>
           ))}
@@ -154,7 +167,7 @@ export default function PriceChart({
                 fill="none"
                 stroke={line.color}
                 strokeWidth="1.5"
-                strokeDasharray={line.spec.kind === "previous_close" ? "5 4" : undefined}
+                strokeDasharray={line.spec.kind !== "sma" ? "5 4" : undefined}
                 opacity=".9"
               />
             ) : null;
@@ -176,6 +189,20 @@ export default function PriceChart({
               </text>
             </>
           )}
+          {hovered && (
+            <g pointerEvents="none">
+              <line x1={hoverX} x2={hoverX} y1="0" y2={size.h - 22} stroke="var(--text-tertiary)" strokeDasharray="2 3" opacity=".7" />
+              {hoverPrice !== null && hover && (
+                <>
+                  <line x1="0" x2={size.w - AXIS_WIDTH} y1={hover.y} y2={hover.y} stroke="var(--text-tertiary)" strokeDasharray="2 3" opacity=".7" />
+                  <rect x={size.w - 67} y={hover.y - 11} width="67" height="22" rx="3" fill="var(--bg-elevated)" stroke="var(--text-tertiary)" />
+                  <text x={size.w - 33.5} y={hover.y + 4} textAnchor="middle" fill="var(--text-primary)" fontSize="11" fontWeight="600">
+                    {formatNumber(Number(hoverPrice.toFixed(tickDigits + 1)))}
+                  </text>
+                </>
+              )}
+            </g>
+          )}
           {ticks.map((tick) => (
             <text
               key={tick.index}
@@ -188,6 +215,20 @@ export default function PriceChart({
             </text>
           ))}
         </svg>
+        {hovered && (
+          <div
+            className={styles.hoverTip}
+            style={hoverX > (size.w - AXIS_WIDTH) / 2 ? { right: size.w - hoverX + 12 } : { left: hoverX + 12 }}
+            role="status"
+          >
+            <strong>{hoverTime(hovered.time, daily)}</strong>
+            <span>시가 {hovered.open === null ? "—" : formatNumber(Number(hovered.open.toFixed(tickDigits + 1)))}</span>
+            <span>고가 {formatNumber(Number(hovered.high.toFixed(tickDigits + 1)))}</span>
+            <span>저가 {formatNumber(Number(hovered.low.toFixed(tickDigits + 1)))}</span>
+            <span>종가 {formatNumber(Number(hovered.close.toFixed(tickDigits + 1)))}</span>
+            <span>거래량 {formatNumber(hovered.volume)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

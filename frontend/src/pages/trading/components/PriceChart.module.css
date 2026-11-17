@@ -54,8 +54,8 @@
 }
 .frame {
   position: relative;
-  flex: 1;
-  min-height: 220px;
+  height: 340px;
+  flex: none;
 }
 .svg {
   position: absolute;
@@ -89,7 +89,6 @@
 }
 .legend i.dashed {
   background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important;
-  color: #e5e7eb;
 }
 .legend strong {
   color: var(--text-primary);
@@ -118,4 +117,26 @@
 .legend li:hover .lineTip,
 .legend li:focus-visible .lineTip {
   opacity: 1;
+}
+.hoverTip {
+  position: absolute;
+  top: 8px;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1a1e25;
+  box-shadow:
+    0 8px 24px #000b,
+    inset 0 0 0 1px #ffffff14;
+  color: #e4e6ea;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.hoverTip strong {
+  margin-bottom: 3px;
+  font-weight: 600;
 }

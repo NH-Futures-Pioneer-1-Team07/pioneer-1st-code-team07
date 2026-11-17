@@ -1,0 +1,113 @@
+.markdown {
+  display: grid;
+  gap: 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.75;
+  min-width: 0;
+}
+.section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--data-line);
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.subsection {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.minor {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.paragraph {
+  margin: 0;
+}
+.list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+.markdown strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.markdown code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table th,
+.table td {
+  padding: 10px 12px;
+  white-space: normal;
+  vertical-align: top;
+}
+.table th:first-child,
+.table td:first-child {
+  padding-left: 12px;
+}
+.table td {
+  color: var(--text-secondary);
+}
+.codeBlock {
+  border-radius: 10px;
+  background: #0a0c10;
+  border: 1px solid var(--data-line);
+  overflow: hidden;
+}
+.codeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+}
+.codeHead button {
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+.codeBlock pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  max-height: 360px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.codeBlock code {
+  padding: 0;
+  background: none;
+  color: var(--text-secondary);
+}
+.quote {
+  margin: 0;
+  padding: 4px 0 4px 14px;
+  border-left: 2px solid var(--accent);
+}
+.rule {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--data-line);
+}
