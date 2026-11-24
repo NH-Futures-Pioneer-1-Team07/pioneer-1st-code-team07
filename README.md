@@ -243,7 +243,8 @@ pioneer-1st-code-team07/
 │   │   ├── week03_zn_treasury_futures/  ZN 국채선물 이동평균 전략
 │   │   ├── week04_z3n_zn_spread/     Z3N·ZN(3년물·10년물) 국채선물 스프레드 전략
 │   │   └── week04_zf_zn_spread/      ZF·ZN(5년물·10년물) 국채선물 스프레드 전략 (기본 선택)
-│   ├── data/vixcls.csv               VIX 일 종가 데이터
+│   ├── data/vixcls.csv               VIX 일 종가 예비 데이터
+│   ├── data/vix_cache.csv            실행할 때 받은 VIX 일 종가 (Git에 올리지 않음)
 │   ├── data/minute_cache/            조합 탐색이 받아 둔 분봉 (Git에 올리지 않음)
 │   ├── runs/                         실행 기록 (README.md에 구조 설명)
 │   ├── sweeps/                       조합 탐색 결과 (<전략 id>/results.jsonl, trades/, requests/)
@@ -400,7 +401,7 @@ pioneer-1st-code-team07/
 | 기술 | 범위 | 역할 |
 |---|---|---|
 | NH선물 Open API | 국내·해외 모의투자 | 시세 조회, 주문, 계좌 조회, 실시간 체결·호가 수신(국내·해외) |
-| FRED `VIXCLS` | VIX 일 종가 | 전략 입력용 VIX (`backend/data/vixcls.csv`에 저장해 사용) |
+| FRED `VIXCLS` | VIX 일 종가 | 전략 입력용 VIX (실행할 때 최신 값을 받고, 받지 못하면 저장된 값 사용) |
 
 ## 아키텍처
 

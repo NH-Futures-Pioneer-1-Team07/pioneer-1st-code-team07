@@ -35,3 +35,6 @@ coverage/
 
 # 조합 탐색이 받아 둔 분봉(다시 받을 수 있는 자료)
 /backend/data/minute_cache/
+
+# 실행할 때 받은 VIX(다시 받을 수 있는 자료)
+/backend/data/vix_cache.csv*

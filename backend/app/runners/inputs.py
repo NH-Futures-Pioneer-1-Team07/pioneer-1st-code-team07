@@ -18,6 +18,7 @@ class ExtraInputs:
 
     - `series`: 계열 이름별 일봉. `now` 이전 날짜의 봉만 넘긴다(오늘 일봉은 아직 완성되지 않았다).
     - `vix`: 직전 거래일 종가를 넘긴다.
+    - `vix_loader`: 있으면 `prepare`가 첫 호출과 날짜가 바뀔 때 `vix`를 다시 불러온다(모의매매).
     - `margin`: 계약당 기준 증거금.
     """
 
@@ -25,10 +26,15 @@ class ExtraInputs:
     vix: VixHistory | None = None
     margin: float | None = None
     loader: SeriesLoader | None = None
+    vix_loader: Callable[[date], VixHistory | None] | None = None
+    _vix_for: date | None = field(default=None, init=False, repr=False)
     _loaded_for: date | None = field(default=None, init=False, repr=False)
 
     def prepare(self, day: date) -> None:
-        """날짜가 바뀌었으면 계열을 다시 불러온다. 블로킹 호출이므로 비동기 코드에서는 스레드에서 부른다."""
+        """날짜가 바뀌었으면 계열과 VIX를 다시 불러온다. 블로킹 호출이므로 비동기 코드에서는 스레드에서 부른다."""
+        if self.vix_loader is not None and (self._vix_for is None or day > self._vix_for):
+            self.vix = self.vix_loader(day)
+            self._vix_for = day
         if self.loader is not None and self._loaded_for != day:
             self.series = self.loader(day)
             self._loaded_for = day

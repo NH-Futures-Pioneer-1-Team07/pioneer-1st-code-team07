@@ -7,7 +7,7 @@ from time import monotonic
 from typing import Any
 
 from app.config import Settings
-from app.data.vix import load as load_vix
+from app.data.vix import latest as latest_vix
 from app.nh.auth import KST
 from app.runners.backtest import Assumptions, BacktestEngine, infer_tick
 from app.runners.inputs import ExtraInputs
@@ -139,7 +139,10 @@ class SweepRunner:
         if manifest.series:
             bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(first, self._today()))
             series = {name: bars for name in manifest.series}
-        extras = ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
+        vix = latest_vix()
+        event = vix.event()
+        self._log(f"{event['text']}: 마지막 날짜 {event['vix_last_day']}" + (f" ({vix.error})" if vix.error else ""))
+        extras = ExtraInputs(series=series, vix=vix.history, margin=instrument.margin)
 
         for number, item in enumerate(todo, 1):
             label = f"[{number}/{len(todo)}] {item.result_id} {item.combo.overrides or '기본값'} {item.combo.period.start}~{item.combo.period.end}"
@@ -214,6 +217,7 @@ class SweepRunner:
             "slippage_ticks": slippage,
             "initial_capital": initial_capital,
             "fee_rate": self._settings.backtest_fee_rate,
+            "vix_last_day": extras.vix.last_day.isoformat() if extras.vix and extras.vix.last_day else None,
             "summary": {name: result[name] for name in SUMMARY_FIELDS},
             "daily_equity": result["equity_curve"],
             "created_at": datetime.now(KST).isoformat(timespec="seconds"),

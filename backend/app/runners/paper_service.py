@@ -5,11 +5,12 @@ import dataclasses
 import logging
 import threading
 from collections.abc import Callable
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any, Protocol
 
 from app.config import Settings
-from app.data.vix import load as load_vix
+from app.data.vix import VixHistory
+from app.data.vix import latest as latest_vix
 from app.nh.client import NHClient
 from app.nh.errors import NHError
 from app.nh.realtime import RealtimeConnection
@@ -210,7 +211,7 @@ class PaperService:
                 last_trading_day=last_trading_day,
                 deposit_before=deposit,
                 clock=self._clock,
-                extras=self._extra_inputs(manifest, instrument),
+                extras=self._extra_inputs(manifest, instrument, recorder),
             )
             self._session = session
             self._recorder = recorder
@@ -307,14 +308,19 @@ class PaperService:
         else:
             call(*args)
 
-    def _extra_inputs(self, manifest: Manifest, instrument: Any) -> ExtraInputs:
+    def _extra_inputs(self, manifest: Manifest, instrument: Any, recorder: RunRecorder) -> ExtraInputs:
         loader = None
         if manifest.series:
             def loader(day):  # noqa: ANN001 - 날짜가 바뀔 때마다 일봉을 다시 받는다
                 bars = spread_daily_fetcher(self._daily_fetcher)(instrument, SPREAD_DAILY_BARS if instrument.legs else DAILY_MARGIN)
                 return {name: bars for name in manifest.series}
 
-        return ExtraInputs(vix=load_vix(), margin=instrument.margin, loader=loader)
+        def vix_loader(day: date) -> VixHistory | None:
+            found = latest_vix()
+            recorder.record("event", **found.event(day))
+            return found.history
+
+        return ExtraInputs(margin=instrument.margin, loader=loader, vix_loader=vix_loader)
 
     def _merge_params(self, manifest: Manifest, overrides: dict[str, Any] | None) -> dict[str, Any]:
         problem = manifest.override_problem(overrides)

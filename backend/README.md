@@ -99,8 +99,13 @@ uv run pytest
 ### VIX
 
 - 전략에는 직전 거래일 종가 VIX를 넘긴다. 장중 VIX는 다루지 않는다.
-- 출처는 FRED `VIXCLS` 일 종가이며 `data/vixcls.csv`에 저장한다. 백테스트와 모의매매가 같은 파일을 읽는다.
-- 파일은 다음 명령으로 갱신한다. 받기에 실패하면 기존 파일을 그대로 둔다.
+- 출처는 FRED `VIXCLS` 일 종가다. FRED 게시가 늦어 직전 거래일 값이 아직 없으면 가장 최근 값을 넘긴다.
+- 백테스트와 조합 탐색은 실행할 때, 모의매매는 시작할 때와 한국 시간 날짜가 바뀔 때 최신 값을 받는다. 모의매매는 하루 동안 같은 값을 쓴다.
+- 받은 값은 `data/vix_cache.csv`에 둔다. 이 파일은 Git에 올리지 않는다.
+- 받지 못하면(5초 제한) 실행을 멈추지 않고 `data/vix_cache.csv`와 `data/vixcls.csv` 중 더 최근 값을 쓴다.
+- 백테스트·모의매매는 받은 결과와 VIX 마지막 날짜(`vix_last_day`)를 `event` 기록에 남긴다. 받지 못했으면 `warning`이다. 모의매매는 그날 쓰는 종가(`vix`)와 그 날짜(`vix_day`)도 남긴다.
+- 조합 식별자에는 VIX가 들어가지 않는다. VIX를 쓰는 전략의 저장된 조합 결과는 VIX가 갱신돼도 다시 계산하지 않는다.
+- 저장소의 `data/vixcls.csv`는 다음 명령으로 갱신한다. 받기에 실패하면 기존 파일을 그대로 둔다.
 
 ```bash
 uv run python -m app.data.vix
@@ -350,6 +355,7 @@ sweeps/<전략 id>/trades/<id>.jsonl   조합의 거래와 체결
 | `strategy_id`, `params`, `start`, `end`, `slippage_ticks`, `initial_capital`, `fee_rate` | 조합의 정의. `params`는 기본값을 포함한 전체 값이다 |
 | `summary` | `net_pnl`, `gross_pnl`, `fee`, `return_rate`, `final_equity`, `max_drawdown`, `max_drawdown_rate`, `trade_count`, `win_count`, `loss_count`, `days`, `bars`. `runs/`의 `result.json`과 같은 값이다 |
 | `daily_equity` | 자산 곡선 `{time, equity}` |
+| `vix_last_day` | 계산에 쓴 VIX 자료의 마지막 날짜. 이 필드가 없는 줄은 VIX 자동 갱신 전 결과다 |
 | `created_at`, `elapsed_seconds` | 저장 시각, 계산에 걸린 초 |
 
 `trades/<id>.jsonl`의 한 줄(`kind`로 구분):
