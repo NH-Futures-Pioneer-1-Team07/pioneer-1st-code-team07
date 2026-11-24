@@ -116,7 +116,11 @@ def spread_daily_fetcher(base: DailyFetcher) -> DailyFetcher:
 
 
 def loader_for(instrument: Instrument, base):
-    """`legs`가 있는 종목이면 스프레드 로더로 감싸고, 아니면 그대로 돌려준다."""
+    """`legs`가 있는 종목이면 스프레드 로더로, `index_code`가 있으면 지수 종가를 붙이는 로더로 감싸고, 아니면 그대로 돌려준다."""
+    if instrument.index_code:
+        from app.runners.basis import index_loader
+
+        return index_loader(base, instrument.index_code)
     return spread_loader(base, instrument.legs) if instrument.legs else base
 
 

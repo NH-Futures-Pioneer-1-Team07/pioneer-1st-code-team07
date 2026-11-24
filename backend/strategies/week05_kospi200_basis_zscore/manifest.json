@@ -1,0 +1,46 @@
+{
+  "name": "코스피200 베이시스 z-score 전략",
+  "description": "코스피200 선물 5분봉 베이시스(선물-지수)의 z-score가 진입 기준을 벗어나면 평균회귀 방향으로 1계약 진입하고, 증거금 대비 수익률이 ±기준에 닿으면 청산합니다.",
+  "instruments": [
+    {
+      "name": "코스피200 선물 2026년 12월물",
+      "market": "domestic",
+      "code": "A016C000",
+      "index_code": "KRD020020016",
+      "multiplier": 250000,
+      "margin": 40463850,
+      "tick_size": 0.05
+    }
+  ],
+  "bar": {
+    "unit": "minute",
+    "size": 5
+  },
+  "history_bars": 300,
+  "parameters": {
+    "window_bars": {
+      "default": 60,
+      "description": "z-score 평균과 표준편차를 계산하는 직전 5분봉 개수(현재 봉 제외, 지수 봉이 있는 유효한 봉만 셈)",
+      "editable": true,
+      "label": "z-score 5분봉 개수",
+      "min": 10,
+      "max": 200
+    },
+    "entry_z": {
+      "default": 1.5,
+      "description": "베이시스 z-score의 절댓값이 이 값 이상이면 진입. 양수면 선물 매도, 음수면 선물 매수",
+      "editable": true,
+      "label": "진입 z-score",
+      "min": 0.1,
+      "max": 10
+    },
+    "exit_return_pct": {
+      "default": 10,
+      "description": "증거금 대비 수익률(%)이 +값 이상이면 이익 청산, -값 이하이면 손절 청산",
+      "editable": true,
+      "label": "청산 수익률(%)",
+      "min": 0.1,
+      "max": 100
+    }
+  }
+}

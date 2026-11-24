@@ -1,0 +1,28 @@
+{
+  "gross_pnl": 24999.999999977263,
+  "fee": 33405.0,
+  "fee_estimated": true,
+  "net_pnl": -8405.000000022737,
+  "trade_count": 1,
+  "win_count": 0,
+  "loss_count": 1,
+  "open_lots": [],
+  "account": {
+    "before": {
+      "cash": 100000000.0,
+      "total_assets": 100000000.0,
+      "fee": 0.0,
+      "futures_realized_pnl": 0.0,
+      "total_pnl": 0.0
+    },
+    "after": {
+      "cash": 100000000.0,
+      "total_assets": 100000000.0,
+      "fee": 5698.0,
+      "futures_realized_pnl": 25000.0,
+      "total_pnl": 25000.0
+    },
+    "fee_change": 5698.0,
+    "realized_pnl_change": 25000.0
+  }
+}
