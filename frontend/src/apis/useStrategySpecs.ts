@@ -1,20 +1,35 @@
 import { useEffect, useState } from "react";
 import type { ParameterSpec } from "./types";
-import { fetchStrategy } from "./trading";
+import { fetchStrategies, fetchStrategy } from "./trading";
+
+type Specs = Record<string, Record<string, ParameterSpec>>;
+
+/** 등록된 전략의 파라미터 명세를 불러온다. 지워졌거나 못 불러온 전략은 빈 명세로 둔다. */
+async function loadSpecs(ids: string[]): Promise<Specs> {
+  const registered = await fetchStrategies().then(
+    (items) => new Set(items.map((item) => item.id)),
+    () => new Set<string>(),
+  );
+  const entries = await Promise.all(
+    ids.map(async (id) => {
+      if (!registered.has(id)) return [id, {}] as const;
+      const parameters = await fetchStrategy(id).then((detail) => detail.parameters, () => ({}));
+      return [id, parameters] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
 
 /** 전략 id별 파라미터 명세. 이력 목록에 나오는 전략의 것을 한 번씩만 불러온다. */
-export function useStrategySpecs(strategyIds: string[]): Record<string, Record<string, ParameterSpec>> {
-  const [specs, setSpecs] = useState<Record<string, Record<string, ParameterSpec>>>({});
+export function useStrategySpecs(strategyIds: string[]): Specs {
+  const [specs, setSpecs] = useState<Specs>({});
   const missing = [...new Set(strategyIds)].filter((id) => !(id in specs)).sort().join(",");
   useEffect(() => {
     if (!missing) return;
     let cancelled = false;
-    for (const id of missing.split(",")) {
-      fetchStrategy(id)
-        .then((detail) => !cancelled && setSpecs((current) => ({ ...current, [id]: detail.parameters })))
-        // 지워진 전략처럼 명세를 못 불러오면 파라미터 표시만 건너뛴다.
-        .catch(() => !cancelled && setSpecs((current) => ({ ...current, [id]: {} })));
-    }
+    void loadSpecs(missing.split(",")).then(
+      (loaded) => !cancelled && setSpecs((current) => ({ ...current, ...loaded })),
+    );
     return () => {
       cancelled = true;
     };

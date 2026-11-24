@@ -7,6 +7,7 @@
   거절된 경우의 몇 번뿐이다. 그 요청은 처리되지 않았다.
 """
 
+import threading
 import time
 from collections.abc import Callable
 from typing import Any, Literal
@@ -14,7 +15,7 @@ from typing import Any, Literal
 import httpx
 
 from app.config import Settings
-from app.nh.auth import TokenManager
+from app.nh.auth import Token, TokenManager
 from app.nh.errors import BusinessError, GatewayError, HttpError, TransportError
 from app.nh.rate_limit import SHARED_LIMITER, Limit, RateLimiter
 
@@ -32,6 +33,23 @@ RATE_LIMITED = "EGW036"
 RATE_LIMIT_RETRIES = 3
 RATE_LIMIT_BACKOFF = 1.0
 ERROR_MESSAGE_FIELDS = ("errorMessage", "errorMsg", "message", "msg")
+
+# 프로세스 안에서 같은 키를 쓰는 클라이언트가 함께 쓰는 토큰 관리자.
+# 같은 키로 동시에 발급하면 NH가 거절하므로(`EAU046`) 클라이언트마다 따로 발급하지 않는다.
+_SHARED_TOKENS: dict[tuple[str, str | None, str | None, str], TokenManager] = {}
+_SHARED_TOKENS_LOCK = threading.Lock()
+
+
+def _shared_tokens(
+    *, base_url: str, app_key: str | None, app_secret: str | None, key_names: str, client: httpx.Client
+) -> TokenManager:
+    key = (base_url, app_key, app_secret, key_names)
+    with _SHARED_TOKENS_LOCK:
+        if key not in _SHARED_TOKENS:
+            _SHARED_TOKENS[key] = TokenManager(
+                base_url=base_url, app_key=app_key, app_secret=app_secret, key_names=key_names, client=client
+            )
+        return _SHARED_TOKENS[key]
 
 
 class NHClient:
@@ -56,7 +74,8 @@ class NHClient:
         # 클라이언트가 여러 개여도 같은 계정의 호출 한도를 함께 지키도록 기본은 하나를 공유한다.
         self._limiter = limiter or SHARED_LIMITER
         self._sleep = sleep
-        self._tokens = TokenManager(
+        make_tokens = _shared_tokens if http_client is None else TokenManager
+        self._tokens = make_tokens(
             base_url=self.base_url,
             app_key=key.get_secret_value() if key else None,
             app_secret=secret.get_secret_value() if secret else None,
@@ -81,11 +100,12 @@ class NHClient:
 
     def _call_once(self, path: str, payload: dict[str, Any], limit: Limit) -> dict[str, Any]:
         self._limiter.wait(self.environment, limit)
-        response, body = self._send(path, payload)
+        token = self._tokens.token()
+        response, body = self._send(path, payload, token)
         if response.status_code == UNAUTHORIZED or _error_code(body) in REISSUE_CODES:
-            self._tokens.forget()
+            self._tokens.forget(token)
             self._limiter.wait(self.environment, limit)
-            response, body = self._send(path, payload)
+            response, body = self._send(path, payload, self._tokens.token())
 
         return self._checked(path, response, body)
 
@@ -126,8 +146,8 @@ class NHClient:
             raise HttpError(path, response.status_code, body)
         return body
 
-    def _send(self, path: str, payload: dict[str, Any]) -> tuple[httpx.Response, Any]:
-        headers = {"Authorization": self._tokens.token().authorization}
+    def _send(self, path: str, payload: dict[str, Any], token: Token) -> tuple[httpx.Response, Any]:
+        headers = {"Authorization": token.authorization}
         try:
             response = self._http.post(f"{self.base_url}{path}", headers=headers, json=payload)
         except httpx.TimeoutException:
