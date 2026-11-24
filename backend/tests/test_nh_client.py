@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.nh.auth import KST, REFRESH_MARGIN, AuthError, Token, TokenManager, parse_expires_at
+from app.nh.auth import ISSUE_RETRIES, KST, REFRESH_MARGIN, AuthError, Token, TokenManager, parse_expires_at
 from app.nh.client import RATE_LIMIT_RETRIES, NHClient
 from app.nh.errors import BusinessError, GatewayError, HttpError, NHConfigError, TransportError
 from app.nh.rate_limit import PER_SECOND, SHARED_LIMITER, Limit, RateLimiter
@@ -181,6 +181,68 @@ def test_토큰_발급이_거부되면_인증_오류를_내고_키를_드러내�
         manager.token()
 
     assert KEY not in str(error.value) and SECRET not in str(error.value)
+
+
+IN_PROGRESS = {"errorCode": "EAU046", "errorMessage": "이미 처리중인 토큰 발급 요청이 있습니다."}
+
+
+def make_manager(*responses, waits=None):
+    remaining = list(responses)
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: remaining.pop(0)))
+    sleep = waits.append if waits is not None else (lambda seconds: None)
+    return TokenManager(base_url="https://x", app_key=KEY, app_secret=SECRET, client=http, sleep=sleep), remaining
+
+
+def test_다른_발급_요청이_처리_중이면_기다렸다가_다시_발급한다():
+    waits = []
+    busy = httpx.Response(429, json=IN_PROGRESS)
+    manager, _ = make_manager(busy, busy, httpx.Response(200, json=TOKEN_BODY), waits=waits)
+
+    assert manager.token().access_token == TOKEN
+    assert waits == [1.0, 2.0]
+
+
+def test_발급_요청이_계속_처리_중이면_정해진_횟수만_다시_보내고_실패한다():
+    manager, remaining = make_manager(*[httpx.Response(429, json=IN_PROGRESS)] * (ISSUE_RETRIES + 2))
+
+    with pytest.raises(AuthError):
+        manager.token()
+    assert len(remaining) == 1
+
+
+def test_다른_이유로_거부된_발급은_다시_보내지_않는다():
+    waits = []
+    manager, _ = make_manager(httpx.Response(429, json={"errorCode": "EGW036"}), waits=waits)
+
+    with pytest.raises(AuthError):
+        manager.token()
+    assert waits == []
+
+
+def test_이미_새로_발급받았으면_옛_토큰을_버려도_새_토큰을_유지한다():
+    manager, _ = make_manager(*[httpx.Response(200, json=TOKEN_BODY) for _ in range(2)])
+    old = manager.token()
+    manager.forget(old)
+    new = manager.token()
+
+    manager.forget(old)
+
+    assert manager.token() is new
+
+
+def test_같은_키의_클라이언트는_토큰을_함께_쓰고_키가_다르면_따로_쓴다():
+    settings = Settings(
+        trading_env="mock",
+        nh_app_key=KEY,
+        nh_app_secret=SECRET,
+        nh_overseas_app_key="OVERSEAS-KEY",
+        nh_overseas_app_secret="OVERSEAS-SECRET",
+    )
+
+    first, second, overseas = NHClient(settings), NHClient(settings), NHClient(settings, market="overseas")
+
+    assert first._tokens is second._tokens
+    assert first._tokens is not overseas._tokens
 
 
 def test_토큰_표시에는_토큰_값이_없다():
