@@ -1,9 +1,10 @@
 """진입분별 포지션과 손익 계산. 백테스트와 모의매매가 같은 코드를 쓴다."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
-from strategy_base.models import Lot, Side
+from app.nh.auth import KST
+from strategy_base.models import EntryFill, Lot, Side
 
 
 @dataclass
@@ -61,6 +62,8 @@ class Ledger:
         self.trades = 0
         self.wins = 0
         self.losses = 0
+        self._entry_fill_day: date | None = None
+        self._entry_fills: list[EntryFill] = []
 
     def fee_for(self, price: float, quantity: int) -> float:
         # 스프레드처럼 체결가가 체결대금을 나타내지 못하는 종목은 정해 둔 가격으로 수수료를 계산한다.
@@ -85,7 +88,17 @@ class Ledger:
         position.entry_value += price * quantity
         position.fee += fee
         self.fee += fee
+        day = (moment.astimezone(KST) if moment.tzinfo is not None else moment).date()
+        if self._entry_fill_day is None or self._entry_fill_day < day:
+            self._entry_fill_day = day
+            self._entry_fills.clear()
+        if self._entry_fill_day == day:
+            self._entry_fills.append(EntryFill(moment, side, quantity, price))
         return Applied(quantity, fee)
+
+    def entry_fills(self, day: date) -> tuple[EntryFill, ...]:
+        """보유 여부와 무관하게 당일에 실제 반영된 신규 진입 체결을 돌려준다."""
+        return tuple(self._entry_fills) if self._entry_fill_day == day else ()
 
     def apply_exit(
         self, entry_id: str, side: Side, quantity: int, price: float, moment: datetime

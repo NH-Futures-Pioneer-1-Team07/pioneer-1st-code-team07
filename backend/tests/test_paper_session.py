@@ -27,6 +27,7 @@ from strategy_base.models import (
     CancelRequest,
     IntentKind,
     OrderIntent,
+    OrderType,
     Side,
     StrategyOutput,
 )
@@ -93,6 +94,7 @@ class FakeBroker:
         self.orderable_quantity = 100
         self.place_results: list = []
         self.place_calls: list = []
+        self.place_limit_calls: list = []
         self.cancel_calls: list = []
         self.failing: set[str] = set()
         self.deposit_now = Deposit(1e8, 1e8, 1e8, 1e8, 0, 0, 5000, 5000, 350.0)
@@ -132,6 +134,13 @@ class FakeBroker:
 
     def place(self, side, quantity):
         self.place_calls.append((side, quantity))
+        return self._place()
+
+    def place_limit(self, side, quantity, price):
+        self.place_limit_calls.append((side, quantity, price))
+        return self._place()
+
+    def _place(self):
         if self.place_results:
             result = self.place_results.pop(0)
             if isinstance(result, Exception):
@@ -143,6 +152,7 @@ class FakeBroker:
 
     def cancel(self, side, quantity, order_no):
         self.cancel_calls.append((side, quantity, order_no))
+        self._check("cancel")
         return "C" + order_no
 
 
@@ -621,6 +631,103 @@ def test_체결_알림을_놓쳐도_주문_내역으로_원장을_맞춘다(tmp_
         assert [l.quantity for l in h.session.ledger.lots()] == [5]
         assert h.journal("fill")[0]["source"] == "history"
         assert h.session.tracked["0000000001"].status == "filled"
+
+    run(scenario)
+
+
+def test_지정가는_교차봉에서_정한_시각에_취소하고_취소_실패를_재시도한다(tmp_path):
+    async def scenario():
+        config = dataclasses.replace(CONFIG, minutes=5, market="overseas", tick_size=0.015625)
+        order = OrderIntent(
+            Side.BUY, 1, IntentKind.ENTRY, "e1", "테스트", OrderType.LIMIT,
+            limit_price=112.484375, expires_at=at(minutes=10),
+        )
+        h = Harness(tmp_path, Script(on_bar=lambda ctx: StrategyOutput(orders=[order])), config)
+        h.broker.bars = [bar(0)]
+        await h.at(minutes=5, seconds=10)
+        assert h.strategy.bar_calls[0].tick_size == 0.015625
+        assert h.broker.place_limit_calls == [(Side.BUY, 1, 112.484375)]
+        assert h.broker.place_calls == []
+        assert h.orders("submitted")[0]["expires_at"] == at(minutes=10).isoformat()
+        h.broker.open_list = [record(Side.BUY, "0000000001", OrderStatus.CONFIRMED, quantity=1)]
+
+        await h.at(minutes=9, seconds=59)
+        assert h.broker.cancel_calls == []
+        h.broker.failing.add("cancel")
+        await h.at(minutes=10)
+        assert h.session.entry_blocks(h.now)
+        await h.at(minutes=10, seconds=1)
+        assert len(h.broker.cancel_calls) == 1
+        h.broker.failing.remove("cancel")
+        await h.at(minutes=10, seconds=2)
+        assert h.broker.cancel_calls == [(Side.BUY, 1, "0000000001")] * 2
+
+    run(scenario)
+
+
+def test_이미_시한이_지난_봉의_지정가는_내지_않는다(tmp_path):
+    async def scenario():
+        config = dataclasses.replace(CONFIG, minutes=5, market="overseas")
+        order = OrderIntent(
+            Side.SELL, 1, IntentKind.ENTRY, "e1", "테스트", OrderType.LIMIT,
+            limit_price=112.515625, expires_at=at(minutes=10),
+        )
+        h = Harness(tmp_path, Script(on_bar=lambda ctx: StrategyOutput(orders=[order])), config)
+        h.broker.bars = [bar(0)]
+        await h.at(minutes=10, seconds=10)
+        assert h.broker.place_calls == h.broker.place_limit_calls == []
+        assert "시한" in h.orders("skipped")[0]["reason"]
+
+    run(scenario)
+
+
+def test_자정_뒤에_확인한_체결은_주문_내역의_체결일_평단에_반영한다(tmp_path):
+    async def scenario():
+        config = dataclasses.replace(CONFIG, minutes=5, market="overseas")
+        endpoint = datetime(2026, 10, 29)
+        order = OrderIntent(
+            Side.BUY, 1, IntentKind.ENTRY, "e1", "테스트", OrderType.LIMIT,
+            limit_price=112.484375, expires_at=endpoint,
+        )
+        h = Harness(tmp_path, Script(on_bar=lambda ctx: StrategyOutput(orders=[order])), config)
+        h.broker.bars = [bar(13 * 60 + 50)]
+        await h.at(minutes=13 * 60 + 55, seconds=10)
+        history = record(Side.BUY, "0000000001", OrderStatus.FILLED, quantity=1, filled=1, price=112.484375)
+        h.broker.history = [dataclasses.replace(history, executed_time="20261028235959")]
+        h.broker.positions_list = [account_position(Side.BUY, 1)]
+        h.broker.bars = []
+        await h.at(minutes=14 * 60, seconds=2)
+
+        prior = h.session.ledger.entry_fills(endpoint.date() - timedelta(days=1))
+        today = await h.session._context(h.now, None)
+        assert len(prior) == 1 and prior[0].time == endpoint - timedelta(seconds=1)
+        assert today.entry_fills == ()
+        assert h.broker.cancel_calls == [(Side.BUY, 1, "0000000001")]
+
+    run(scenario)
+
+
+def test_자정_뒤에_접수된_미확인_지정가를_찾아_취소한다(tmp_path):
+    async def scenario():
+        config = dataclasses.replace(CONFIG, minutes=5, market="overseas")
+        endpoint = datetime(2026, 10, 29)
+        order = OrderIntent(
+            Side.BUY, 1, IntentKind.ENTRY, "e1", "테스트", OrderType.LIMIT,
+            limit_price=112.484375, expires_at=endpoint,
+        )
+        h = Harness(tmp_path, Script(on_bar=lambda ctx: StrategyOutput(orders=[order])), config)
+        h.broker.bars = [bar(13 * 60 + 50)]
+        h.broker.place_results = [TransportError("시간 초과")]
+        await h.at(minutes=13 * 60 + 59, seconds=58)
+        assert len(h.session.unknown) == 1
+        received = record(Side.BUY, "0000000077", OrderStatus.CONFIRMED, quantity=1, received="000000")
+        h.broker.history = h.broker.open_list = [dataclasses.replace(received, price=112.484375)]
+        h.broker.bars = []
+
+        await h.at(minutes=14 * 60, seconds=1)
+        assert h.session.unknown == []
+        assert h.broker.cancel_calls == [(Side.BUY, 1, "0000000077")]
+        assert h.session.entry_blocks(h.now)
 
     run(scenario)
 

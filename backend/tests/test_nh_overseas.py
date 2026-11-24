@@ -224,7 +224,8 @@ def test_주문_내역을_읽고_미체결만_조회할_수_있다():
     row = {
         "occurs1_ord_no": "7", "occurs1_org_ord_no": "0", "occurs1_sym": "ZNZ26", "occurs1_ord_sts": "4", "occurs1_trd_tp": "1",
         "occurs1_qt_tp": "1", "occurs1_ord_qty": "3", "occurs1_exec_qty": "1", "occurs1_ord_rem_qty": "2", "occurs1_ord_pric": "0",
-        "occurs1_exec_pric": "111.5", "occurs1_ord_rcv_tm": "20261102103015", "occurs1_rejt_rsn": "",
+        "occurs1_exec_pric": "111.5", "occurs1_ord_rcv_tm": "20261102103015",
+        "occurs1_exec_tm": "20261102103016", "occurs1_rejt_rsn": "",
     }
     client, server = make({"Occurs1": [row]})
 
@@ -233,6 +234,7 @@ def test_주문_내역을_읽고_미체결만_조회할_수_있다():
     assert body_of(server.api_requests()[0])["inq_div"] == "3"
     assert (record.order_no, record.status, record.side, record.remaining_quantity) == ("7", OrderStatus.PARTIAL, Side.BUY, 2)
     assert record.is_open and record.received_time == "103015"
+    assert record.executed_time == "20261102103016"
 
 
 def test_주문가능수량은_방향에_맞는_필드를_읽는다():

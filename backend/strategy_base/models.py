@@ -58,6 +58,16 @@ class Lot:
 
 
 @dataclass(frozen=True)
+class EntryFill:
+    """실제 반영된 신규 진입 체결 한 건."""
+
+    time: datetime
+    side: Side
+    quantity: int
+    price: float
+
+
+@dataclass(frozen=True)
 class OpenOrder:
     """아직 체결이 끝나지 않은 주문."""
 
@@ -82,6 +92,8 @@ class Context:
     - `vix`: 직전 거래일 종가 VIX. 값을 알 수 없으면 `None`이다.
     - `margin`: 계약당 기준 증거금. `manifest.json`의 종목에 적은 값이며 없으면 `None`이다.
     - `unrealized_pnl`: 보유분 전체의 평가손익(통화 단위). 수수료는 포함하지 않는다.
+    - `entry_fills`: `now`의 한국 시간 날짜에 체결된 신규 진입. 이미 청산한 진입분도 담는다.
+    - `tick_size`: 실행 종목의 호가 단위. 값을 알 수 없으면 `None`이다.
     """
 
     now: datetime
@@ -96,6 +108,8 @@ class Context:
     vix: float | None = None
     margin: float | None = None
     unrealized_pnl: float | None = None
+    entry_fills: Sequence[EntryFill] = ()
+    tick_size: float | None = None
 
     @property
     def net_quantity(self) -> int:
@@ -111,6 +125,8 @@ class OrderIntent:
     - `valid_bars`: 주문 유효 시한(봉 개수). 주문을 낸 뒤 처음 마감되는 봉부터 세어
       n번째 봉이 마감될 때까지 유효하다. `None`이면 시한이 없다.
     - `entry_id`: 진입이면 새 진입분 id, 청산이면 청산할 진입분 id.
+    - `limit_price`: 지정가 주문의 체결 한도 가격.
+    - `expires_at`: 이 시각부터 주문이 만료된다. `valid_bars`와 함께 쓰면 먼저 도달한 시한을 적용한다.
     """
 
     side: Side
@@ -120,6 +136,8 @@ class OrderIntent:
     reason: str
     order_type: OrderType = OrderType.MARKET
     valid_bars: int | None = None
+    limit_price: float | None = None
+    expires_at: datetime | None = None
 
 
 @dataclass(frozen=True)
