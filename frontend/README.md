@@ -36,6 +36,7 @@ npm run dev
 - 의존성은 `package.json`과 `package-lock.json`으로 관리한다.
 - 화면은 FastAPI를 폴링하고, 실시간 시세(`/ws/market`)와 실행 이력 변경(`/ws/runs`)은 WebSocket으로 수신한다.
 - 개발 서버는 `/api`·`/ws`를 백엔드(기본 `http://127.0.0.1:8000`, `BACKEND_URL`로 변경)로 프록시한다.
+- 모의매매와 백테스트의 초기 전략은 6주차 ZN이다. 서버에 등록되어 있지 않으면 등록된 최신 주차 전략을 쓴다.
 
 ## 폴더 구조
 
