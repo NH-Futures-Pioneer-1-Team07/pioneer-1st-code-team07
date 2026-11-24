@@ -12,7 +12,7 @@ from app.nh.client import NHClient
 from app.nh.domestic.quotes import fetch_minute_bars, fetch_quote
 from app.nh.errors import NHError
 from app.nh.overseas.quotes import fetch_minute_bars as fetch_overseas_minutes
-from app.data.vix import load as load_vix
+from app.data.vix import latest as latest_vix
 from app.records.store import RunRecorder, RunStore
 from app.runners.availability import (
     AvailableRange,
@@ -275,12 +275,14 @@ class BacktestService:
             self._thread.start()
             return dict(self._current)
 
-    def _extra_inputs(self, manifest: Manifest, instrument: Any, start: date) -> ExtraInputs:
+    def _extra_inputs(self, manifest: Manifest, instrument: Any, start: date, recorder: RunRecorder) -> ExtraInputs:
         series = {}
         if manifest.series:
             bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(start, self._today()))
             series = {name: bars for name in manifest.series}
-        return ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
+        vix = latest_vix()
+        recorder.record("event", **vix.event())
+        return ExtraInputs(series=series, vix=vix.history, margin=instrument.margin)
 
     def _validate_period(self, start: date, end: date, initial_capital: float) -> None:
         if initial_capital <= 0:
@@ -375,7 +377,7 @@ class BacktestService:
             warmup = loader(instrument.code or "", minutes, warmup_start(start, HISTORY_DAYS), start - timedelta(days=1), lambda done, total: None)
             extra["history"] = [bar for day in sorted(warmup.days) for bar in warmup.days[day]]
             extra["history_bars"] = manifest.history_bars
-        extra["extras"] = self._extra_inputs(manifest, instrument, start)
+        extra["extras"] = self._extra_inputs(manifest, instrument, start, recorder)
         engine = engine_type(
             registered.strategy_class(params),
             recorder,

@@ -1,5 +1,6 @@
 import shutil
 import time as clock
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ from app.nh.domestic.account import OrderStatus
 from app.nh.realtime_data import Feed, OrderEvent, Trade
 from app.runners import paper
 from app.runners.clearing import ClearConfig
+from app.data.vix import LatestVix, VixHistory
 from app.runners.paper_service import PaperService
 from strategy_base.models import Side
 from tests.test_clearing import FakeGateway
@@ -140,6 +142,28 @@ def test_시작하면_식별자를_돌려주고_실시간을_구독하며_상태
 
     env.client.post("/api/trading/stop")
     env.service.join(10)
+
+
+def test_운용을_시작하면_VIX를_받아_그날_쓰는_종가를_기록한다(env, monkeypatch):
+    fresh = LatestVix(VixHistory({date(2020, 1, 2): 21.5}))
+    monkeypatch.setattr("app.runners.paper_service.latest_vix", lambda: fresh)
+    started = env.start().json()
+    env.wait(lambda: env.hub and env.hub[0].started)
+    env.emit(trade(243000.0))
+    env.wait(lambda: env.broker.place_calls)
+
+    [event] = [e for e in env.journal(started, "event") if "vix_day" in e]
+
+    assert (event["vix_day"], event["vix"], event["level"]) == ("2020-01-02", 21.5, "info")
+    env.emit(OrderEvent("0000000001", "", CODE, Side.BUY, OrderStatus.FILLED, 1, 1, 0, 243000.0, 1, 0, "", "", ""))
+    env.broker.positions_list = [account_position(Side.BUY, 1)]
+    env.wait(lambda: env.status().get("lots"))
+    env.client.post("/api/trading/stop")
+    env.wait(lambda: env.broker.place_calls[1:])
+    env.emit(OrderEvent("0000000002", "", CODE, Side.SELL, OrderStatus.FILLED, 1, 1, 0, 243500.0, 1, 0, "", "", ""))
+    env.broker.positions_list = []
+    env.service.join(10)
+    assert env.status()["phase"] == "idle"
 
 
 def test_시작_전에는_대기_상태다(env):

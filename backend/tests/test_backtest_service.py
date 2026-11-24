@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.data.vix import LatestVix, VixHistory
 from app.main import create_app
 from app.runners.service import BacktestRejected, LoadedData
 from strategy_base.models import Bar
@@ -475,6 +476,25 @@ def test_추가_봉_계열과_전날_봉_VIX_증거금을_전략에_전달한다
     assert rows[0]["bars"] == 3 and rows[0]["margin"] == 2500
     assert rows[0]["daily"] == 20  # 10/21 이전 일봉
     assert rows[0]["vix"] is not None
+
+
+def test_백테스트는_실행할_때_VIX를_받고_받지_못하면_저장된_값으로_끝까지_실행한다(make_client, monkeypatch):
+    client, service = make_client()
+
+    def run_events():
+        started = client.post("/api/backtests", json=body()).json()
+        service.join(10)
+        assert run_detail(client, started)["meta"]["status"] == "completed"
+        url = f"/api/runs/{started['strategy_id']}/{started['mode']}/{started['run_id']}/journal"
+        return [e for e in client.get(url, params={"kind": "event"}).json()["items"] if "vix_last_day" in e]
+
+    [failed] = run_events()  # 테스트에서는 FRED를 받지 못한다
+    assert failed["level"] == "warning" and failed["vix_last_day"]
+
+    fresh = LatestVix(VixHistory({date(2026, 10, 19): 21.5}))
+    monkeypatch.setattr("app.runners.service.latest_vix", lambda: fresh)
+    [received] = run_events()
+    assert received["level"] == "info" and received["vix_last_day"] == "2026-10-19"
 
 
 RANGED = {

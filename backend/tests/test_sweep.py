@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.config import Settings
+from app.data.vix import LatestVix, VixHistory
 from app.records.store import RunStore
 from app.runners.service import BacktestService, LoadedData
 from app.sweep.cache import CachedLoader
@@ -227,6 +228,23 @@ def test_분봉이_없는_기간은_실패로_보고하고_나머지는_계속�
     assert len(report.ran) == 1 and len(report.failed) == 1
     assert "분봉" in next(iter(report.failed.values()))
     assert len(store.read_results("week02_stub")) == 1
+
+
+def test_실행할_때_VIX를_한_번_받아_결과에_마지막_날짜를_남긴다(env, monkeypatch):
+    calls = []
+
+    def latest():
+        calls.append(1)
+        return LatestVix(VixHistory({date(2026, 10, 19): 21.5}))
+
+    monkeypatch.setattr("app.sweep.runner.latest_vix", latest)
+    _, _, store, _, runner = env
+
+    runner.run(spec(params=[{}, {"quantity": 2}]))
+
+    rows = store.read_results("week02_stub")
+    assert len(rows) == 2 and len(calls) == 1
+    assert {row["vix_last_day"] for row in rows} == {"2026-10-19"}
 
 
 def test_기본_파라미터_결과가_기존_백테스트와_같다(env, tmp_path):
