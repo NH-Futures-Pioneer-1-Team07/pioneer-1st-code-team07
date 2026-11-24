@@ -35,6 +35,8 @@ MANIFEST = {
     "parameters": {"quantity": {"default": 1, "description": "수량"}},
 }
 START, END = date(2026, 10, 20), date(2026, 10, 23)
+# 테스트 데이터(FakeProbe)의 마지막 날 다음 날. 실제 날짜가 바뀌어도 결과가 같도록 고정한다.
+TODAY = date(2026, 10, 28)
 
 
 def day_bars(day):
@@ -85,6 +87,7 @@ def make_client(tmp_path):
         values = {"trading_env": "mock", "nh_app_key": "k", "nh_app_secret": "s",
                   "strategies_dir": strategies, "runs_dir": tmp_path / "runs"}
         app = create_app(Settings(**{**values, **settings_kwargs}))
+        app.state.backtests._today = lambda: TODAY
         app.state.backtests._loader_factory = lambda: loader
         app.state.backtests._probe_factory = lambda code, minutes: probe or FakeProbe()
         return TestClient(app), app.state.backtests
@@ -224,9 +227,8 @@ def test_잘못된_요청은_거부하고_실행_기록을_만들지_않는다(m
 
 def test_종료일이_오늘이면_거부한다(make_client):
     client, _ = make_client()
-    today = datetime.now().date().isoformat()
 
-    assert client.post("/api/backtests", json=body(end_date=today)).status_code == 422
+    assert client.post("/api/backtests", json=body(end_date=TODAY.isoformat())).status_code == 422
 
 
 def test_종목_정보가_모자란_전략은_거부한다(make_client):

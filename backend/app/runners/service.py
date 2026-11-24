@@ -138,6 +138,7 @@ class BacktestService:
         loader_factory: Callable[[], DataLoader] | None = None,
         probe_factory: Callable[[str, int], ProbeSource] | None = None,
         daily_fetcher: DailyFetcher | None = None,
+        today: Callable[[], date] | None = None,
     ):
         self._settings = settings
         self._registry = registry
@@ -145,7 +146,8 @@ class BacktestService:
         self._loader_factory = loader_factory
         self._probe_factory = probe_factory
         self._daily_fetcher = daily_fetcher or nh_daily_fetcher(settings)
-        self._ranges = RangeCache(lambda: datetime.now(KST).date())
+        self._today = today or (lambda: datetime.now(KST).date())
+        self._ranges = RangeCache(lambda: self._today())
         self._lock = threading.Lock()
         self._current: dict[str, str] | None = None
         self._thread: threading.Thread | None = None
@@ -276,7 +278,7 @@ class BacktestService:
     def _extra_inputs(self, manifest: Manifest, instrument: Any, start: date) -> ExtraInputs:
         series = {}
         if manifest.series:
-            bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(start, datetime.now(KST).date()))
+            bars = spread_daily_fetcher(self._daily_fetcher)(instrument, days_needed(start, self._today()))
             series = {name: bars for name in manifest.series}
         return ExtraInputs(series=series, vix=load_vix(), margin=instrument.margin)
 
@@ -285,7 +287,7 @@ class BacktestService:
             raise BacktestRejected(422, "초기자금은 0보다 커야 합니다")
         if start > end:
             raise BacktestRejected(422, "시작일이 종료일보다 늦습니다")
-        if end >= datetime.now(KST).date():
+        if end >= self._today():
             raise BacktestRejected(422, "종료일은 오늘보다 이전이어야 합니다")
         if (end - start).days + 1 > MAX_DAYS:
             raise BacktestRejected(422, f"기간은 {MAX_DAYS}일 이하여야 합니다")
