@@ -12,3 +12,10 @@ export function latestWeek<T>(items: readonly T[], idOf: (item: T) => string): T
     return gap > 0 || (gap === 0 && idOf(item) > idOf(best)) ? item : best;
   }, undefined);
 }
+
+const DEFAULT_RUN_STRATEGY_ID = "week06_zn_intraday_average_entry";
+
+/** 모의매매와 백테스트의 초기 전략을 고른다. 미등록 환경에서는 최신 주차를 쓴다. */
+export function defaultRunStrategy<T extends { id: string }>(items: readonly T[]): T | undefined {
+  return items.find((item) => item.id === DEFAULT_RUN_STRATEGY_ID) ?? latestWeek(items, (item) => item.id);
+}
