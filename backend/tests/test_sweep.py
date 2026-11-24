@@ -240,6 +240,7 @@ def test_기본_파라미터_결과가_기존_백테스트와_같다(env, tmp_pa
         RunStore(settings.runs_dir),
         loader_factory=lambda: good_loader,
         probe_factory=lambda code, minutes: FakeProbe(first=date(2026, 10, 1), last=date(2026, 10, 27)),
+        today=lambda: TODAY,
     )
     started = service.start("week02_stub", START, END, 100_000_000)
     service.join(10)

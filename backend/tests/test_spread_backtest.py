@@ -4,8 +4,7 @@ import pytest
 
 from app.runners.service import LoadedData
 from strategy_base.models import Bar
-from app.nh.auth import KST
-from tests.test_backtest_service import FakeProbe, body, make_client, run_detail  # noqa: F401
+from tests.test_backtest_service import TODAY, FakeProbe, body, make_client, run_detail  # noqa: F401
 
 SPREAD_MANIFEST = {
     "name": "스프레드 서비스 테스트 전략",
@@ -28,8 +27,8 @@ CLOSES = {"AAA": 104.0, "BBB": 106.0}
 
 
 def weekdays_back(count):
-    """오늘 이전의 평일 `count`일 중 가장 오래된 날과 가장 최근 날."""
-    day, found = datetime.now(KST).date(), []
+    """`TODAY` 이전의 평일 `count`일 중 가장 오래된 날과 가장 최근 날."""
+    day, found = TODAY, []
     while len(found) < count:
         day -= timedelta(days=1)
         if day.weekday() < 5:
