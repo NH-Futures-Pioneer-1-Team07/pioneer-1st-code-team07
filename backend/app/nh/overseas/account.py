@@ -140,4 +140,5 @@ def _order(row: dict[str, Any]) -> OrderRecord:
         remaining_quantity=count(row.get("occurs1_ord_rem_qty")),
         received_time=text(row.get("occurs1_ord_rcv_tm"))[-6:],  # YYYYMMDDHHMMSS → HHMMSS
         reject_reason=text(row.get("occurs1_rejt_rsn")),
+        executed_time=text(row.get("occurs1_exec_tm")),
     )

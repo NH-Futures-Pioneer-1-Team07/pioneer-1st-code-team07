@@ -1,7 +1,7 @@
 """모의매매가 쓰는 NH 기능의 묶음. 세션은 이 인터페이스만 알고, 테스트는 가짜로 바꿔 끼운다."""
 
 from datetime import date
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from app.nh.client import NHClient
 from app.nh.domestic.account import (
@@ -19,7 +19,7 @@ from app.nh.domestic.quotes import Quote, fetch_minute_bars, fetch_quote
 from app.nh.overseas import account as overseas_account
 from app.nh.overseas import orders as overseas_orders
 from app.nh.overseas import quotes as overseas_quotes
-from strategy_base.models import Bar, Side
+from strategy_base.models import Bar, OrderType, Side
 
 
 class Broker(Protocol):
@@ -44,6 +44,11 @@ class Broker(Protocol):
     def place(self, side: Side, quantity: int) -> str: ...
 
     def cancel(self, side: Side, quantity: int, order_no: str) -> str: ...
+
+
+@runtime_checkable
+class LimitBroker(Broker, Protocol):
+    def place_limit(self, side: Side, quantity: int, price: float) -> str: ...
 
 
 class NHBroker:
@@ -119,6 +124,11 @@ class OverseasNHBroker:
 
     def place(self, side: Side, quantity: int) -> str:
         return overseas_orders.place_order(self._client, self.code, side, quantity)
+
+    def place_limit(self, side: Side, quantity: int, price: float) -> str:
+        return overseas_orders.place_order(
+            self._client, self.code, side, quantity, order_type=OrderType.LIMIT, price=price
+        )
 
     def cancel(self, side: Side, quantity: int, order_no: str) -> str:
         return overseas_orders.cancel_order(self._client, self.code, side, quantity, order_no)

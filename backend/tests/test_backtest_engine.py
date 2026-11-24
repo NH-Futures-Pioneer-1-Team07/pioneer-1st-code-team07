@@ -22,6 +22,7 @@ from strategy_base.models import (
     DecisionResult,
     IntentKind,
     OrderIntent,
+    OrderType,
     Side,
     StrategyOutput,
 )
@@ -245,6 +246,65 @@ def test_그날_마지막_봉에서_낸_주문은_그_봉_종가에_체결한다
 
     [fill] = [f for f in journal(recorder, "fill") if f["source"] == "day_end"]
     assert (fill["entry_id"], fill["price"]) == ("late", 100500)
+
+
+def next_bar_limit(side, expires_at):
+    return OrderIntent(
+        side, 1, IntentKind.ENTRY, "limit-entry", "테스트",
+        order_type=OrderType.LIMIT, valid_bars=1, limit_price=100000, expires_at=expires_at,
+    )
+
+
+@pytest.mark.parametrize(("side", "opening"), [(Side.BUY, 99500), (Side.SELL, 100500)])
+def test_지정가_시가_체결은_슬리피지가_있어도_한도_이내다(tmp_path, side, opening):
+    expiry = datetime(2026, 10, 26, 9, 6, tzinfo=KST)
+    strategy = Script(bar_orders={1: [next_bar_limit(side, expiry)]})
+    engine, recorder = engine_for(tmp_path, strategy, Assumptions(0, 2, 10, 500))
+    rows = [(100000, 100000, 100000, 100000), (opening, opening, opening, opening)]
+
+    engine.run({DAY1: bars_of(DAY1, rows)})
+
+    [fill] = [row for row in journal(recorder, "fill") if row["intent"] == "entry"]
+    assert (fill["raw_price"], fill["price"], fill["source"]) == (opening, 100000, "next_open")
+
+
+def test_자정_직전_유효한_다음_봉에서_지정가에_닿으면_체결한다(tmp_path):
+    expiry = datetime(2026, 10, 27, 0, 0, tzinfo=KST)
+    strategy = Script(bar_orders={1: [next_bar_limit(Side.BUY, expiry)]})
+    engine, recorder = engine_for(tmp_path, strategy, COSTLY)
+    rows = [(100500, 100500, 100500, 100500), (100500, 100500, 100000, 100500)]
+
+    engine.run({DAY1: bars_of(DAY1, rows, start=(23, 54))})
+
+    [entry] = [row for row in journal(recorder, "fill") if row["intent"] == "entry"]
+    assert (entry["raw_price"], entry["price"], entry["source"]) == (100000, 100000, "limit_touch")
+    assert datetime.fromisoformat(entry["time"]) == expiry - timedelta(seconds=1)
+
+
+@pytest.mark.parametrize("next_bar", ["unfilled", "missing", "next_day"])
+def test_지정가는_다음_봉이_끝나거나_유실되면_뒤의_유리한_가격에도_체결되지_않는다(tmp_path, next_bar):
+    first, second, third = bars_of(DAY1, [
+        (100000, 100000, 100000, 100000),
+        (100500, 100500, 100500, 100500),
+        (99500, 99500, 99500, 99500),
+    ])
+    days = {DAY1: [first, second, third] if next_bar == "unfilled" else [first, third]}
+    expiry = datetime(2026, 10, 26, 9, 6, tzinfo=KST)
+    if next_bar == "next_day":
+        expiry = datetime(2026, 10, 27, 0, 0, tzinfo=KST)
+        days = {
+            DAY1: bars_of(DAY1, [(100000, 100000, 100000, 100000)], start=(23, 57)),
+            DAY2: bars_of(DAY2, [(99500, 99500, 99500, 99500)], start=(0, 0)),
+        }
+    strategy = Script(bar_orders={1: [next_bar_limit(Side.BUY, expiry)]})
+    engine, recorder = engine_for(tmp_path, strategy)
+
+    engine.run(days)
+
+    assert journal(recorder, "fill") == []
+    assert [(row["status"], row["limit_price"]) for row in journal(recorder, "order")] == [
+        ("submitted", 100000), ("cancelled", 100000),
+    ]
 
 
 # ---- 장중 가격 판단 ----
@@ -547,3 +607,29 @@ def test_보유분이_있으면_평가손익을_계산해_전달한다(tmp_path)
 
     # 2번째 봉 시가(105)에 2계약 진입, 거래승수 10. 세 번째 봉 마감 종가 98 기준 평가손익은 (98-105)*2*10
     assert seen[0] == 0.0 and seen[-1] == (98 - 105) * 2 * 10
+
+
+def test_당일_진입_체결은_전량_청산_뒤에도_전달하고_자정에_초기화한다(tmp_path):
+    class EntryFillProbe(Probe):
+        def on_bar(self, ctx):
+            super().on_bar(ctx)
+            orders = {
+                1: [market(Side.BUY, 2, IntentKind.ENTRY, "e1")],
+                2: [market(Side.SELL, 2, IntentKind.EXIT, "e1")],
+            }
+            return StrategyOutput(orders=orders.get(len(self.contexts), []))
+
+    probe = EntryFillProbe()
+    engine, _ = engine_for(tmp_path, probe, COSTLY)
+    engine.run({
+        DAY1: bars_of(DAY1, [(100000, 100000, 100000, 100000)] * 3),
+        DAY2: bars_of(DAY2, [(100000, 100000, 100000, 100000)]),
+    })
+
+    opening, holding, closed, next_day = probe.contexts
+    assert not opening.entry_fills and not next_day.entry_fills
+    assert holding.lots and not closed.lots
+    [fill] = closed.entry_fills
+    assert (fill.side, fill.quantity, fill.price) == (Side.BUY, 2, 100500)
+    assert holding.entry_fills == closed.entry_fills
+    assert closed.tick_size == 500

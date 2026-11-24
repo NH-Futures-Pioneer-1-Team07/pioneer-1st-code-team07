@@ -187,6 +187,7 @@ class PaperService:
                     history_bars=manifest.history_bars,
                     market=instrument.market,
                     fee_price=fee_price,
+                    tick_size=instrument.tick_size,
                     **({"session_anchor": time(0, 0)} if instrument.market == "overseas" else {}),
                 ),
                 **self._overrides,

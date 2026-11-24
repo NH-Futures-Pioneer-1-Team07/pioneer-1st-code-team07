@@ -5,7 +5,7 @@
 - 분봉: `poll_interval`마다 분봉을 조회해 마감된 봉을 한 번씩 `on_bar`에 전달한다.
   운용을 시작한 뒤에 시작한 당일 봉만 쓴다.
 - 가격: 실시간 체결을 `on_price`에 전달한다. 실시간이 끊기면 현재가 조회로 대신한다.
-- 주문: 전략의 주문 의도를 시장가 주문으로 보낸다. 거부된 주문과 처리 여부를 모르는 주문은 다시 보내지 않는다.
+- 주문: 전략의 주문 의도를 시장가 또는 지원하는 종목의 지정가로 보낸다. 처리 여부를 모르는 주문은 다시 보내지 않는다.
 - 원장: 체결 알림으로 갱신한다. 알림이 없어도 주문 내역 조회로 맞춘다.
 - 안전: 계좌와 원장이 어긋나거나 주문 상태를 모르거나 시세·분봉이 끊기면 신규 진입을 막는다. 청산은 막지 않는다.
 """
@@ -15,6 +15,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from math import isfinite
 from typing import Any
 
 from app.nh.auth import KST
@@ -23,7 +24,7 @@ from app.nh.domestic.orders import OrderBlocked
 from app.nh.errors import BusinessError, NHConfigError, NHError
 from app.nh.realtime_data import OrderEvent, Reconnected, SubscriptionFailed, Trade
 from app.records.store import RunRecorder
-from app.runners.broker import Broker
+from app.runners.broker import Broker, LimitBroker
 from app.runners.inputs import ExtraInputs
 from app.runners.ledger import ClosedTrade, Ledger
 from strategy_base.interface import BaseStrategy
@@ -68,6 +69,7 @@ class PaperConfig:
     # 이 시각이 되면 운용을 종료한다(신규 판단을 멈추고 미체결 취소·보유 청산). 없으면 직접 종료할 때까지 운용한다.
     # 수수료를 체결가가 아닌 이 가격으로 어림한다(스프레드 종목).
     fee_price: float | None = None
+    tick_size: float | None = None
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,7 @@ class Tracked:
     filled: int = 0
     status: str = "open"  # open, filled, closed, rejected
     cancel_requested: bool = False
+    last_cancel_try: datetime | None = None
 
     @property
     def remaining(self) -> int:
@@ -125,6 +128,19 @@ def kst_now() -> datetime:
 
 def _same_order(left: str, right: str) -> bool:
     return left.strip().lstrip("0") == right.strip().lstrip("0")
+
+
+def _order_time(value: str, now: datetime) -> datetime | None:
+    """NH 주문 시각을 읽는다. 날짜가 없으면 확인 시각 이전의 가장 가까운 날짜를 쓴다."""
+    try:
+        if len(value) == 14:
+            return datetime.strptime(value, "%Y%m%d%H%M%S")
+        if len(value) == 6:
+            moment = datetime.combine(now.date(), datetime.strptime(value, "%H%M%S").time())
+            return moment if moment <= now else moment - timedelta(days=1)
+    except ValueError:
+        pass
+    return None
 
 
 class PaperSession:
@@ -243,14 +259,17 @@ class PaperSession:
         if self.phase == RUNNING and now >= self.next_poll:
             self.next_poll = now + timedelta(seconds=self.config.poll_interval)
             await self._poll_bars(now)
+            await self._expire_orders(self.clock())
         if self.feed_state != "live" and now >= self.next_quote:
             self.next_quote = now + timedelta(seconds=self.config.poll_interval)
             await self._poll_quote(now)
+            await self._expire_orders(self.clock())
         if now >= self.next_reconcile:
             urgent = self.phase == STOPPING or bool(self.unknown)
             interval = self.config.stop_reconcile_interval if urgent else self.config.reconcile_interval
             self.next_reconcile = now + timedelta(seconds=interval)
             await self._reconcile(now)
+            await self._expire_orders(self.clock())
         if self.phase == STOPPING:
             await self._stop_step(now)
 
@@ -336,6 +355,8 @@ class PaperSession:
             open_orders=self._open_orders(),
             state=self.state,
             unrealized_pnl=self.ledger.unrealized(reference) if reference is not None else None,
+            entry_fills=self.ledger.entry_fills(decision_now.date()),
+            tick_size=self.config.tick_size,
             **self.extras.fields(decision_now),
         )
 
@@ -410,6 +431,11 @@ class PaperSession:
             reasons.append("계좌 전체 정리 중" if self.phase == CLEARING else "종료 중")
         if self.unknown:
             reasons.append("주문 처리 여부를 확인하지 못함")
+        if any(
+            t.status == "open" and t.intent.expires_at is not None and t.expires_at is not None and now >= t.expires_at
+            for t in self.tracked.values()
+        ):
+            reasons.append("유효 시한이 지난 주문의 취소를 확인하지 못함")
         if self.mismatch:
             reasons.append(self.mismatch)
         stale = timedelta(seconds=self.config.stale_after)
@@ -420,9 +446,25 @@ class PaperSession:
         return reasons
 
     async def _submit(self, intent: OrderIntent, now: datetime, score: float | None) -> None:
-        if intent.order_type != OrderType.MARKET:
-            self._note("시장가가 아닌 주문은 지원하지 않아 무시했습니다", level="warning", entry_id=intent.entry_id)
+        limit_price = None
+        limit_broker = None
+        if intent.order_type == OrderType.LIMIT:
+            limit_price = intent.limit_price
+            if limit_price is None or not isfinite(limit_price) or limit_price <= 0:
+                self._order_record("skipped", intent, now, reason="지정가 주문 가격이 유효하지 않음")
+                return
+            if not isinstance(self.broker, LimitBroker):
+                self._order_record("skipped", intent, now, reason="이 종목은 지정가 주문을 지원하지 않음")
+                return
+            limit_broker = self.broker
+        elif intent.order_type != OrderType.MARKET:
+            self._note("지원하지 않는 주문 유형을 무시했습니다", level="warning", entry_id=intent.entry_id)
             return
+        if intent.expires_at is not None:
+            now = self.clock()
+            if now >= intent.expires_at:
+                self._order_record("skipped", intent, now, reason="주문 유효 시한이 지남")
+                return
         if intent.kind == IntentKind.ENTRY:
             reasons = self.entry_blocks(now)
             if reasons:
@@ -433,8 +475,16 @@ class PaperSession:
             quantity = self._exit_quantity(intent, now)
         if quantity <= 0:
             return
+        if intent.expires_at is not None:
+            now = self.clock()
+            if now >= intent.expires_at:
+                self._order_record("skipped", intent, now, reason="주문 유효 시한이 지남")
+                return
         try:
-            order_no = await asyncio.to_thread(self.broker.place, intent.side, quantity)
+            if limit_broker is not None and limit_price is not None:
+                order_no = await asyncio.to_thread(limit_broker.place_limit, intent.side, quantity, limit_price)
+            else:
+                order_no = await asyncio.to_thread(self.broker.place, intent.side, quantity)
         except BusinessError as error:
             self._order_record("rejected", intent, now, quantity=quantity, code=error.code, message=error.detail)
             return
@@ -455,9 +505,11 @@ class PaperSession:
         )
         self._order_record("submitted", intent, now, quantity=quantity, order_no=order_no)
         self.next_reconcile = now + timedelta(seconds=self.config.stop_reconcile_interval)
+        if intent.expires_at is not None:
+            await self._expire_orders(self.clock())
 
     async def _entry_quantity(self, intent: OrderIntent, now: datetime) -> int:
-        price = self.last_price
+        price = intent.limit_price if intent.order_type == OrderType.LIMIT else self.last_price
         if price is None:
             self._order_record("skipped", intent, now, reason="현재가를 알 수 없어 주문가능수량을 확인하지 못함")
             return 0
@@ -499,15 +551,19 @@ class PaperSession:
 
     def _expiry(self, intent: OrderIntent, now: datetime) -> datetime | None:
         if intent.valid_bars is None:
-            return None
+            return intent.expires_at
         width = timedelta(minutes=self.config.minutes)
         anchor = datetime.combine(now.date(), self.config.session_anchor)
         steps = int((now - anchor) / width) + 1 if now >= anchor else 0
-        return anchor + width * (steps + intent.valid_bars - 1)
+        bar_expiry = anchor + width * (steps + intent.valid_bars - 1)
+        return min(bar_expiry, intent.expires_at) if intent.expires_at is not None else bar_expiry
 
     def _order_record(
         self, status: str, intent: OrderIntent, now: datetime, quantity: int | None = None, **fields: Any
     ) -> None:
+        if intent.order_type == OrderType.LIMIT:
+            expires_at = intent.expires_at.isoformat() if intent.expires_at is not None else None
+            fields = {"limit_price": intent.limit_price, "expires_at": expires_at, **fields}
         fields = {"reason": intent.reason, **fields}
         self.recorder.record(
             "order",
@@ -532,10 +588,16 @@ class PaperSession:
     async def _cancel(self, tracked: Tracked, reason: str, now: datetime) -> None:
         if tracked.cancel_requested or tracked.remaining <= 0:
             return
+        if tracked.intent.expires_at is not None and tracked.last_cancel_try is not None:
+            if now < tracked.last_cancel_try + timedelta(seconds=self.config.stop_reconcile_interval):
+                return
+        tracked.last_cancel_try = now
         tracked.cancel_requested = True
         try:
             await asyncio.to_thread(self.broker.cancel, tracked.intent.side, tracked.remaining, tracked.order_no)
         except NHError as error:
+            if tracked.intent.expires_at is not None:
+                tracked.cancel_requested = False
             self._note(
                 "취소 요청이 거부되었거나 확인하지 못했습니다",
                 level="warning",
@@ -545,7 +607,8 @@ class PaperSession:
             )
         else:
             self._order_record("cancel_requested", tracked.intent, now, order_no=tracked.order_no, cancel_reason=reason)
-        self.next_reconcile = now + timedelta(seconds=self.config.stop_reconcile_interval)
+        reconcile_at = now + timedelta(seconds=self.config.stop_reconcile_interval)
+        self.next_reconcile = min(self.next_reconcile, reconcile_at) if tracked.intent.expires_at else reconcile_at
 
     async def _expire_orders(self, now: datetime) -> None:
         for tracked in list(self.tracked.values()):
@@ -568,26 +631,31 @@ class PaperSession:
                 cumulative = event.filled_quantity
             else:
                 cumulative = tracked.filled + (event.execution_quantity or 0)
-            self._apply_fill(tracked, cumulative, event.filled_price, now, "notification")
+            self._apply_fill(tracked, cumulative, event.filled_price, now, "notification", event.executed_time)
         elif event.status == OrderStatus.AUTO_CANCELLED:
             self._close(tracked, "자동 취소", now)
 
-    def _apply_fill(self, tracked: Tracked, cumulative: int, price: float | None, now: datetime, source: str) -> None:
+    def _apply_fill(
+        self, tracked: Tracked, cumulative: int, price: float | None, now: datetime, source: str, executed_time: str
+    ) -> None:
         delta = min(cumulative, tracked.quantity) - tracked.filled
         if delta <= 0 or price is None:
             return
         intent = tracked.intent
+        filled_at = _order_time(executed_time, now)
+        if filled_at is None or not tracked.placed_at.replace(microsecond=0) <= filled_at <= now:
+            filled_at = now
         if intent.kind == IntentKind.ENTRY:
-            applied = self.ledger.apply_entry(intent.entry_id, intent.side, delta, price, now)
+            applied = self.ledger.apply_entry(intent.entry_id, intent.side, delta, price, filled_at)
         else:
-            applied = self.ledger.apply_exit(intent.entry_id, intent.side, delta, price, now)
+            applied = self.ledger.apply_exit(intent.entry_id, intent.side, delta, price, filled_at)
         if applied is None:
             self._note("체결을 원장에 반영하지 못했습니다", level="error", order_no=tracked.order_no, entry_id=intent.entry_id)
             return
         tracked.filled += applied.quantity
         self.recorder.record(
             "fill",
-            time=now,
+            time=filled_at,
             side=intent.side.value,
             quantity=applied.quantity,
             price=price,
@@ -600,8 +668,10 @@ class PaperSession:
             score=tracked.score,
             source=source,
         )
+        if intent.expires_at is not None and tracked.expires_at is not None and filled_at >= tracked.expires_at:
+            self._note("유효 시한이 지난 주문의 체결을 확인했습니다", level="warning", order_no=tracked.order_no)
         if applied.trade is not None:
-            self._record_trade(applied.trade, now)
+            self._record_trade(applied.trade, filled_at)
         if tracked.filled >= tracked.quantity:
             tracked.status = "filled"
 
@@ -652,6 +722,18 @@ class PaperSession:
             ]
         for tracked in missing:
             self._close(tracked, "계좌의 미체결에 없음", now)
+        for tracked in self.tracked.values():
+            if (
+                tracked.status == "open"
+                and tracked.cancel_requested
+                and tracked.intent.expires_at is not None
+                and tracked.expires_at is not None
+                and now >= tracked.expires_at
+                and tracked.last_cancel_try is not None
+                and now >= tracked.last_cancel_try + timedelta(seconds=self.config.stop_reconcile_interval)
+                and any(_same_order(tracked.order_no, n) for n in open_numbers)
+            ):
+                tracked.cancel_requested = False
 
         self.account_net, self.account_open = account_net, account_open
         foreign = [
@@ -683,6 +765,7 @@ class PaperSession:
         except NHError as error:
             self._error_event("주문 내역 조회에 실패했습니다", error, now)
             return
+        now = self.clock()
         by_number = {r.order_no: r for r in records}
         for tracked in list(self.tracked.values()):
             record = next((r for n, r in by_number.items() if _same_order(n, tracked.order_no)), None)
@@ -695,10 +778,13 @@ class PaperSession:
                 (
                     r for r in records
                     if r.kind == "new"
+                    and r.code == self.config.code
                     and r.side == unknown.intent.side
                     and r.quantity == unknown.quantity
+                    and (unknown.intent.order_type != OrderType.LIMIT or r.price == unknown.intent.limit_price)
                     and not any(_same_order(r.order_no, t.order_no) for t in self.tracked.values())
-                    and r.received_time >= (unknown.placed_at - timedelta(seconds=5)).strftime("%H%M%S")
+                    and (received_at := _order_time(r.received_time, now)) is not None
+                    and unknown.placed_at - timedelta(seconds=5) <= received_at <= now
                 ),
                 None,
             )
@@ -711,6 +797,7 @@ class PaperSession:
                 self.unknown.remove(unknown)
                 self._note("처리 여부를 몰랐던 주문을 주문 내역에서 찾았습니다", order_no=match.order_no)
                 self._sync_record(tracked, match, now)
+                await self._expire_orders(self.clock())
             elif unknown.checks >= self.config.unknown_checks:
                 self.unknown.remove(unknown)
                 self._note(
@@ -719,7 +806,7 @@ class PaperSession:
 
     def _sync_record(self, tracked: Tracked, record: OrderRecord, now: datetime) -> None:
         if record.filled_quantity:
-            self._apply_fill(tracked, record.filled_quantity, record.filled_price, now, "history")
+            self._apply_fill(tracked, record.filled_quantity, record.filled_price, now, "history", record.executed_time)
         if record.status == OrderStatus.REJECTED and tracked.status == "open":
             tracked.status = "rejected"
             self._order_record("rejected", tracked.intent, now, order_no=tracked.order_no, message=record.reject_reason)

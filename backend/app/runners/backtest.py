@@ -2,10 +2,11 @@
 
 체결 가정
 - `on_bar`가 낸 시장가 주문은 다음 봉의 시가에 전량 체결한다. 그날 마지막 봉이면 그 봉의 종가에 체결한다.
+- `on_bar`가 낸 지정가 주문은 같은 날 바로 이어지는 봉에서만 시가 또는 지정가에 체결한다.
 - `on_price`는 봉마다 시가 → 불리한 극단 → 유리한 극단 → 종가 순으로 호가 단위씩 가격을 움직이며
   호출한다. 보유 중이면 불리한 극단이 먼저다(롱은 저가, 숏은 고가). 이 호출이 낸 주문은 그 가격에 체결한다.
-- 체결 가격에는 슬리피지를 불리한 방향으로 더하고, 체결대금(체결가 × 거래승수 × 수량)에 수수료율을 곱한
-  수수료를 뺀다. 증거금과 주문가능수량은 제한하지 않는다.
+- 체결 가격에는 슬리피지를 불리한 방향으로 더한다. 지정가 주문의 체결가는 지정가보다 불리해지지 않는다.
+- 체결대금(체결가 × 거래승수 × 수량)에 수수료율을 곱한 수수료를 뺀다. 증거금과 주문가능수량은 제한하지 않는다.
 """
 
 import math
@@ -14,11 +15,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from app.records.store import RunRecorder
+from app.records.store import RunRecorder, to_kst
 from app.runners.inputs import ExtraInputs
 from app.runners.ledger import Ledger
 from strategy_base.interface import BaseStrategy
-from strategy_base.models import Bar, Context, IntentKind, Lot, OrderIntent, Side, StrategyOutput
+from strategy_base.models import Bar, Context, IntentKind, Lot, OrderIntent, OrderType, Side, StrategyOutput
 
 MAX_PATH_STEPS = 200
 END_OF_PERIOD_REASON = "백테스트 종료 청산"
@@ -164,19 +165,31 @@ class BacktestEngine:
         for index, bar in enumerate(bars):
             if bar.open is None:
                 raise ValueError(f"{bar.time:%Y-%m-%d %H:%M} 봉에 시가가 없습니다")
+            preceding = bars[index - 1].time if index else None
+            resting_limits: list[OrderIntent] = []
             for order in pending:
-                self._fill(order, bar.open, bar.time, "next_open")
+                if order.order_type == OrderType.LIMIT and (
+                    preceding is None or bar.time != preceding + step or to_kst(bar.time).date() != to_kst(preceding).date()
+                ):
+                    self._expire_limit(order, bar.time)
+                elif not self._fill(order, bar.open, bar.time, "next_open"):
+                    resting_limits.append(order)
             pending = []
 
             completed = self._prefix + list(bars[:index])
-            before_close = bar.time + step - timedelta(seconds=1)
+            close_time = bar.time + step
             for number, price in enumerate(price_path(bar, self._net(), self.assumptions.tick_size)):
-                moment = bar.time if number == 0 else before_close
+                moment = bar.time if number == 0 else close_time - timedelta(seconds=1)
+                if number > 0 and resting_limits:
+                    resting_limits = [
+                        order for order in resting_limits if not self._fill(order, price, moment, "limit_touch")
+                    ]
                 output = self._call(self.strategy.on_price, moment, completed, price)
                 for order in output.orders:
                     self._fill(order, price, moment, "intrabar")
 
-            close_time = bar.time + step
+            for order in resting_limits:
+                self._expire_limit(order, close_time)
             output = self._call(self.strategy.on_bar, close_time, completed + [bar], None)
             pending.extend(output.orders)
             self.totals.bars += 1
@@ -184,7 +197,10 @@ class BacktestEngine:
 
         end = bars[-1].time + step
         for order in pending:
-            self._fill(order, bars[-1].close, end, "day_end")
+            if order.order_type == OrderType.LIMIT:
+                self._expire_limit(order, end)
+            else:
+                self._fill(order, bars[-1].close, end, "day_end")
 
     def _call(
         self,
@@ -204,6 +220,8 @@ class BacktestEngine:
             open_orders=(),
             state=self.state,
             unrealized_pnl=self.ledger.unrealized(reference) if reference is not None else None,
+            entry_fills=self.ledger.entry_fills(to_kst(now).date()),
+            tick_size=self.assumptions.tick_size,
             **self.extras.fields(now),
         )
         output = hook(ctx)
@@ -223,28 +241,52 @@ class BacktestEngine:
                 ],
             )
         for order in output.orders:
-            self.recorder.record(
-                "order",
-                time=now,
-                status="submitted",
-                side=order.side.value,
-                quantity=order.quantity,
-                order_type=order.order_type.value,
-                intent=order.kind.value,
-                entry_id=order.entry_id,
-                reason=order.reason,
-            )
+            self._record_order(order, now, "submitted", order.reason)
         return output
 
     # ---- 체결 ----
 
-    def _fill(self, order: OrderIntent, raw_price: float, moment: datetime, source: str) -> None:
+    def _record_order(self, order: OrderIntent, moment: datetime, status: str, reason: str) -> None:
+        limit = {"limit_price": order.limit_price} if order.order_type == OrderType.LIMIT else {}
+        self.recorder.record(
+            "order",
+            time=moment,
+            status=status,
+            side=order.side.value,
+            quantity=order.quantity,
+            order_type=order.order_type.value,
+            intent=order.kind.value,
+            entry_id=order.entry_id,
+            reason=reason,
+            **limit,
+        )
+
+    def _expire_limit(self, order: OrderIntent, moment: datetime) -> None:
+        if order.expires_at is not None:
+            moment = min(to_kst(moment), to_kst(order.expires_at))
+        self._record_order(order, moment, "cancelled", "지정가 주문의 유효시간이 끝났습니다")
+
+    def _fill(self, order: OrderIntent, raw_price: float, moment: datetime, source: str) -> bool:
+        buy = order.side == Side.BUY
+        limit = order.limit_price if order.order_type == OrderType.LIMIT else None
+        if order.order_type == OrderType.LIMIT:
+            if limit is None:
+                raise ValueError("지정가 주문에는 가격이 필요합니다")
+            if order.expires_at is not None and to_kst(moment) >= to_kst(order.expires_at):
+                return False
+            if (buy and raw_price > limit) or (not buy and raw_price < limit):
+                return False
+            if source == "limit_touch":
+                raw_price = limit
         slip = self.assumptions.slippage_ticks * self.assumptions.tick_size
-        price = raw_price + slip if order.side == Side.BUY else raw_price - slip
+        price = raw_price + slip if buy else raw_price - slip
+        if limit is not None:
+            price = min(price, limit) if buy else max(price, limit)
         if order.kind == IntentKind.ENTRY:
             self._enter(order, price, raw_price, moment, source)
         else:
             self._exit(order, price, raw_price, moment, source)
+        return True
 
     def _enter(self, order: OrderIntent, price: float, raw_price: float, moment: datetime, source: str) -> None:
         applied = self.ledger.apply_entry(order.entry_id, order.side, order.quantity, price, moment)

@@ -88,6 +88,7 @@ class OrderRecord:
     remaining_quantity: int | None
     received_time: str
     reject_reason: str
+    executed_time: str = ""
 
     @property
     def is_open(self) -> bool:
