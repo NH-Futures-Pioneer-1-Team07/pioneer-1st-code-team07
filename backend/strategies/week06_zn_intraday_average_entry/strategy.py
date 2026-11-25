@@ -4,6 +4,7 @@ from fractions import Fraction
 from math import ceil, floor
 from typing import Any
 
+from strategies.week03_zn_treasury_futures.strategy import BUY, NEUTRAL, SELL
 from strategies.week03_zn_treasury_futures.strategy import Strategy as Week03Strategy
 from strategy_base.models import Context, IntentKind, OrderType, Side, StrategyOutput
 
@@ -54,11 +55,55 @@ class Strategy(Week03Strategy):
 
     def describe(self, ctx: Context) -> dict[str, Any]:
         description = super().describe(ctx)
-        rows = description["sections"][-1]["rows"]
-        for side, label in ((Side.BUY, "당일 매수 평단"), (Side.SELL, "당일 매도 평단")):
-            average = _entry_average(ctx, side)
-            rows.append([label, "—" if average is None else f"{average:.6f}"])
+        signal = self._facts(ctx, dict(ctx.state))["mid"]["signal"]
+        description["sections"].insert(2, _average_section(ctx, signal))
         return description
+
+
+def _average_section(ctx: Context, signal: str | None) -> dict[str, Any]:
+    """당일 평단과 현재 가격의 비교. 실제 진입은 교차봉 종가로 판정하므로 참고용이다."""
+    title = "평단 판단 (당일)"
+    averages = {side: _entry_average(ctx, side) for side in (Side.BUY, Side.SELL)}
+    price = _price(ctx.price)
+    if signal not in (BUY, SELL):
+        return {
+            "title": title,
+            "headline": "진입 안 함" if signal == NEUTRAL else "계산 불가",
+            "tone": "neutral",
+            "rows": [
+                ["당일 매수 평단", _price(averages[Side.BUY])],
+                ["당일 매도 평단", _price(averages[Side.SELL])],
+                ["현재 가격", price],
+            ],
+        }
+
+    label = "매수" if signal == BUY else "매도"
+    average = averages[Side(signal)]
+    gap, headline, condition, tone = "—", "첫 진입 전", "없음 (시장가)", "neutral"
+    if average is not None:
+        headline, condition = "현재 가격 대기", "—"
+        if ctx.price is not None:
+            difference = Fraction(str(ctx.price)) - average
+            met = difference < 0 if signal == BUY else difference > 0
+            gap = f"{float(difference):+.4f}"
+            headline = "평단과 같음" if difference == 0 else "평단보다 낮음" if difference < 0 else "평단보다 높음"
+            condition, tone = ("충족", signal) if met else ("미충족", "neutral")
+    return {
+        "title": title,
+        "headline": headline,
+        "tone": tone,
+        "rows": [
+            [f"당일 {label} 평단", _price(average)],
+            ["현재 가격", price],
+            ["평단과의 차이", gap],
+            [f"추가 {label} 조건", condition],
+            ["실제 판정", "교차봉 종가 기준"],
+        ],
+    }
+
+
+def _price(value: Fraction | float | None) -> str:
+    return "—" if value is None else f"{float(value):.4f}"
 
 
 def _entry_average(ctx: Context, side: Side) -> Fraction | None:

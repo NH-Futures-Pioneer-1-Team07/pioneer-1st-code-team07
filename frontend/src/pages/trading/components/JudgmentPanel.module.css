@@ -11,6 +11,9 @@
   gap: 12px;
   margin-top: 14px;
 }
+.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .section {
   padding: 18px 20px;
   background: var(--bg-surface);
@@ -57,8 +60,14 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+@media (max-width: 1280px) {
+  .four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 900px) {
-  .sections {
+  .sections,
+  .four {
     grid-template-columns: minmax(0, 1fr);
   }
 }

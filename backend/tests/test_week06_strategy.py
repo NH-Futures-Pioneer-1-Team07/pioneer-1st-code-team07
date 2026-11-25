@@ -124,3 +124,54 @@ def test_등록된_전략이_다음_봉에서_시장가_첫_진입과_지정가_
         ("09:05:00", 112.125 + TICK, "next_open"),
         ("09:19:59", 112.125, "limit_touch"),
     ]
+
+
+def described(registered, ctx):
+    sections = registered.strategy_class(ctx.params).describe(ctx)["sections"]
+    assert [s["title"] for s in sections] == ["중기 판단 (일봉)", "장중 판단 (5분봉)", "평단 판단 (당일)", "오늘 진입·보유"]
+    assert not any("평단" in name for name, _ in sections[3]["rows"])
+    section = sections[2]
+    return section["headline"], section["tone"], dict(section["rows"])
+
+
+@pytest.mark.parametrize(
+    ("side", "ticks", "headline", "condition"),
+    [
+        (Side.BUY, -1, "평단보다 낮음", "충족"),
+        (Side.BUY, 0, "평단과 같음", "미충족"),
+        (Side.BUY, 1, "평단보다 높음", "미충족"),
+        (Side.SELL, 1, "평단보다 높음", "충족"),
+        (Side.SELL, 0, "평단과 같음", "미충족"),
+        (Side.SELL, -1, "평단보다 낮음", "미충족"),
+    ],
+)
+def test_판단_화면은_현재_가격이_당일_평단보다_유리한지_보여준다(registered, side, ticks, headline, condition):
+    strategy = registered.strategy_class(registered.manifest.default_params())
+    ctx = context(strategy, side, 112.5, fills=[EntryFill(NOW, side, 1, 112.5)])
+
+    shown, tone, rows = described(registered, replace(ctx, price=112.5 + ticks * TICK))
+
+    label = "매수" if side == Side.BUY else "매도"
+    assert shown == headline and tone == (side.value if condition == "충족" else "neutral")
+    assert rows[f"당일 {label} 평단"] == "112.5000" and rows[f"추가 {label} 조건"] == condition
+    assert rows["평단과의 차이"] == f"{ticks * TICK:+.4f}" and rows["실제 판정"] == "교차봉 종가 기준"
+
+
+def test_판단_화면은_첫_진입_전과_가격이_없을_때와_중립을_구분한다(registered):
+    strategy = registered.strategy_class(registered.manifest.default_params())
+    ctx = replace(context(strategy, Side.BUY, 112.5), price=112.25)
+
+    headline, tone, rows = described(registered, ctx)
+    assert (headline, tone, rows["당일 매수 평단"], rows["추가 매수 조건"]) == ("첫 진입 전", "neutral", "—", "없음 (시장가)")
+
+    bought = replace(ctx, entry_fills=[EntryFill(NOW, Side.BUY, 1, 112.5)])
+    headline, _, rows = described(registered, replace(bought, price=None))
+    assert (headline, rows["현재 가격"], rows["추가 매수 조건"]) == ("현재 가격 대기", "—", "—")
+
+    # 직전 거래일 종가가 이동평균 사이에 있으면 중립이다.
+    neutral = [*RISING[:-1], replace(RISING[-1], close=RISING[-10].close)]
+    headline, tone, rows = described(registered, replace(bought, series={"daily": neutral}))
+    assert (headline, tone, rows["당일 매수 평단"], rows["당일 매도 평단"]) == ("진입 안 함", "neutral", "112.5000", "—")
+
+    headline, _, _ = described(registered, replace(bought, series={"daily": []}))
+    assert headline == "계산 불가"

@@ -1132,6 +1132,24 @@ def test_전략이_설명한_현재_판단을_상태에_싣는다(tmp_path):
     run(scenario)
 
 
+def test_판단_설명에는_마지막으로_받은_가격을_넘긴다(tmp_path):
+    async def scenario():
+        class Described(Script):
+            def describe(self, ctx):
+                return {"sections": [{"title": "판단", "headline": f"가격 {ctx.price}", "tone": "neutral", "rows": []}]}
+
+        h = Harness(tmp_path, Described())
+        h.broker.bars = [bar(0)]
+        await h.send(trade_event(243000.0))
+        assert h.session.judgment["sections"][0]["headline"] == "가격 243000.0"
+
+        await h.at(minutes=3, seconds=10)  # 봉 마감 판단에는 가격을 넘기지 않지만 설명에는 넘긴다
+        assert h.strategy.bar_calls[0].price is None
+        assert h.session.judgment["sections"][0]["headline"] == "가격 243000.0"
+
+    run(scenario)
+
+
 def test_판단을_설명하지_않는_전략의_judgment는_None이다(tmp_path):
     async def scenario():
         h = Harness(tmp_path)

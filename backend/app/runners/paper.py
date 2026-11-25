@@ -13,7 +13,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from math import isfinite
 from typing import Any
@@ -363,7 +363,7 @@ class PaperSession:
     async def _refresh_judgment(self, now: datetime) -> None:
         """전략이 설명하는 현재 판단을 갱신한다. 설명하지 못해도 매매에는 영향이 없다."""
         try:
-            ctx = await self._context(now, None)
+            ctx = replace(await self._context(now, None), price=self.last_price)
             self.judgment = dict(self.strategy.describe(ctx)) or None
         except Exception as error:  # noqa: BLE001 - 화면용 설명이 실패해도 운용은 계속한다
             self._error_event("판단 설명에 실패했습니다", error, now)
