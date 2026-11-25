@@ -13,11 +13,11 @@ export default function JudgmentPanel({ ctl }: { ctl: TradingController }) {
       <div className="section-head">
         <h2 id="judgment-title">현재 판단</h2>
         <span className={styles.hint}>
-          {sections.length > 0 ? "봉이 마감될 때마다 갱신됩니다" : "운용 중인 전략의 판단이 여기에 표시됩니다"}
+          {sections.length > 0 ? "봉이 마감되거나 가격이 바뀔 때 갱신됩니다" : "운용 중인 전략의 판단이 여기에 표시됩니다"}
         </span>
       </div>
       {sections.length > 0 && (
-        <div className={styles.sections}>
+        <div className={`${styles.sections} ${sections.length === 4 ? styles.four : ""}`}>
           {sections.map((section) => (
             <article key={section.title} className={styles.section}>
               <header>

@@ -414,7 +414,7 @@ ZN 5분봉으로 확인했다(2026-11-10, 73일, 16,342봉). 분봉을 처음 �
 | --- | --- |
 | `POST /api/trading/start` | 운용을 시작하고 `202`와 실행 식별자를 돌려준다. 본문은 `strategy_id`(와 선택으로 `params`) |
 | `POST /api/trading/stop` | 정상 종료를 시작한다 |
-| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전략이 설명한 현재 판단(`judgment`, 설명하지 않는 전략은 `null`), 전체 정리 진행과 결과(`clear`) |
+| `GET /api/trading/status` | 단계, 시세 상태, 마지막 가격·봉 시각, 신규 주문 차단 사유, 손익, 보유 진입분, 진행 중인 주문, 전략이 설명한 현재 판단(`judgment`, 설명하지 않는 전략은 `null`. 봉이 마감되거나 가격이 바뀔 때 갱신), 전체 정리 진행과 결과(`clear`) |
 | `GET /api/trading/account?market=` | NH 모의계좌의 예탁금, 보유 포지션, 미체결 주문. 운용 중이 아니어도 조회된다. `market`은 `domestic`(기본) 또는 `overseas`(해외 모의계좌, 예탁금은 USD) |
 | `POST /api/trading/clear?market=` | 미체결 취소·전체 포지션 청산을 시작한다. `market`의 계좌를 정리하며 같은 시장에서 운용 중인 전략만 멈춘다 |
 
