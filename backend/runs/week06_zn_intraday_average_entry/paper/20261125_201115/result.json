@@ -1,0 +1,34 @@
+{
+  "gross_pnl": 0.0,
+  "fee": 9.12421875,
+  "fee_estimated": true,
+  "net_pnl": -9.12421875,
+  "trade_count": 0,
+  "win_count": 0,
+  "loss_count": 0,
+  "open_lots": [
+    {
+      "entry_id": "2026-11-25-1",
+      "side": "buy",
+      "quantity": 1
+    }
+  ],
+  "account": {
+    "before": {
+      "cash": 100000.0,
+      "total_assets": 99937.12,
+      "fee": 16.0,
+      "futures_realized_pnl": -46.88,
+      "total_pnl": 0.0
+    },
+    "after": {
+      "cash": 100000.0,
+      "total_assets": 99944.75,
+      "fee": 24.0,
+      "futures_realized_pnl": -46.88,
+      "total_pnl": 15.63
+    },
+    "fee_change": 8.0,
+    "realized_pnl_change": 0.0
+  }
+}
